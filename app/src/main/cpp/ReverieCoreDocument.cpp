@@ -131,6 +131,88 @@ bool ReverieCore::newDocument(int width, int height, bool infiniteCanvas)
     return true;
 }
 
+// Release the current document and everything that references its nodes or
+// tiles. g_core is a process-lifetime singleton: without this, returning to
+// Home leaves the whole KisImage (all layers' tiles, easily hundreds of MB on
+// large documents) alive until the next open - and during that next open the
+// new document coexists with the old one, spiking peak memory (LMK kills on
+// 169-layer 4K documents). Mirrors the newDocument()/loadRevp() teardown
+// without creating a replacement document.
+void ReverieCore::closeDocument()
+{
+    if (!m_document && !m_undoStore && m_layers.isEmpty()) {
+        return; // already closed (idempotent, safe to call repeatedly)
+    }
+
+    // Preview transactions keep undo commands bound to the old image; they
+    // must die before the document itself. (Normally the UI has already
+    // cancelled any active preview before leaving the painting page; this is
+    // a defensive teardown, same as delete m_strokeTxn below.)
+    for (KisTransaction *tx : m_previewTransactions) {
+        delete tx;
+    }
+    m_previewTransactions.clear();
+    m_previewDevices.clear();
+    m_previewTempDevice = nullptr;
+
+    // Document + undo history. KisImage owns the node tree: clearing the SP
+    // frees all layers and their tiles.
+    m_document.clear();
+    m_undoStore = nullptr;
+    m_macroDepth = 0;
+    m_selection = KisSelectionSP();
+    m_storedSelections.clear();
+
+    // Layer list mirror holds bare KisNode* into the freed tree
+    m_layers.clear();
+    m_currentLayer = 0;
+    m_soloedNode = nullptr;
+    m_thumbCache.clear();
+    m_onionSuppressedPrev.clear();
+
+    // Display pipeline: force full re-init on the next open (same as newDocument)
+    m_renderBufW = -1;
+    m_renderBufH = -1;
+    m_dirtyRect = QRect();
+    m_bitmapInited = false;
+    m_lastDirty = QRect();
+
+    // Stroke state (same order as newDocument)
+    endStrokeBatch();               // delete m_strokePainter
+    m_strokeDevice = nullptr;
+    m_strokeSamples.clear();
+    m_strokeHadMove = false;
+    m_strokeBatchOpen = false;
+    m_drawing = false;
+    m_snapshotPending = false;
+    m_strokeStartImg = QPointF();
+    m_lastPressure = 1.0;
+    m_strokeColor = QColor();
+    m_strokeOpacity = 1.0;
+    delete m_strokeTxn;
+    m_strokeTxn = nullptr;
+    m_strokeTxnActive = false;
+    m_redoCount = 0;
+    m_accumulatedStrokeBounds = QRectF();
+
+    // Stroke onion-skin caches hold per-layer devices from the old document;
+    // the scratch devices are lazily recreated by the next stroke.
+    invalidateStrokeOnionCache();
+    m_strokeMergeScratch = nullptr;
+    m_strokeOutScratch = nullptr;
+
+    // Keyframe thumbnail caches reference live nodes. The generation counter
+    // stays monotonic: Kotlin caches gen values to decide UI rebuilds, so it
+    // must never observe a smaller gen than what it already saw.
+    ++m_keyframeThumbGen;
+    m_keyframeThumbCache.clear();
+    m_dirtyKeyframeThumbs.clear();
+
+    // Cosmetic defaults for the next document (newDocument re-sets these)
+    m_backgroundColor = Qt::white;
+    m_infiniteCanvas = false;
+}
+
 void ReverieCore::setBackgroundColor(quint32 color, bool commit)
 {
     KisImageSP image = m_document;

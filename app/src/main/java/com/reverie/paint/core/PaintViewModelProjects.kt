@@ -904,6 +904,11 @@ internal fun PaintViewModel.goHome() {
     stopPaintingTimer()
     // 动画播放与状态镜像: 离开绘画页彻底停止并重置动画状态, 避免耗电和跨画布状态残留
     resetAnimationState()
+    // 释放 native 文档: g_core 是进程级单例, 不释放则旧 KisImage (所有图层
+    // tile) 一直驻留内存, 重新打开时新旧文档共存推高峰值内存 (大文档被 LMK
+    // 杀进程)。排队到渲染线程, FIFO 保证已排队的引擎操作先完成; 之后残留的
+    // 渲染/保存调用在 C++ 侧空文档防护中安全返回。
+    runCore(render = false) { ReverieCoreBridge.closeDocument() }
     currentProjectFile = null
     docName = ""
     isModified = false

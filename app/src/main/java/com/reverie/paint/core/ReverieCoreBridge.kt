@@ -603,6 +603,9 @@ object ReverieCoreBridge {
     /** 设置撤销历史上限 (命令条数, 0 = 无上限); 超限命令在下次 push 时从栈底释放 */
     external fun setUndoLimit(limit: Int)
 
+    /** 释放当前文档的全部 native 资源 (图层 tile/undo 栈/渲染与洋葱皮缓存)。回主页时调用: g_core 是进程级单例, 不释放则旧文档一直驻留内存 */
+    external fun closeDocument()
+
     external fun beginUndoMacro(text: String = "")
 
     external fun endUndoMacro()

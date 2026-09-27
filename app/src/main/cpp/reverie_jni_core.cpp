@@ -138,6 +138,12 @@ Java_com_reverie_paint_core_ReverieCoreBridge_newDocumentEx(JNIEnv *env, jobject
 }
 
 JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_closeDocument(JNIEnv *, jobject)
+{
+    core()->closeDocument();
+}
+
+JNIEXPORT void JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_setInfiniteCanvas(JNIEnv *, jobject, jboolean infinite)
 {
     core()->setInfiniteCanvas(infinite == JNI_TRUE);

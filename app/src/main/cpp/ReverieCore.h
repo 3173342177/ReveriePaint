@@ -50,6 +50,10 @@ public:
 
     // Document
     bool newDocument(int width, int height, bool infiniteCanvas = false);
+    // 释放当前文档及引用其节点/tile 的全部状态 (undo 栈/渲染管线/洋葱皮与缩略图
+    // 缓存/预览事务)。幂等。g_core 是进程级单例, 回主页时必须调用, 否则旧
+    // KisImage 一直驻留内存且下次打开时新旧文档共存推高峰值。
+    void closeDocument();
     bool isInfiniteCanvas() const { return m_infiniteCanvas; }
     void setInfiniteCanvas(bool infinite) { m_infiniteCanvas = infinite; }
     void fillBackground(const QString &colorName);
