@@ -44,10 +44,9 @@ class ParsedRecording(
 class PaintRecorder {
     private var buffer: RecordingBuffer? = null
     // Guards buffer/eventCount/lastEventMs between main-thread emit() and
-    // render-thread serialize(); snapshotBytes carries the copied event
-    // region out of the lock.
+    // render-thread serialize(); serialize snapshots the used event region
+    // into a local under the lock and does all disk IO outside it.
     private val ioLock = Any()
-    private var snapshotBytes: ByteArray? = null
     private var lastEventMs = 0L
     private var sessionStartMs = 0L
 
@@ -167,7 +166,6 @@ class PaintRecorder {
             recording = false
             buffer = null
             eventCount = 0
-            snapshotBytes = null
             priorEvents = null
             priorEventCount = 0
             priorTotalMs = 0L
@@ -181,71 +179,66 @@ class PaintRecorder {
      *  front, so the saved blob always replays the full drawing history.
      *  Thread-safety: emit() writes the buffer on the main thread while this
      *  runs on the render thread (autosave); ioLock guards the shared state
-     *  snapshot so a concurrent stroke can't tear the serialized stream. */
+     *  snapshot so a concurrent stroke can't tear the serialized stream.
+     *  The ioLock critical section only copies memory - the snapshot file
+     *  read happens OUTSIDE the lock so main-thread stroke emission never
+     *  waits on disk IO. */
     fun serialize(): ByteArray? {
         val b: RecordingBuffer
         val count: Int
         val durationMs: Int
-        val snap: java.io.File?
-        var prior: ByteArray? = null
+        var priorRaw: ByteArray? = null
         var priorCount = 0
         var priorMs = 0L
-        var snapBytesLocked: ByteArray? = null
+        var snapFile: java.io.File? = null
+        var usedRaw: ByteArray? = null
         synchronized(ioLock) {
             val buf = buffer ?: run {
                 android.util.Log.d("ReverieRec", "serialize: no session")
                 return null
             }
             count = eventCount
-            prior = priorEvents
+            priorRaw = priorEvents?.takeIf { it.isNotEmpty() }
             priorCount = priorEventCount
             priorMs = priorTotalMs
-            if (count == 0 && (prior == null || prior!!.isEmpty())) {
+            if (count == 0 && priorRaw == null) {
                 android.util.Log.d("ReverieRec", "serialize: zero events")
                 return null
             }
             b = buf
             // Snapshot exactly the used region: emit() may append concurrently.
-            val used = ByteArray(buf.size)
-            System.arraycopy(buf.data, 0, used, 0, buf.size)
-            snapshotBytes = used
+            usedRaw = ByteArray(buf.size)
+            System.arraycopy(buf.data, 0, usedRaw, 0, buf.size)
             durationMs =
                 ((lastEventMs - sessionStartMs).coerceAtLeast(0L)).toInt().coerceAtMost(Int.MAX_VALUE)
-            snap = snapshotFile
-            // 快照字节必须在锁内读完: endSession (goHome/onCleared) 可并发
-            // 删除快照文件, 锁外 readBytes 会拿到空 blob (有事件流无快照,
-            // 回放直接画在空白底上)
-            snapBytesLocked =
-                try {
-                    snap?.readBytes()
-                } catch (e: Exception) {
-                    android.util.Log.e("ReveriePaint", "recording snapshot read failed", e)
-                    null
-                }
+            snapFile = snapshotFile
         }
-        val snapBytes = snapBytesLocked
-        val used = snapshotBytes ?: return null
-        snapshotBytes = null
+        val used = usedRaw ?: return null
+        val prior = priorRaw
+        // 快照磁盘读在锁外 (原实现在 ioLock 下 readBytes, 快照可能是几 MB 的
+        // .revp —— autoSave 触发时主线程 emit 的笔画事件全部堵在锁上等磁盘,
+        // 表现为"落墨延迟")。并发 endSession 删除文件: Android(Linux) 上已
+        // 打开的 fd 仍可读完, 读前被删则抛异常捕获为 null —— 仅丢本次
+        // autoSave 的录像快照 (goHome 与 autoSave 撞点的罕见瞬间), 不崩溃。
+        val snapBytes =
+            try {
+                snapFile?.takeIf { it.exists() }?.readBytes()
+            } catch (e: Exception) {
+                android.util.Log.e("ReveriePaint", "recording snapshot read failed", e)
+                null
+            }
         // Merge: prior event stream first, session events appended. dt is a
         // relative increment per event, so plain stream concatenation keeps
         // the timeline monotonic (the first session event carries the pause
         // since this session started).
-        val merged: ByteArray
-        val totalCount: Int
-        val totalMs: Int
-        val p = prior
-        if (p != null && p.isNotEmpty()) {
-            merged = ByteArray(p.size + used.size)
-            System.arraycopy(p, 0, merged, 0, p.size)
-            System.arraycopy(used, 0, merged, p.size, used.size)
-            totalCount = priorCount + count
-            totalMs = (priorMs + durationMs).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        } else {
-            merged = used
-            totalCount = count
-            totalMs = durationMs
-        }
-        val out = RecordingBuffer(64 + merged.size + (snapBytes?.size ?: 0))
+        // 直接顺序写入输出缓冲, 不再构造 merged 中转数组 (省一份全量分配+两次拷贝)
+        val priorSize = prior?.size ?: 0
+        val totalCount = (if (prior != null) priorCount else 0) + count
+        val totalMs =
+            ((if (prior != null) priorMs else 0L) + durationMs)
+                .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val mergedSize = priorSize + used.size
+        val out = RecordingBuffer(64 + mergedSize + (snapBytes?.size ?: 0) + 16)
         out.writeBytes(MAGIC.toByteArray(Charsets.US_ASCII))
         out.u16(VERSION)
         out.u16(sessionW)
@@ -253,8 +246,11 @@ class PaintRecorder {
         out.u8(if (snapBytes != null) 1 else 0)
         out.u32(totalCount)
         out.u32(totalMs)
-        out.u32(merged.size)
-        out.writeBytes(merged, 0, merged.size)
+        out.u32(mergedSize)
+        if (prior != null) {
+            out.writeBytes(prior, 0, prior.size)
+        }
+        out.writeBytes(used, 0, used.size)
         if (snapBytes != null) {
             out.u64(snapBytes.size.toLong())
             out.writeBytes(snapBytes)

@@ -2828,6 +2828,7 @@ class PaintViewModel : ViewModel() {
     private val strokeBatchCoords = FloatArray(STROKE_BATCH_CAPACITY * STROKE_SAMPLE_STRIDE)
     private val strokeDrainCoords = FloatArray(STROKE_BATCH_CAPACITY * STROKE_SAMPLE_STRIDE)
     private var strokeBatchCount = 0
+    private var batchOverflowLogCounter = 0 // queueStrokeMove 仅 UI 线程调用
     @Volatile private var strokeBatchQueued = false
     @Volatile private var lastQueuedInputEventTime = 0L
     @Volatile private var lastQueuedUptime = 0L
@@ -2900,6 +2901,23 @@ class PaintViewModel : ViewModel() {
                 strokeBatchCoords[o + 4] = safeTiltY
                 strokeBatchCoords[o + 5] = safeRotation
                 strokeBatchCount++
+            } else {
+                // 队列满 (渲染线程被长任务阻塞): 覆盖最后一个样本而非静默
+                // 丢弃新样本 —— drain 时笔画尾端仍是最新位置, 中段被直线化
+                // 但不断线不缺墨 (此前满后直接 return, 新点整段丢失)。
+                val o = (strokeBatchCount - 1) * STROKE_SAMPLE_STRIDE
+                strokeBatchCoords[o] = x
+                strokeBatchCoords[o + 1] = y
+                strokeBatchCoords[o + 2] = safeP
+                strokeBatchCoords[o + 3] = safeTiltX
+                strokeBatchCoords[o + 4] = safeTiltY
+                strokeBatchCoords[o + 5] = safeRotation
+                if (++batchOverflowLogCounter % 60 == 1) {
+                    android.util.Log.w(
+                        "ReveriePerf",
+                        "StrokeBatch overflow: render thread backed up, overwriting tail (capacity=$STROKE_BATCH_CAPACITY)"
+                    )
+                }
             }
         }
         if (!strokeBatchQueued) {
