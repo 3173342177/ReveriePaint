@@ -1912,14 +1912,6 @@
     <string name="canvas_adjust_apply">Apply</string>
     <string name="canvas_ratio_free">Free</string>
     <string name="canvas_ratio_original">Original</string>
-    <string name="canvas_ratio_1_1">1:1</string>
-    <string name="canvas_ratio_4_3">4:3</string>
-    <string name="canvas_ratio_3_4">3:4</string>
-    <string name="canvas_ratio_16_9">16:9</string>
-    <string name="canvas_ratio_9_16">9:16</string>
-    <string name="canvas_ratio_3_2">3:2</string>
-    <string name="canvas_ratio_2_3">2:3</string>
-    <string name="canvas_ratio_a4">A4</string>
     <string name="canvas_resample_bicubic">Bicubic Smooth (Recommended)</string>
     <string name="canvas_resample_nearest">Nearest Neighbor (Pixel Art)</string>
     <string name="canvas_resample_bilinear">Bilinear</string>

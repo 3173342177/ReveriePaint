@@ -64,19 +64,13 @@ class CanvasAdjustStateTest {
 
     @Test
     fun `aspect ratio preset calculations operate properly`() {
-        val p16_9 = AspectRatioPreset.RATIO_16_9
-        val heightFor1920 = p16_9.calculateHeight(1920, 1000, 1000)
-        assertEquals(1080, heightFor1920)
-
-        val widthFor1080 = p16_9.calculateWidth(1080, 1000, 1000)
-        assertEquals(1920, widthFor1080)
-
-        val p1_1 = AspectRatioPreset.RATIO_1_1
-        assertEquals(1500, p1_1.calculateHeight(1500, 1000, 1000))
-        assertEquals(1500, p1_1.calculateWidth(1500, 1000, 1000))
-
         val pOrig = AspectRatioPreset.ORIGINAL
         assertEquals(1000, pOrig.calculateHeight(2000, 2000, 1000))
+        assertEquals(2000, pOrig.calculateWidth(1000, 2000, 1000))
+
+        val pFree = AspectRatioPreset.FREE
+        assertEquals(1500, pFree.calculateHeight(1500, 2000, 1000))
+        assertEquals(1500, pFree.calculateWidth(1500, 2000, 1000))
     }
 
     @Test

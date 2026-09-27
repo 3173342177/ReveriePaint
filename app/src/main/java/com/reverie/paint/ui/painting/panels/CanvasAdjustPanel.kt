@@ -76,6 +76,10 @@ fun CanvasAdjustPanel(
 ) {
     val state = vm.canvasAdjustState
     val focusManager = LocalFocusManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val maxLayers = remember(context, state.targetWidth, state.targetHeight) {
+        com.reverie.paint.ui.create.calculateRealMaxLayers(context, state.targetWidth, state.targetHeight)
+    }
     val panelShape = RoundedCornerShape(20.dp)
 
     Box(
@@ -236,12 +240,24 @@ fun CanvasAdjustPanel(
                 }
             }
 
+            Spacer(Modifier.height(4.dp))
+
+            // 实时最大图层数指示
+            Text(
+                text = stringResource(R.string.create_max_layers_desc, maxLayers),
+                color = Morandi.subText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+            )
+
+            Spacer(Modifier.height(6.dp))
+
             // 3. 动态配置选项行 (根据模式切换：裁切模式显示锚点与常用比例；缩放模式显示倍率与插值算法)
             if (state.mode == CanvasAdjustMode.CROP_EXPAND) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // 9 宫格锚点点阵
                     AnchorMatrixGrid(
@@ -251,12 +267,9 @@ fun CanvasAdjustPanel(
                         }
                     )
 
-                    // 比例预设水平滑动芯片
+                    // 比例预设 (自由 / 原始)
                     Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AspectRatioPreset.entries.forEach { preset ->

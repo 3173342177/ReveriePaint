@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.reverie.paint.R
 import com.reverie.paint.core.PaintViewModel
 import com.reverie.paint.model.AspectRatioPreset
 import com.reverie.paint.model.CanvasAdjustMode
@@ -57,6 +58,7 @@ fun CanvasAdjustOverlay(
     fitScale: Float,
     modifier: Modifier = Modifier,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val density = LocalDensity.current
     val handleTouchRadiusPx = with(density) { 34.dp.toPx() }
     val bracketLenPx = with(density) { 16.dp.toPx() }
@@ -273,10 +275,8 @@ fun CanvasAdjustOverlay(
 
                         // 比例锁定约束
                         if (state.lockAspectRatio || state.selectedPreset != AspectRatioPreset.FREE) {
-                            val ratio = if (state.selectedPreset != AspectRatioPreset.FREE) {
-                                val rw = state.selectedPreset.ratioW ?: 1f
-                                val rh = state.selectedPreset.ratioH ?: 1f
-                                rw / rh
+                            val ratio = if (state.selectedPreset == AspectRatioPreset.ORIGINAL) {
+                                docW.toFloat() / maxOf(1, docH)
                             } else {
                                 initialTargetW.toFloat() / initialTargetH
                             }
@@ -446,7 +446,9 @@ fun CanvasAdjustOverlay(
             isAntiAlias = true
         }
 
-        val dimText = "${state.targetWidth} × ${state.targetHeight} px"
+        val maxLayers = com.reverie.paint.ui.create.calculateRealMaxLayers(context, state.targetWidth, state.targetHeight)
+        val maxLayersDesc = context.getString(R.string.create_max_layers_desc, maxLayers)
+        val dimText = "${state.targetWidth} × ${state.targetHeight} px  ·  $maxLayersDesc"
         val textBounds = android.graphics.Rect()
         textPaint.getTextBounds(dimText, 0, dimText.length, textBounds)
         val badgeW = textBounds.width() + 24.dp.toPx()

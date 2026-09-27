@@ -42,45 +42,23 @@ enum class AnchorPosition(val dx: Float, val dy: Float) {
 }
 
 enum class AspectRatioPreset(
-    val ratioW: Float?,
-    val ratioH: Float?,
     @get:StringRes val labelRes: Int,
 ) {
-    FREE(null, null, R.string.canvas_ratio_free),
-    ORIGINAL(null, null, R.string.canvas_ratio_original),
-    RATIO_1_1(1f, 1f, R.string.canvas_ratio_1_1),
-    RATIO_4_3(4f, 3f, R.string.canvas_ratio_4_3),
-    RATIO_3_4(3f, 4f, R.string.canvas_ratio_3_4),
-    RATIO_16_9(16f, 9f, R.string.canvas_ratio_16_9),
-    RATIO_9_16(9f, 16f, R.string.canvas_ratio_9_16),
-    RATIO_3_2(3f, 2f, R.string.canvas_ratio_3_2),
-    RATIO_2_3(2f, 3f, R.string.canvas_ratio_2_3),
-    RATIO_A4(210f, 297f, R.string.canvas_ratio_a4);
+    FREE(R.string.canvas_ratio_free),
+    ORIGINAL(R.string.canvas_ratio_original);
 
     fun calculateHeight(width: Int, origW: Int, origH: Int): Int {
         if (this == ORIGINAL) {
             return if (origW > 0) (width.toFloat() * origH / origW).roundToInt() else width
         }
-        val rw = ratioW
-        val rh = ratioH
-        return if (rw != null && rh != null && rw > 0f) {
-            (width.toFloat() * rh / rw).roundToInt()
-        } else {
-            width
-        }
+        return width
     }
 
     fun calculateWidth(height: Int, origW: Int, origH: Int): Int {
         if (this == ORIGINAL) {
             return if (origH > 0) (height.toFloat() * origW / origH).roundToInt() else height
         }
-        val rw = ratioW
-        val rh = ratioH
-        return if (rw != null && rh != null && rh > 0f) {
-            (height.toFloat() * rw / rh).roundToInt()
-        } else {
-            height
-        }
+        return height
     }
 }
 
