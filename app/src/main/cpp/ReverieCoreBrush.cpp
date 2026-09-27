@@ -133,6 +133,11 @@ int ReverieCore::loadBrushPresetsFromDir(const QString &dirPath)
         name.chop(4);  // strip ".kpp"
         m_presets.append(qMakePair(name, dir.filePath(f)));
     }
+    // 预设列表重建后索引全部位移, 元数据缓存按 index 键存, 必须整体失效
+    {
+        QMutexLocker lock(&m_presetInfoMutex);
+        m_presetInfoCache.clear();
+    }
     return m_presets.size();
 }
 
@@ -486,6 +491,7 @@ bool ReverieCore::loadBrushPreset(int index)
     setBrushOpacity(m_brushOpacity);
     setBrushFlow(m_brushFlow);
     m_brushTipAsset.clear();
+    m_tipOverridden = false; // 刚重新解析预设, 出厂笔尖天然在场
     // Diagnostics: is the preset's brush resolved to a real brush resource
     // or did it fall back to the default auto_brush (circle)?
     KisBrushBasedPaintOpSettings *bs =
@@ -507,35 +513,48 @@ bool ReverieCore::loadBrushPreset(int index)
     return true;
 }
 
-QVector<double> ReverieCore::brushPresetDefaults(int index)
+// 一次 .kpp 解析同时提取 defaults / paintOpId / tipFilename 三个只读值。
+// 选择预设时 Kotlin 会在主线程连查这三个值 (原本各做一次完整解析:
+// 读文件 + PNG zTXt 解压 + 正则扫描 + XML loadFromDevice), 是"换笔卡顿"
+// 的主因; 这里解析一次后按 mtime+size 缓存 (updateKppFile 改写文件即失效)。
+bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
 {
-    const QVector<double> defaultFallback = {
-        20.0, 1.0, 1.0, 0.15,
-        0.0, 30.0, 0.5, 0.5,
-        0.0, 0.0, 0.5, 1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0
-    };
     if (index < 0 || index >= m_presets.size()) {
-        return defaultFallback;
+        return false;
     }
+    QMutexLocker lock(&m_presetInfoMutex);
+    const QString path = m_presets[index].second;
+    const QFileInfo fi(path);
+    const qint64 mtimeMs = fi.exists() ? fi.lastModified().toMSecsSinceEpoch() : 0;
+    const qint64 fsize = fi.size();
+    auto it = m_presetInfoCache.find(index);
+    if (it != m_presetInfoCache.end() && it->valid && it->mtimeMs == mtimeMs && it->fileSize == fsize) {
+        out = *it;
+        return true;
+    }
+
     registerPaintOps();
     if (!m_brushResources) {
         m_brushResources = KisResourcesInterfaceSP(new KisLocalStrokeResources());
     }
-    const QString path = m_presets[index].second;
     ensureBrushForPreset(path);
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
-        return defaultFallback;
+        return false;
     }
     KisPaintOpPresetSP preset(new KisPaintOpPreset(m_presets[index].first));
     const bool ok = preset->loadFromDevice(&f, m_brushResources);
     f.close();
     if (!ok || !preset->settings()) {
-        return defaultFallback;
+        return false;
     }
     KisPaintOpSettingsSP s = preset->settings();
+
+    CachedPresetInfo info;
+    info.mtimeMs = mtimeMs;
+    info.fileSize = fsize;
+
+    // ---- defaults (原 brushPresetDefaults 的提取逻辑) ----
     double size = s->paintOpSize();
     if (!(size > 0.0) || size != size) {  // NaN / non-positive guard
         size = 20.0;
@@ -591,38 +610,54 @@ QVector<double> ReverieCore::brushPresetDefaults(int index)
     const double mirrorY = s->getBool("VerticalMirrorEnabled", false) ? 1.0 : 0.0;
     const double antiAliasing = s->getBool("Antialiasing", s->getBool("antialiasEdges", true)) ? 1.0 : 0.0;
 
-    return {
+    info.defaults = {
         size, opacity, flow, spacing,
         isAirbrush ? 1.0 : 0.0, airbrushRate, smudgeRate, smudgeLength,
         angle, scatter, softness, ratio, sharpness, rotation,
         pressureSize, pressureOpacity, pressureFlow,
         followDirection, mirrorX, mirrorY, antiAliasing
     };
+
+    // ---- paintOpId (原 brushPresetPaintOpId 的提取逻辑) ----
+    info.paintOpId = preset->paintOp().id();
+
+    // ---- tipFilename (原 brushPresetTipFilename 的提取逻辑) ----
+    if (bs) {
+        KisBrushSP b = bs->brush();
+        if (b) {
+            info.tipFilename = b->filename();
+        }
+    }
+
+    info.valid = true;
+    m_presetInfoCache.insert(index, info);
+    out = info;
+    return true;
+}
+
+QVector<double> ReverieCore::brushPresetDefaults(int index)
+{
+    const QVector<double> defaultFallback = {
+        20.0, 1.0, 1.0, 0.15,
+        0.0, 30.0, 0.5, 0.5,
+        0.0, 0.0, 0.5, 1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    };
+    CachedPresetInfo info;
+    if (!ensurePresetInfo(index, info) || info.defaults.isEmpty()) {
+        return defaultFallback;
+    }
+    return info.defaults;
 }
 
 QString ReverieCore::brushPresetPaintOpId(int index)
 {
-    if (index < 0 || index >= m_presets.size()) {
+    CachedPresetInfo info;
+    if (!ensurePresetInfo(index, info) || info.paintOpId.isEmpty()) {
         return QStringLiteral("paintbrush");
     }
-    registerPaintOps();
-    if (!m_brushResources) {
-        m_brushResources = KisResourcesInterfaceSP(new KisLocalStrokeResources());
-    }
-    const QString path = m_presets[index].second;
-    ensureBrushForPreset(path);
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly)) {
-        return QStringLiteral("paintbrush");
-    }
-    KisPaintOpPresetSP preset(new KisPaintOpPreset(m_presets[index].first));
-    const bool ok = preset->loadFromDevice(&f, m_brushResources);
-    f.close();
-    if (ok) {
-        const QString id = preset->paintOp().id();
-        if (!id.isEmpty()) return id;
-    }
-    return QStringLiteral("paintbrush");
+    return info.paintOpId;
 }
 
 QString ReverieCore::currentBrushPaintOpId() const
@@ -636,33 +671,11 @@ QString ReverieCore::currentBrushPaintOpId() const
 
 QString ReverieCore::brushPresetTipFilename(int index)
 {
-    if (index < 0 || index >= m_presets.size()) {
+    CachedPresetInfo info;
+    if (!ensurePresetInfo(index, info)) {
         return QString();
     }
-    registerPaintOps();
-    if (!m_brushResources) {
-        m_brushResources = KisResourcesInterfaceSP(new KisLocalStrokeResources());
-    }
-    const QString path = m_presets[index].second;
-    ensureBrushForPreset(path);
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly)) {
-        return QString();
-    }
-    KisPaintOpPresetSP preset(new KisPaintOpPreset(m_presets[index].first));
-    const bool ok = preset->loadFromDevice(&f, m_brushResources);
-    f.close();
-    if (ok && preset->settings()) {
-        KisBrushBasedPaintOpSettings *bs =
-            dynamic_cast<KisBrushBasedPaintOpSettings *>(preset->settings().data());
-        if (bs) {
-            KisBrushSP b = bs->brush();
-            if (b) {
-                return b->filename();
-            }
-        }
-    }
-    return QString();
+    return info.tipFilename;
 }
 
 int ReverieCore::brushPresetCount() const
@@ -882,7 +895,14 @@ bool ReverieCore::setBrushTipAsset(const QString &assetName)
         return false;
     }
     if (assetName.isEmpty()) {
-        // Restore factory brush tip from the original .kpp preset file
+        // Restore factory brush tip from the original .kpp preset file.
+        // Skip the re-parse when no tip override is in effect: loadBrushPreset
+        // always parses a fresh preset whose settings already carry the
+        // factory brush, so restoring would re-read the very same file.
+        if (!m_tipOverridden) {
+            RPC_LOG("RPC setBrushTipAsset: no override in effect, factory tip already active (preset %d)", m_brushPresetIndex);
+            return true;
+        }
         if (m_brushPresetIndex >= 0 && m_brushPresetIndex < m_presets.size()) {
             QFile f(m_presets[m_brushPresetIndex].second);
             if (f.open(QIODevice::ReadOnly)) {
@@ -894,6 +914,7 @@ bool ReverieCore::setBrushTipAsset(const QString &assetName)
                         KisBrushOptionProperties prop;
                         prop.readOptionSetting(origBs, m_brushResources, origBs->canvasResourcesInterface());
                         prop.writeOptionSetting(bs);
+                        m_tipOverridden = false;
                         RPC_LOG("RPC setBrushTipAsset: restored factory brush tip for preset %d", m_brushPresetIndex);
                         return true;
                     }
@@ -925,6 +946,7 @@ bool ReverieCore::setBrushTipAsset(const QString &assetName)
     prop.readOptionSetting(bs, m_brushResources, bs->canvasResourcesInterface());
     prop.setBrush(brush);
     prop.writeOptionSetting(bs);
+    m_tipOverridden = true;
     RPC_LOG("RPC setBrushTipAsset SUCCESS: %s", assetName.toUtf8().constData());
     return true;
 }
