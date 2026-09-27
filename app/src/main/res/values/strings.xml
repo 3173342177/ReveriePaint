@@ -1353,6 +1353,14 @@
     <string name="stylus_sound_paper_desc">落笔与运笔时模拟真实笔尖在纸张上的微摩擦发声，随笔速变化，营造沉浸式触感体验</string>
     <string name="stylus_sound_volume">音效音量</string>
     <string name="stylus_sound_volume_desc">纸张微摩擦声播放音量</string>
+    <string name="stylus_sound_type">音效质感</string>
+    <string name="stylus_sound_type_desc">选择手写笔书写与绘画时的声音风格</string>
+    <string name="stylus_audio_type_pencil">真实铅笔 (细腻磨砂)</string>
+    <string name="stylus_audio_type_pencil_desc">基于高质量铅笔摩擦实录采样与动态压感共振调制</string>
+    <string name="stylus_audio_type_ink">钢笔划纸 (清脆微响)</string>
+    <string name="stylus_audio_type_ink_desc">模拟硬质金属笔尖划过纸面的清脆划擦质感</string>
+    <string name="stylus_audio_type_tick">系统微触音 (极简轻触)</string>
+    <string name="stylus_audio_type_tick_desc">落笔时触发极简的柔和物理点触微声</string>
     <string name="stylus_curve_title">全局压力曲线</string>
     <string name="stylus_curve_mapping">压力曲线映射</string>
     <string name="stylus_curve_mapping_desc">手感偏硬时可选用「轻压灵敏」预设或微调控制点</string>

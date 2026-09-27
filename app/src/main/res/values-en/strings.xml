@@ -1353,6 +1353,14 @@
     <string name="stylus_sound_paper_desc">Simulate realistic paper friction acoustics that dynamically vary with stroke speed</string>
     <string name="stylus_sound_volume">Sound Volume</string>
     <string name="stylus_sound_volume_desc">Volume for paper friction sound effect</string>
+    <string name="stylus_sound_type">Sound Texture</string>
+    <string name="stylus_sound_type_desc">Select acoustic style for pen strokes and contact</string>
+    <string name="stylus_audio_type_pencil">Real Pencil (Fine Friction)</string>
+    <string name="stylus_audio_type_pencil_desc">High-fidelity acoustic recording with dynamic pressure resonance</string>
+    <string name="stylus_audio_type_ink">Ink Pen (Crisp Scratch)</string>
+    <string name="stylus_audio_type_ink_desc">Simulate crisp metallic nib scratch on smooth paper</string>
+    <string name="stylus_audio_type_tick">Soft Touch (Minimal Tick)</string>
+    <string name="stylus_audio_type_tick_desc">Trigger a clean, minimal tactile tick upon pen touchdown</string>
     <string name="stylus_curve_title">Global Pressure Curve</string>
     <string name="stylus_curve_mapping">Pressure Curve Mapping</string>
     <string name="stylus_curve_mapping_desc">Choose soft presets or adjust curve control points for personalized tactile response</string>

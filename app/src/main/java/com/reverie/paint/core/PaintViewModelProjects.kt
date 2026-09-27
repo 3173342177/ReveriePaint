@@ -700,7 +700,50 @@ internal fun PaintViewModel.exportDocument(
                 }
 
                 "jpg", "jpeg" -> {
-                    ReverieCoreBridge.exportJpg(targetFile.absolutePath, 95)
+                    val tempPng = java.io.File(appContext.cacheDir, "temp_jpg_${System.currentTimeMillis()}.png")
+                    try {
+                        if (ReverieCoreBridge.savePng(tempPng.absolutePath)) {
+                            val bmp = android.graphics.BitmapFactory.decodeFile(tempPng.absolutePath)
+                            if (bmp != null) {
+                                // JPEG 不支持 Alpha 通道, 在纯白背景上合成后输出
+                                val solidBmp = android.graphics.Bitmap.createBitmap(
+                                    bmp.width,
+                                    bmp.height,
+                                    android.graphics.Bitmap.Config.ARGB_8888,
+                                )
+                                val canvas = android.graphics.Canvas(solidBmp)
+                                canvas.drawColor(android.graphics.Color.WHITE)
+                                canvas.drawBitmap(bmp, 0f, 0f, null)
+                                bmp.recycle()
+                                targetFile.outputStream().use { out ->
+                                    solidBmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                                }
+                                solidBmp.recycle()
+
+                                if (embedAuthor && authorProfile.enabled && authorProfile.isNotEmpty()) {
+                                    try {
+                                        val exif = android.media.ExifInterface(targetFile.absolutePath)
+                                        val author = authorProfile.name.trim().ifEmpty { authorProfile.nickname.trim() }
+                                        if (author.isNotEmpty()) {
+                                            exif.setAttribute(android.media.ExifInterface.TAG_ARTIST, author)
+                                        }
+                                        if (authorProfile.copyright.trim().isNotEmpty()) {
+                                            exif.setAttribute(android.media.ExifInterface.TAG_COPYRIGHT, authorProfile.copyright.trim())
+                                        }
+                                        exif.setAttribute(android.media.ExifInterface.TAG_SOFTWARE, "ReveriePaint")
+                                        exif.saveAttributes()
+                                    } catch (_: Exception) {}
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } finally {
+                        tempPng.delete()
+                    }
                 }
 
                 "psd" -> {

@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.paint.R
+import com.reverie.paint.core.stylus.StylusAudioType
 import com.reverie.paint.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -835,6 +836,7 @@ class PaintViewModel : ViewModel() {
     var stylusHapticsIntensity by mutableFloatStateOf(0.5f)
     var stylusAudioEnabled by mutableStateOf(false)
     var stylusAudioVolume by mutableFloatStateOf(0.6f)
+    var stylusAudioType by mutableStateOf(StylusAudioType.PENCIL)
     var stylusStrokePredictionEnabled by mutableStateOf(true)
     // Samsung Notes 标准语义: 按住侧键落笔 = 临时橡皮 (默认开, 可在三星 S Pen 专属设置中关闭)
     var samsungSideButtonErase by mutableStateOf(true)
@@ -1420,6 +1422,15 @@ class PaintViewModel : ViewModel() {
         }
     }
 
+    fun updateStylusAudioType(type: StylusAudioType) {
+        stylusAudioType = type
+        if (::appContext.isInitialized) {
+            appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().putInt("stylusAudioType", type.ordinal).apply()
+            getOrCreateStylusDriver(appContext).syncSettings()
+        }
+    }
+
     fun updateStylusStrokePredictionEnabled(enabled: Boolean) {
         stylusStrokePredictionEnabled = enabled
         motionPredictorEnabled = enabled
@@ -1899,7 +1910,7 @@ class PaintViewModel : ViewModel() {
             stylusHapticsIntensity = prefs.getFloat("stylusHapticsIntensity", 0.5f)
             stylusAudioEnabled = prefs.getBoolean("stylusAudioEnabled", false)
             stylusAudioVolume = prefs.getFloat("stylusAudioVolume", 0.6f)
-            // 音效类型设置已移除, 统一为程序化铅笔沙沙音色 (忽略历史存储值)
+            stylusAudioType = StylusAudioType.fromOrdinal(prefs.getInt("stylusAudioType", StylusAudioType.PENCIL.ordinal))
             samsungSideButtonErase = prefs.getBoolean("samsungSideButtonErase", true)
             stylusStrokePredictionEnabled = prefs.getBoolean("stylusStrokePredictionEnabled", true)
             motionPredictorEnabled = stylusStrokePredictionEnabled

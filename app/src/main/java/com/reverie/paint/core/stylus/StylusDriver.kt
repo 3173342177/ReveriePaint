@@ -50,6 +50,7 @@ class StylusDriver(
         feedbackManager.inPenHaptics = vm.oppoInPenHapticsEnabled && vm.oppoPencilModel.hasInPenHaptics
         feedbackManager.audioEnabled = vm.stylusAudioEnabled
         feedbackManager.audioVolume = vm.stylusAudioVolume
+        feedbackManager.audioType = vm.stylusAudioType
         feedbackManager.syncAudioConfig()
         feedbackManager.setWritingHapticsEnabled(false)
 
