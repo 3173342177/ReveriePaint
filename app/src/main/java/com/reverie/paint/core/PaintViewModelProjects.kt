@@ -185,6 +185,7 @@ private fun PaintViewModel.recSessionDir(): File = File(appContext.filesDir, "re
 internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
     android.util.Log.d("RP_IO", "loadProject START: name=${p.name}, path=${p.filePath}, isAutoSaved=${p.isAutoSaved}")
     stopPaintingTimer()
+    resetAnimationState()
     // Navigate to painting page first, then show loading overlay while reading native file
     currentPage = Page.PAINTING
     isBlockingLoading = true
@@ -267,8 +268,12 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
                     syncAnimationFromNative()
                 }
                 mainHandler.post {
-                    anim.enabled = animated
-                    anim.panelOpen = animated
+                    if (animated) {
+                        anim.enabled = true
+                        anim.panelOpen = true
+                    } else {
+                        resetAnimationState()
+                    }
                 }
                 android.util.Log.d("RP_IO", "loadProject OP OK: coreW=$coreW, coreH=$coreH, nativeLayers=${ReverieCoreBridge.layerCount()}, animated=$animated")
             } else {
@@ -852,9 +857,8 @@ internal fun PaintViewModel.exportImageToGallery(
 internal fun PaintViewModel.goHome() {
     recorder.endSession()
     stopPaintingTimer()
-    // 动画播放是自续定时链: 离开绘画页必须停掉, 否则主页/回放页仍在按帧率
-    // 渲染并循环播放导入音频, 系统判为"应用在静音播放视频"而报耗电异常
-    stopAnimationPlaybackForPageExit()
+    // 动画播放与状态镜像: 离开绘画页彻底停止并重置动画状态, 避免耗电和跨画布状态残留
+    resetAnimationState()
     currentProjectFile = null
     docName = ""
     isModified = false
@@ -870,7 +874,7 @@ internal fun PaintViewModel.goHome() {
 
 internal fun PaintViewModel.goCreate() {
     stopPaintingTimer()
-    stopAnimationPlaybackForPageExit()
+    resetAnimationState()
     currentPage = Page.CREATE
 }
 
@@ -927,6 +931,7 @@ internal fun PaintViewModel.startPainting(
     elapsedSeconds = 0L
     canvasCreatedTime = System.currentTimeMillis()
     stopPaintingTimer()
+    resetAnimationState()
     currentPage = Page.PAINTING
     isBlockingLoading = true
     blockingLoadingMessage = getString(R.string.project_creating_canvas)
@@ -948,6 +953,8 @@ internal fun PaintViewModel.startPainting(
                 anim.length = 1
                 anim.revision++
                 syncAnimationFromNativeAfter()
+            } else {
+                resetAnimationState()
             }
         },
     ) {
@@ -995,9 +1002,8 @@ internal fun PaintViewModel.startPainting(
 internal fun PaintViewModel.goReplay(p: com.reverie.paint.model.Project) {
     recorder.endSession()
     stopPaintingTimer()
-    // 回放页与动画播放互斥: 不停播的话两套自续链会同时渲染 (动画帧还会覆盖
-    // 回放画布), 且回放播完后动画链仍在跑, 持续耗电
-    stopAnimationPlaybackForPageExit()
+    // 回放页与动画互斥: 停播并重置动画状态, 避免后台渲染和画布覆盖
+    resetAnimationState()
     currentPage = Page.REPLAY
     isBlockingLoading = true
     blockingLoadingMessage = getString(R.string.project_preparing_replay)
