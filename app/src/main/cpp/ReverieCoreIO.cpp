@@ -827,19 +827,100 @@ static QByteArray readAllStoreBytes(KoStore *store)
     return data;
 }
 
-static void paintDeviceFromPng(KisPaintDeviceSP dev, const QByteArray &pngBytes)
+// ---- LayerPixelLoader: 见 ReverieCoreInternal.h 的结构说明 ----
+
+namespace {
+// stage 累计字节的自动 flush 阈值: 防止超大文档 (169 层 .kra) 的全部压缩
+// 字节同时驻留内存。约等于该文档所有层的 PNG 总量, 超过则先落盘一批。
+constexpr qint64 kLayerPixelFlushBytes = 192LL * 1024 * 1024;
+
+int layerPixelChunk()
 {
-    if (!dev || pngBytes.isEmpty()) return;
-    QImage img;
-    if (!img.loadFromData(pngBytes, "PNG")) return;
-    dev->clear();
-    dev->convertFromQImage(img, nullptr);
-    dev->setDirty();
+    // 每块并行解码的层数。解码后的 QImage 是未压缩 RGBA (4K 层 ~64MB),
+    // chunk 同时限制了额外的解码峰值内存。8 核手机取 4-6 即可近线性加速。
+    static const int chunk = qBound(2, QThread::idealThreadCount(), 6);
+    return chunk;
+}
+} // namespace
+
+LayerPixelLoader::~LayerPixelLoader()
+{
+    // 兜底: 调用方漏 flush 时设备也能拿到像素 (正常路径显式 flush)
+    flush();
 }
 
-static bool loadLayerDataFromStore(KoStore *store, KisPaintDeviceSP dev, const QString &docName, const QString &filename, int index)
+void LayerPixelLoader::stage(PendingLayerPixels job)
 {
-    if (!store || !dev) return false;
+    if (!job.dev) return;
+    m_stagedBytes += job.pngBytes.size() + job.defaultPixel.size();
+    m_jobs.append(job);
+    if (m_stagedBytes >= kLayerPixelFlushBytes) {
+        flush();
+    }
+}
+
+void LayerPixelLoader::flush()
+{
+    if (m_jobs.isEmpty()) return;
+    QElapsedTimer timer;
+    timer.start();
+    const int chunk = layerPixelChunk();
+    for (int start = 0; start < m_jobs.size(); start += chunk) {
+        const int count = qMin(chunk, m_jobs.size() - start);
+        // 取出本块 (从队头消费, 队列持续收缩), 多核并行解码。
+        // QImage::fromData 各自独立, 线程安全。
+        QVector<PendingLayerPixels> batch;
+        batch.reserve(count);
+        for (int i = 0; i < count; ++i) {
+            batch.append(m_jobs[start + i]);
+        }
+        QtConcurrent::blockingMap(batch, [](PendingLayerPixels &j) {
+            if (j.hasPng && !j.pngBytes.isEmpty()) {
+                j.decoded.loadFromData(j.pngBytes, "PNG");
+            }
+        });
+        // 串行写回: Krita tile 分配/写入不并发; 写完立即释放字节缓冲
+        for (int i = 0; i < count; ++i) {
+            PendingLayerPixels &j = batch[i];
+            KisPaintDeviceSP dev = j.dev;
+            if (dev) {
+                if (!j.decoded.isNull()) {
+                    dev->clear();
+                    dev->convertFromQImage(j.decoded, nullptr);
+                    dev->setDirty();
+                } else if (j.hasData && !j.hasPng && !j.pngBytes.isEmpty()) {
+                    // 非 PNG (Krita 原生 gbr/逐层格式): 慢路径
+                    QBuffer buf(&j.pngBytes);
+                    buf.open(QIODevice::ReadOnly);
+                    if (dev->read(&buf)) {
+                        dev->setDirty();
+                    } else {
+                        qWarning() << "LayerPixelLoader: dev->read failed";
+                    }
+                }
+                if (!j.defaultPixel.isEmpty()) {
+                    KoColor defColor(reinterpret_cast<const quint8 *>(j.defaultPixel.constData()), dev->colorSpace());
+                    dev->setDefaultPixel(defColor);
+                }
+            }
+            j.decoded = QImage();
+            j.pngBytes.clear();
+            j.defaultPixel.clear();
+        }
+        for (int i = 0; i < count; ++i) {
+            m_jobs.removeAt(start);
+        }
+    }
+    m_jobs.clear();
+    m_stagedBytes = 0;
+    qDebug() << "LayerPixelLoader flush took" << timer.elapsed() << "ms";
+}
+
+// stage 模式的图层像素加载: 在候选文件名循环里只读字节并交给 loader
+// (PNG 解码延迟到 flush 时多核并行)。store 交互全部留在调用线程。
+static bool stageLayerDataFromStore(KoStore *store, LayerPixelLoader *loader, KisPaintDeviceSP dev, const QString &docName, const QString &filename, int index)
+{
+    if (!store || !loader || !dev) return false;
 
     QStringList candidates;
     if (!docName.isEmpty() && !filename.isEmpty()) {
@@ -870,18 +951,11 @@ static bool loadLayerDataFromStore(KoStore *store, KisPaintDeviceSP dev, const Q
             if (data.isEmpty()) {
                 continue;
             }
-            if (data.size() >= 8 && memcmp(data.constData(), "\x89PNG\r\n\x1a\n", 8) == 0) {
-                paintDeviceFromPng(dev, data);
-            } else {
-                QBuffer buf(&data);
-                buf.open(QIODevice::ReadOnly);
-                if (dev->read(&buf)) {
-                    dev->setDirty();
-                } else {
-                    qWarning() << "loadLayerDataFromStore: dev->read failed for" << cand;
-                    continue;
-                }
-            }
+            PendingLayerPixels job;
+            job.dev = dev;
+            job.pngBytes = data;
+            job.hasPng = (data.size() >= 8 && memcmp(data.constData(), "\x89PNG\r\n\x1a\n", 8) == 0);
+            job.hasData = true;
 
             // Check if defaultpixel exists
             if (store->open(cand + ".defaultpixel")) {
@@ -889,10 +963,11 @@ static bool loadLayerDataFromStore(KoStore *store, KisPaintDeviceSP dev, const Q
                 QByteArray dp = readAllStoreBytes(store);
                 store->close();
                 if (dp.size() == pxSize) {
-                    KoColor defColor(reinterpret_cast<const quint8*>(dp.constData()), dev->colorSpace());
-                    dev->setDefaultPixel(defColor);
+                    job.defaultPixel = dp;
                 }
             }
+            // PNG 解码延迟到 loader->flush() 多核并行 (KoStore 交互仍在此串行)
+            loader->stage(job);
             return true;
         }
     }
@@ -905,7 +980,8 @@ static bool loadKraNodesDom(const QDomElement &parentElem,
                             KoStore *store,
                             const QString &docName,
                             int &layerIndexCounter,
-                            bool *bgVisible)
+                            bool *bgVisible,
+                            LayerPixelLoader *loader)
 {
     if (parentElem.isNull() || !image || !parentNode || !store) return false;
 
@@ -938,7 +1014,7 @@ static bool loadKraNodesDom(const QDomElement &parentElem,
         } else {
             KisPaintLayerSP pl = new KisPaintLayer(image, name, opacity, cs);
             const QString fn = el.attribute("filename");
-            loadLayerDataFromStore(store, pl->paintDevice(), docName, fn, layerIndexCounter++);
+            stageLayerDataFromStore(store, loader, pl->paintDevice(), docName, fn, layerIndexCounter++);
             node = pl;
         }
 
@@ -978,7 +1054,7 @@ static bool loadKraNodesDom(const QDomElement &parentElem,
                 QDomElement subLayers = el.firstChildElement("layers");
                 if (subLayers.isNull()) subLayers = el.firstChildElement("LAYERS");
                 if (!subLayers.isNull()) {
-                    loadKraNodesDom(subLayers, image, node, store, docName, layerIndexCounter, bgVisible);
+                    loadKraNodesDom(subLayers, image, node, store, docName, layerIndexCounter, bgVisible, loader);
                 }
             }
         }
@@ -1001,7 +1077,11 @@ bool ReverieCore::loadKraTree(const QByteArray &maindocBytes, KisImageSP image, 
     if (layersElem.isNull()) return false;
 
     int counter = 0;
-    return loadKraNodesDom(layersElem, image, image->rootLayer(), store, docName, counter, bgVisible);
+    LayerPixelLoader loader;
+    const bool ok = loadKraNodesDom(layersElem, image, image->rootLayer(), store, docName, counter, bgVisible, &loader);
+    // 树构建完成后统一并行解码 + 写回 (大批 PNG 解码是多核并行的大头)
+    loader.flush();
+    return ok;
 }
 
 bool ReverieCore::loadRevp(const QString &path)
@@ -1192,6 +1272,7 @@ bool ReverieCore::loadRevp(const QString &path)
         paint->original()->setDirty();
         image->addNode(paint, image->rootLayer());
     } else {
+        LayerPixelLoader loader;
         for (int i = 0; i < layersArray.size(); ++i) {
             QJsonObject layerObj = layersArray[i].toObject();
             const QString name = layerObj["name"].toString(i == 0 ? QStringLiteral("背景") : QString("图层 %1").arg(i));
@@ -1217,15 +1298,15 @@ bool ReverieCore::loadRevp(const QString &path)
             if (store->open(layerFileName)) {
                 QByteArray lData = readAllStoreBytes(store.data());
                 store->close();
-                QImage lImg;
-                if (!lData.isEmpty() && lImg.loadFromData(lData, "PNG")) {
-                    KisPaintDeviceSP dev = layer->paintDevice();
-                    if (dev) {
-                        dev->clear();
-                        dev->convertFromQImage(lImg, 0);
-                        dev->setDirty();
-                        loadedPixelData = true;
-                    }
+                if (!lData.isEmpty()) {
+                    PendingLayerPixels job;
+                    job.dev = layer->paintDevice();
+                    job.pngBytes = lData;
+                    job.hasPng = true;
+                    job.hasData = true;
+                    // PNG 解码延迟到 loader.flush() 多核并行
+                    loader.stage(job);
+                    loadedPixelData = true;
                 }
             }
             if (!loadedPixelData && isBg) {
@@ -1236,6 +1317,7 @@ bool ReverieCore::loadRevp(const QString &path)
 
             image->addNode(layer, image->rootLayer());
         }
+        loader.flush();
     }
     } // !treeLoaded
 

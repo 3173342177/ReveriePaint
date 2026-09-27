@@ -160,16 +160,6 @@ QByteArray readStoreEntryBytes(KoStore *store)
     return data;
 }
 
-void paintDeviceFromPng(KisPaintDeviceSP dev, const QByteArray &pngBytes)
-{
-    if (!dev || pngBytes.isEmpty()) return;
-    QImage img;
-    if (!img.loadFromData(pngBytes, "PNG")) return;
-    dev->clear();
-    dev->convertFromQImage(img, nullptr);
-    dev->setDirty();
-}
-
 } // namespace
 
 bool ReverieCore::loadLayersXmlTree(const QByteArray &xmlData, KisImageSP image, KoStore *store, bool *bgVisible)
@@ -188,6 +178,8 @@ bool ReverieCore::loadLayersXmlTree(const QByteArray &xmlData, KisImageSP image,
     parents.append(image->rootLayer());
     bool any = false;
     bool bg = false;
+    // PNG 解码延迟到解析完成后多核并行 (见 LayerPixelLoader, ReverieCoreInternal.h)
+    LayerPixelLoader loader;
 
     auto applyCommonAttrs = [&](KisNodeSP node) {
         const QXmlStreamAttributes a = r.attributes();
@@ -242,7 +234,14 @@ bool ReverieCore::loadLayersXmlTree(const QByteArray &xmlData, KisImageSP image,
                     png = readStoreEntryBytes(store);
                     store->close();
                 }
-                paintDeviceFromPng(pl->original(), png);
+                if (!png.isEmpty()) {
+                    PendingLayerPixels job;
+                    job.dev = pl->original();
+                    job.pngBytes = png;
+                    job.hasPng = true;
+                    job.hasData = true;
+                    loader.stage(job);
+                }
                 node = pl;
             } else if (name == QLatin1String("group")) {
                 node = new KisGroupLayer(image, nodeName.isEmpty() ? QStringLiteral("图层组") : nodeName, 255, cs);
@@ -280,7 +279,14 @@ bool ReverieCore::loadLayersXmlTree(const QByteArray &xmlData, KisImageSP image,
                     store->close();
                 }
                 KisPaintLayerSP pl = new KisPaintLayer(image, nodeName, 255, cs);
-                paintDeviceFromPng(pl->original(), png);
+                if (!png.isEmpty()) {
+                    PendingLayerPixels job;
+                    job.dev = pl->original();
+                    job.pngBytes = png;
+                    job.hasPng = true;
+                    job.hasData = true;
+                    loader.stage(job);
+                }
                 node = pl;
             } else if (name == QLatin1String("transparencymask")) {
                 node = new KisTransparencyMask(image, nodeName);
@@ -322,6 +328,8 @@ bool ReverieCore::loadLayersXmlTree(const QByteArray &xmlData, KisImageSP image,
             }
         }
     }
+    // 树解析完成, 统一并行解码 + 串行写回全部暂存图层
+    loader.flush();
     if (r.hasError()) return false;
 
     if (bgVisible) *bgVisible = bg;

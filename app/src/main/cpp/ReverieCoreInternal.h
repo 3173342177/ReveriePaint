@@ -45,6 +45,7 @@
 #include <kis_brush_option.h>
 #include <KoPattern.h>
 #include <QMutex>
+#include <QImage>
 
 #include <QDebug>
 #if defined(Q_OS_ANDROID)
@@ -126,6 +127,37 @@
 #include <KoBgrColorSpaceTraits.h>
 #include <compositeops/KoCompositeOps.h>
 #include <QThread>
+
+// ---------------------------------------------------------------------------
+// 图层像素加载流水线 (loadRevp 平铺路径 / .kra 树 / layers.xml 树共用)。
+//
+// KoStore 非线程安全: ZIP 条目的字节读取必须串行。而 PNG 解码是多核并行
+// 的大头 (169 层 4K 文档串行解码实测 30s+, 是"大文档打开慢"的主因)。
+// 两阶段: stage() 只做字节收集 (调用方仍持有 store), flush() 分块并行
+// 解码后串行写回设备 (Krita tile 分配/写入不并发)。
+// ---------------------------------------------------------------------------
+struct PendingLayerPixels
+{
+    KisPaintDeviceSP dev;      // 目标设备 (弱持有: 调用方保证 flush 前存活)
+    QByteArray pngBytes;       // 像素数据原始字节
+    QByteArray defaultPixel;   // 可选 .defaultpixel 字节
+    QImage decoded;            // flush 阶段填充
+    bool hasPng = false;       // pngBytes 是 PNG (否则走 dev->read 慢路径)
+    bool hasData = false;      // 读到了像素数据
+};
+
+class LayerPixelLoader
+{
+public:
+    ~LayerPixelLoader();       // 兜底 flush (正常路径调用方显式 flush)
+    // 记录一个待加载任务; 累计字节超阈值时自动 flush 一批以限制峰值内存
+    void stage(PendingLayerPixels job);
+    // 并行解码 + 串行写回全部未决任务, 释放全部字节缓冲
+    void flush();
+private:
+    QVector<PendingLayerPixels> m_jobs;
+    qint64 m_stagedBytes = 0;
+};
 
 // One undo step wrapping several per-device KisTransaction children (taken
 // via KisTransaction::endAndTake). Krita's undo adapter pushes every
