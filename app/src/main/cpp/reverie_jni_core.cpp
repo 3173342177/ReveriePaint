@@ -228,6 +228,12 @@ Java_com_reverie_paint_core_ReverieCoreBridge_clearUndoHistory(JNIEnv *, jobject
     core()->clearUndoHistory();
 }
 
+JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_setUndoLimit(JNIEnv *, jobject, jint limit)
+{
+    core()->setUndoLimit(limit);
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_beginUndoMacro(JNIEnv *env, jobject, jstring text)
 {

@@ -202,6 +202,7 @@ add_library(reverie_jni SHARED
     ReverieCoreSelectionLasso.cpp
     ReverieCoreBrush.cpp
     ReverieCoreStroke.cpp
+    ReverieCoreUndoStore.cpp
     ReverieCoreRender.cpp
     ReverieCoreTransform.cpp
     ReverieCoreMiscTools.cpp

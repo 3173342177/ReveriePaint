@@ -8,6 +8,7 @@
  * ReverieCoreInternal.h, public API in ReverieCore.h)
  * ============================================================ */
 #include "ReverieCoreInternal.h"
+#include "ReverieCoreUndoStore.h"
 #include <cmath>
 
 void ReverieCore::touchStrokeStart(qreal x, qreal y, qreal pressure, qreal tiltX, qreal tiltY, qreal rotation)
@@ -819,6 +820,15 @@ void ReverieCore::clearUndoHistory()
     }
     m_undoStore->clear();
     m_redoCount = 0;
+}
+
+void ReverieCore::setUndoLimit(int limit)
+{
+    // 0 = 无上限 (KUndo2QStack 语义); Kotlin 侧正常只会传 10..200
+    m_undoLimit = qMax(0, limit);
+    if (m_undoStore) {
+        m_undoStore->setUndoLimit(m_undoLimit);
+    }
 }
 
 void ReverieCore::beginUndoMacro(const QString &text)

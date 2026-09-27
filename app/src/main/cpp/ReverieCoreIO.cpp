@@ -8,6 +8,7 @@
  * ReverieCoreInternal.h, public API in ReverieCore.h)
  * ============================================================ */
 #include "ReverieCoreInternal.h"
+#include "ReverieCoreUndoStore.h"
 #include <QXmlStreamReader>
 #include <QXmlStreamWriter>
 #include <QDomDocument>
@@ -1121,7 +1122,8 @@ bool ReverieCore::loadRevp(const QString &path)
     delete m_strokeTxn;
     m_strokeTxn = nullptr;
     m_strokeTxnActive = false;
-    m_undoStore = new KisSurrogateUndoStore();
+    m_undoStore = new ReverieUndoStore();
+    m_undoStore->setUndoLimit(m_undoLimit);
     m_redoCount = 0;
 
     const KoColorSpace *cs = KoColorSpaceRegistry::instance()->rgb8();
@@ -1491,7 +1493,8 @@ bool ReverieCore::loadPsd(const QString &path)
     delete m_strokeTxn;
     m_strokeTxn = nullptr;
     m_strokeTxnActive = false;
-    m_undoStore = new KisSurrogateUndoStore();
+    m_undoStore = new ReverieUndoStore();
+    m_undoStore->setUndoLimit(m_undoLimit);
     m_redoCount = 0;
 
     const KoColorSpace *cs = KoColorSpaceRegistry::instance()->rgb8();

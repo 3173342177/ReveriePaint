@@ -248,6 +248,8 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
                 renderW = coreW
                 renderH = coreH
                 displayBufferInvalid = true
+                // 新文档的撤销栈是 C++ 侧新建的, 每次都要重新应用历史上限
+                ReverieCoreBridge.setUndoLimit(maxUndoSteps)
                 ReverieCoreBridge.setBrushColor(brushColor)
                 refreshSavedSelections()
                 // Chain the project's own recording so new strokes extend the
@@ -1025,6 +1027,7 @@ internal fun PaintViewModel.startPainting(
                     ReverieCoreBridge.clearUndoHistory()
                 }
                 syncLayersFromNative()
+                ReverieCoreBridge.setUndoLimit(maxUndoSteps)
                 ReverieCoreBridge.setBrushColor(brushColor)
                 if (animation) {
                     // 动画画布: 为最上面的可动画图层建关键帧通道并设帧率
@@ -1383,6 +1386,7 @@ private suspend fun PaintViewModel.convertViaCore(
             else -> ReverieCoreBridge.loadPng(srcFile.absolutePath)
         }
         if (loaded) {
+            ReverieCoreBridge.setUndoLimit(maxUndoSteps)
             val extraJson = """
             {
                 "strokeCount": 0,

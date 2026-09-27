@@ -600,6 +600,9 @@ object ReverieCoreBridge {
 
     external fun clearUndoHistory()
 
+    /** 设置撤销历史上限 (命令条数, 0 = 无上限); 超限命令在下次 push 时从栈底释放 */
+    external fun setUndoLimit(limit: Int)
+
     external fun beginUndoMacro(text: String = "")
 
     external fun endUndoMacro()

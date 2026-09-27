@@ -9,6 +9,7 @@
  * ============================================================ */
 #include "ReverieCoreInternal.h"
 #include "ReverieCoreColorSpaceHook.h"
+#include "ReverieCoreUndoStore.h"
 
 #include <future>
 #include <QSet>
@@ -69,7 +70,8 @@ bool ReverieCore::newDocument(int width, int height, bool infiniteCanvas)
     delete m_strokeTxn;
     m_strokeTxn = nullptr;
     m_strokeTxnActive = false;
-    m_undoStore = new KisSurrogateUndoStore();
+    m_undoStore = new ReverieUndoStore();
+    m_undoStore->setUndoLimit(m_undoLimit);
     m_redoCount = 0;
 
     const KoColorSpace *cs = KoColorSpaceRegistry::instance()->rgb8();
