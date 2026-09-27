@@ -359,6 +359,7 @@
     <string name="project_creating_canvas">Creating canvas...</string>
     <string name="project_preparing_replay">Preparing replay...</string>
     <string name="project_importing_progress">Importing artwork...</string>
+    <string name="project_loading_progress">Loading artwork...</string>
 
     <string name="layer_default_background">Background</string>
     <string name="layer_default_paint_layer">Paint Layer %d</string>

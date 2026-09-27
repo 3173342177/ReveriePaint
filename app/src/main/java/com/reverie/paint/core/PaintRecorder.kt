@@ -120,9 +120,10 @@ class PaintRecorder {
         snapshotFile = null
         if (prior != null) {
             synchronized(ioLock) {
-                priorEvents = prior.events.takeIf { it.isNotEmpty() }
-                priorEventCount = prior.eventCount
-                priorTotalMs = prior.totalMs
+                // 超大录像流保护: 超过 32MB 的历史事件流不继续链式堆叠，防止单工程长期绘画导致内存无限膨胀
+                priorEvents = prior.events.takeIf { it.isNotEmpty() && it.size <= MAX_RECORDING_BYTES }
+                priorEventCount = if (priorEvents != null) prior.eventCount else 0
+                priorTotalMs = if (priorEvents != null) prior.totalMs else 0L
             }
             val snap = prior.snapshot
             if (snap != null && snap.isNotEmpty()) {
@@ -467,7 +468,10 @@ class PaintRecorder {
         }
     }
 
-    companion object {        /** Parse a recording blob; null on any error. */
+    companion object {
+        const val MAX_RECORDING_BYTES = 32 * 1024 * 1024 // 32MB 录制事件流上限 (防超长历史堆叠膨胀)
+
+        /** Parse a recording blob; null on any error. */
         fun parse(data: ByteArray): ParsedRecording? {
             val r = RecordingReader(data)
             return try {

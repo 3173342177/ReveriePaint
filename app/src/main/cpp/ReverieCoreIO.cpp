@@ -297,26 +297,38 @@ bool writeRevpStore(const QString &path,
         pngTasks.append({fn, kf.img, {}});
     }
 
-    // 多核并行 PNG 编码 (quality = 70: 平衡速度与压缩比, 无损画质)
+    // 分块多核并行 PNG 编码并即时写盘 (quality = 70: 平衡速度与压缩比, 无损画质)
+    // 限制单次并行编码块大小, 编码完成立刻写入 ZIP 并释放 QImage/字节缓冲,
+    // 斩断大文档(如 169 层 4K)在全量编码段峰值累积数 GB 内存导致的 LMK 崩溃。
     QElapsedTimer encodeTimer;
     encodeTimer.start();
     const int pngQuality = 70;
-    QtConcurrent::blockingMap(pngTasks, [pngQuality](PngImageTask &task) {
-        if (!task.image.isNull()) {
-            QBuffer buf(&task.encodedBytes);
-            buf.open(QIODevice::WriteOnly);
-            task.image.save(&buf, "PNG", pngQuality);
+    const int chunk = qBound(2, QThread::idealThreadCount(), 6);
+    for (int start = 0; start < pngTasks.size(); start += chunk) {
+        const int count = qMin(chunk, pngTasks.size() - start);
+        QVector<PngImageTask*> batch;
+        batch.reserve(count);
+        for (int i = 0; i < count; ++i) {
+            batch.append(&pngTasks[start + i]);
         }
-    });
-    const qint64 encodeMs = encodeTimer.elapsed();
-
-    // 顺序写入已编码的 PNG 条目到 ZIP 存储
-    for (const auto &task : pngTasks) {
-        if (!task.encodedBytes.isEmpty() && store->open(task.fileName)) {
-            store->write(task.encodedBytes);
-            store->close();
+        QtConcurrent::blockingMap(batch, [pngQuality](PngImageTask *task) {
+            if (!task->image.isNull()) {
+                QBuffer buf(&task->encodedBytes);
+                buf.open(QIODevice::WriteOnly);
+                task->image.save(&buf, "PNG", pngQuality);
+            }
+        });
+        for (int i = 0; i < count; ++i) {
+            PngImageTask &task = pngTasks[start + i];
+            if (!task.encodedBytes.isEmpty() && store->open(task.fileName)) {
+                store->write(task.encodedBytes);
+                store->close();
+            }
+            task.image = QImage();
+            task.encodedBytes.clear();
         }
     }
+    const qint64 encodeMs = encodeTimer.elapsed();
 
     // 3. Imported assets (音频/视频等二进制资源, 文件名即资源名)
     for (auto it = assets.constBegin(); it != assets.constEnd(); ++it) {
@@ -498,10 +510,16 @@ bool ReverieCore::saveRevp(const QString &path, const QString &extraMetaJson, co
         KisPaintDeviceSP dev = layerPaintDeviceFor(e);
         if (!dev) continue;
 
-        QImage layerImg = dev->convertToQImage(nullptr, 0, 0, image->width(), image->height());
-        if (layerImg.isNull()) {
-            layerImg = QImage(image->width(), image->height(), QImage::Format_ARGB32_Premultiplied);
+        QImage layerImg;
+        if (dev->exactBounds().isEmpty()) {
+            layerImg = QImage(1, 1, QImage::Format_ARGB32_Premultiplied);
             layerImg.fill(Qt::transparent);
+        } else {
+            layerImg = dev->convertToQImage(nullptr, 0, 0, image->width(), image->height());
+            if (layerImg.isNull()) {
+                layerImg = QImage(1, 1, QImage::Format_ARGB32_Premultiplied);
+                layerImg.fill(Qt::transparent);
+            }
         }
         layerImages.append(qMakePair(i, layerImg));
     }
@@ -520,7 +538,13 @@ bool ReverieCore::saveRevp(const QString &path, const QString &extraMetaJson, co
         for (int t : times) {
             KisPaintDeviceSP tmp = new KisPaintDevice(dev->colorSpace());
             kfCh->writeToDevice(t, tmp);
-            QImage img = tmp->convertToQImage(nullptr, 0, 0, image->width(), image->height());
+            QImage img;
+            if (tmp->exactBounds().isEmpty()) {
+                img = QImage(1, 1, QImage::Format_ARGB32_Premultiplied);
+                img.fill(Qt::transparent);
+            } else {
+                img = tmp->convertToQImage(nullptr, 0, 0, image->width(), image->height());
+            }
             if (!img.isNull()) {
                 RevpKeyframe kf;
                 kf.layer = i;
@@ -710,12 +734,18 @@ bool ReverieCore::saveRevpAsync(const QString &path, const QString &extraMetaJso
         KisPaintDeviceSP dev = layerPaintDeviceFor(e);
         if (!dev) continue;
 
-        QImage layerImg = dev->convertToQImage(nullptr, 0, 0, image->width(), image->height());
-        if (layerImg.isNull()) {
-            layerImg = QImage(image->width(), image->height(), QImage::Format_ARGB32_Premultiplied);
+        QImage layerImg;
+        if (dev->exactBounds().isEmpty()) {
+            layerImg = QImage(1, 1, QImage::Format_ARGB32_Premultiplied);
             layerImg.fill(Qt::transparent);
         } else {
-            layerImg = layerImg.copy();
+            layerImg = dev->convertToQImage(nullptr, 0, 0, image->width(), image->height());
+            if (layerImg.isNull()) {
+                layerImg = QImage(1, 1, QImage::Format_ARGB32_Premultiplied);
+                layerImg.fill(Qt::transparent);
+            } else {
+                layerImg = layerImg.copy();
+            }
         }
         layerImages.append(qMakePair(i, layerImg));
     }
@@ -793,7 +823,12 @@ bool ReverieCore::saveRevpAsync(const QString &path, const QString &extraMetaJso
             RevpKeyframe kf;
             kf.layer = kfd.layer;
             kf.time = kfd.time;
-            kf.img = kfd.dev->convertToQImage(nullptr, 0, 0, docW, docH);
+            if (kfd.dev->exactBounds().isEmpty()) {
+                kf.img = QImage(1, 1, QImage::Format_ARGB32_Premultiplied);
+                kf.img.fill(Qt::transparent);
+            } else {
+                kf.img = kfd.dev->convertToQImage(nullptr, 0, 0, docW, docH);
+            }
             if (!kf.img.isNull()) {
                 keyframeImages.append(kf);
             }
@@ -865,15 +900,17 @@ void LayerPixelLoader::flush()
     QElapsedTimer timer;
     timer.start();
     const int chunk = layerPixelChunk();
-    for (int start = 0; start < m_jobs.size(); start += chunk) {
-        const int count = qMin(chunk, m_jobs.size() - start);
+    while (!m_jobs.isEmpty()) {
+        const int count = qMin(chunk, m_jobs.size());
         // 取出本块 (从队头消费, 队列持续收缩), 多核并行解码。
         // QImage::fromData 各自独立, 线程安全。
         QVector<PendingLayerPixels> batch;
         batch.reserve(count);
         for (int i = 0; i < count; ++i) {
-            batch.append(m_jobs[start + i]);
+            batch.append(m_jobs[i]);
         }
+        m_jobs.erase(m_jobs.begin(), m_jobs.begin() + count);
+
         QtConcurrent::blockingMap(batch, [](PendingLayerPixels &j) {
             if (j.hasPng && !j.pngBytes.isEmpty()) {
                 j.decoded.loadFromData(j.pngBytes, "PNG");
@@ -906,9 +943,6 @@ void LayerPixelLoader::flush()
             j.decoded = QImage();
             j.pngBytes.clear();
             j.defaultPixel.clear();
-        }
-        for (int i = 0; i < count; ++i) {
-            m_jobs.removeAt(start);
         }
     }
     m_jobs.clear();

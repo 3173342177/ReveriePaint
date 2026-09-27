@@ -359,6 +359,7 @@
     <string name="project_creating_canvas">正在创建画布...</string>
     <string name="project_preparing_replay">正在准备回放...</string>
     <string name="project_importing_progress">正在导入作品...</string>
+    <string name="project_loading_progress">正在加载作品...</string>
 
     <string name="layer_default_background">背景</string>
     <string name="layer_default_paint_layer">颜料图层 %d</string>

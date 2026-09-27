@@ -189,6 +189,7 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
     // Navigate to painting page first, then show loading overlay while reading native file
     currentPage = Page.PAINTING
     isBlockingLoading = true
+    blockingLoadingMessage = getString(R.string.project_loading_progress)
     val isRecovered = p.isAutoSaved || p.filePath.contains(".autosave")
     docName = p.name
     lastAutoSaveTimeMs = 0L
@@ -1266,7 +1267,12 @@ fun PaintViewModel.importDocuments(
         var successCount = 0
         var lastImportedName = ""
 
-        for (uri in uris) {
+        for ((index, uri) in uris.withIndex()) {
+            if (uris.size > 1) {
+                withContext(Dispatchers.Main) {
+                    blockingLoadingMessage = "${getString(R.string.project_importing_progress)} (${index + 1}/${uris.size})"
+                }
+            }
             try {
                 val defaultName = getString(R.string.project_default_import_name)
                 val originalName = queryFileName(context, uri) ?: "${defaultName}_${System.currentTimeMillis() % 10000}"
@@ -1385,23 +1391,28 @@ private suspend fun PaintViewModel.convertViaCore(
             cont.resume(destFile.exists() && destFile.length() > 0)
         },
     ) {
-        val loaded = when (format) {
-            "psd" -> ReverieCoreBridge.loadPsd(srcFile.absolutePath)
-            "kra" -> ReverieCoreBridge.loadRevp(srcFile.absolutePath)
-            else -> ReverieCoreBridge.loadPng(srcFile.absolutePath)
-        }
-        if (loaded) {
-            ReverieCoreBridge.setUndoLimit(maxUndoSteps)
-            val extraJson = """
-            {
-                "strokeCount": 0,
-                "elapsedSeconds": 0,
-                "createdTime": ${System.currentTimeMillis()},
-                "colorMode": "RGB 8位",
-                "layerCount": ${ReverieCoreBridge.layerCount()}
+        try {
+            val loaded = when (format) {
+                "psd" -> ReverieCoreBridge.loadPsd(srcFile.absolutePath)
+                "kra" -> ReverieCoreBridge.loadRevp(srcFile.absolutePath)
+                else -> ReverieCoreBridge.loadPng(srcFile.absolutePath)
             }
-            """.trimIndent()
-            ReverieCoreBridge.saveRevp(destFile.absolutePath, extraJson, null)
+            if (loaded) {
+                ReverieCoreBridge.setUndoLimit(maxUndoSteps)
+                val extraJson = """
+                {
+                    "strokeCount": 0,
+                    "elapsedSeconds": 0,
+                    "createdTime": ${System.currentTimeMillis()},
+                    "colorMode": "RGB 8位",
+                    "layerCount": ${ReverieCoreBridge.layerCount()}
+                }
+                """.trimIndent()
+                ReverieCoreBridge.saveRevp(destFile.absolutePath, extraJson, null)
+            }
+        } finally {
+            // 导入转换完成后立即释放 native 文档, 避免多图层超大工程驻留在 g_core 累积内存峰值
+            ReverieCoreBridge.closeDocument()
         }
     }
 }
