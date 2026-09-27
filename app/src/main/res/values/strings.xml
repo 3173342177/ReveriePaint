@@ -1915,6 +1915,14 @@
     <string name="canvas_resample_bicubic">双三次平滑 (推荐)</string>
     <string name="canvas_resample_nearest">邻近点 (像素画)</string>
     <string name="canvas_resample_bilinear">双线性</string>
+    <string name="canvas_adjust_group_mode">模式</string>
+    <string name="canvas_adjust_group_size">尺寸</string>
+    <string name="canvas_adjust_group_position">位置</string>
+    <string name="canvas_adjust_group_ratio">比例</string>
+    <string name="canvas_adjust_group_scale">缩放</string>
+    <string name="canvas_adjust_group_interpolation">插值</string>
+    <string name="canvas_adjust_collapse">折叠面板</string>
+    <string name="canvas_adjust_expand">展开面板</string>
     <string name="canvas_toast_scale_success">已将图像缩放至 %1$d × %2$d</string>
 </resources>
 

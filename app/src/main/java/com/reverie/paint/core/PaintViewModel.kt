@@ -809,6 +809,10 @@ class PaintViewModel : ViewModel() {
 
     var isCanvasAdjustActive by mutableStateOf(false)
     var canvasAdjustState by mutableStateOf(com.reverie.paint.model.CanvasAdjustState())
+    /** 画布调整面板的拖拽偏移 (面板内部会按可视区钳制, 退出时归零) */
+    var canvasAdjustPanelOffset by mutableStateOf(androidx.compose.ui.geometry.Offset.Zero)
+    /** 画布调整面板折叠状态: 折叠后仅保留一条可拖动标题栏, 避免长期遮挡画布 */
+    var isCanvasAdjustPanelCollapsed by mutableStateOf(false)
 
     fun enterCanvasAdjustMode(mode: com.reverie.paint.model.CanvasAdjustMode = com.reverie.paint.model.CanvasAdjustMode.CROP_EXPAND) {
         val w = docWidth
@@ -840,6 +844,7 @@ class PaintViewModel : ViewModel() {
     fun applyCanvasAdjustment() {
         val s = canvasAdjustState
         isCanvasAdjustActive = false
+        canvasAdjustPanelOffset = androidx.compose.ui.geometry.Offset.Zero
         if (currentToolId == "crop") {
             val prev = lastToolId.ifEmpty { "brush" }
             applyTool(if (prev == "crop") "brush" else prev)

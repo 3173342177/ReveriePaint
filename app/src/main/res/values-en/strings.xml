@@ -1915,6 +1915,14 @@
     <string name="canvas_resample_bicubic">Bicubic Smooth (Recommended)</string>
     <string name="canvas_resample_nearest">Nearest Neighbor (Pixel Art)</string>
     <string name="canvas_resample_bilinear">Bilinear</string>
+    <string name="canvas_adjust_group_mode">Mode</string>
+    <string name="canvas_adjust_group_size">Size</string>
+    <string name="canvas_adjust_group_position">Anchor</string>
+    <string name="canvas_adjust_group_ratio">Ratio</string>
+    <string name="canvas_adjust_group_scale">Scale</string>
+    <string name="canvas_adjust_group_interpolation">Resample</string>
+    <string name="canvas_adjust_collapse">Collapse panel</string>
+    <string name="canvas_adjust_expand">Expand panel</string>
     <string name="canvas_toast_scale_success">Scaled image to %1$d × %2$d</string>
 </resources>
 
