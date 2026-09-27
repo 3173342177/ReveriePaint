@@ -1892,6 +1892,14 @@
     <string name="brush_import_dialog_default_group">Imported</string>
     <string name="toast_brush_import_success_single">Successfully imported brush: %s</string>
     <string name="toast_brush_import_success_multiple">Successfully imported %d brush files</string>
+
+    <!-- Shortcut Conflict & Toolbar Squeeze Warning -->
+    <string name="shortcut_conflict_unbound">Shortcut conflict: %2$s on %1$s has been unbound</string>
+    <string name="toolbar_squeezed_title">Toolbar Space Constrained</string>
+    <string name="toolbar_squeezed_desc">Screen height is too small to display tool buttons. Consider reducing UI scale or shortening slider length to restore toolbar visibility</string>
+    <string name="toolbar_squeezed_slider_length">Quick Slider Length</string>
+    <string name="toolbar_squeezed_ui_scale">UI Scale</string>
+    <string name="toolbar_squeezed_dismiss_forever">Don\'t show again</string>
 </resources>
 
 

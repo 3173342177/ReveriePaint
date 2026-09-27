@@ -37,7 +37,7 @@ data class ShortcutDefinition(
 
 val ALL_SHORTCUT_DEFINITIONS = listOf(
     // 绘画 (Painting)
-    ShortcutDefinition("tool_brush", ShortcutCategory.PAINTING, "画笔工具", "无", R.string.shortcut_def_brush),
+    ShortcutDefinition("tool_brush", ShortcutCategory.PAINTING, "画笔工具", "B", R.string.shortcut_def_brush),
     ShortcutDefinition("brush_size_inc", ShortcutCategory.PAINTING, "增大画笔", "]", R.string.shortcut_def_brush_size_inc),
     ShortcutDefinition("brush_size_dec", ShortcutCategory.PAINTING, "缩小画笔", "[", R.string.shortcut_def_brush_size_dec),
     ShortcutDefinition("brush_opacity_inc", ShortcutCategory.PAINTING, "增大不透明度", "LeftCtrl + ]", R.string.shortcut_def_brush_opacity_inc),
@@ -52,7 +52,7 @@ val ALL_SHORTCUT_DEFINITIONS = listOf(
     ShortcutDefinition("flip_canvas", ShortcutCategory.PAINTING, "翻转画布", "H", R.string.shortcut_def_flip_canvas),
     ShortcutDefinition("rotate_canvas", ShortcutCategory.PAINTING, "旋转画布", "R", R.string.shortcut_def_rotate_canvas),
     ShortcutDefinition("save_document", ShortcutCategory.PAINTING, "保存", "LeftCtrl + S", R.string.shortcut_def_save_document),
-    ShortcutDefinition("undo", ShortcutCategory.PAINTING, "撤销", "B", R.string.shortcut_def_undo),
+    ShortcutDefinition("undo", ShortcutCategory.PAINTING, "撤销", "LeftCtrl + Z", R.string.shortcut_def_undo),
     ShortcutDefinition("redo", ShortcutCategory.PAINTING, "重做", "LeftCtrl + LeftShift + Z", R.string.shortcut_def_redo),
     ShortcutDefinition("toggle_eraser", ShortcutCategory.PAINTING, "当前工具与橡皮切换", "PageDown", R.string.shortcut_def_toggle_eraser),
     ShortcutDefinition("toggle_last_tool", ShortcutCategory.PAINTING, "当前工具与上次使用工具切换", "无", R.string.shortcut_def_toggle_last_tool),
@@ -151,10 +151,25 @@ internal fun PaintViewModel.getShortcutKey(id: String): String {
 
 internal fun PaintViewModel.setShortcutKey(id: String, keyStr: String) {
     val map = shortcutBindings.toMutableMap()
-    if (keyStr.isBlank() || keyStr == "无") {
+    val targetKey = keyStr.trim()
+    if (targetKey.isBlank() || targetKey == "无" || targetKey.equals("none", ignoreCase = true)) {
         map[id] = "无"
     } else {
-        map[id] = keyStr
+        var overriddenDef: ShortcutDefinition? = null
+        for (def in ALL_SHORTCUT_DEFINITIONS) {
+            if (def.id != id) {
+                val current = map[def.id] ?: def.defaultKey
+                if (current.equals(targetKey, ignoreCase = true)) {
+                    map[def.id] = "无"
+                    overriddenDef = def
+                }
+            }
+        }
+        map[id] = targetKey
+        if (overriddenDef != null) {
+            val defName = overriddenDef.nameRes?.let { getString(it) } ?: overriddenDef.name
+            showActionToast(R.string.shortcut_conflict_unbound, R.drawable.ic_alert_triangle, defName, targetKey)
+        }
     }
     shortcutBindings = map
     saveShortcuts()
@@ -297,16 +312,30 @@ internal fun PaintViewModel.handleKeyEvent(event: KeyEvent): Boolean {
     val keyStr = keyEventToString(event)
     if (keyStr.isBlank()) return false
 
-    // 2. 匹配注册/自定义快捷键
-    for (def in ALL_SHORTCUT_DEFINITIONS) {
-        val bound = getShortcutKey(def.id)
-        if (bound.equals(keyStr, ignoreCase = true) ||
-            (bound == "Space(长按)" && keyStr == "Space")
-        ) {
-            executeShortcutAction(def.id)
-            return true
-        }
+    // 2. 匹配注册/自定义快捷键 (优先匹配用户显式自定义的绑定，再匹配默认绑定)
+    val customMatch = ALL_SHORTCUT_DEFINITIONS.firstOrNull { def ->
+        val custom = shortcutBindings[def.id]
+        custom != null && !custom.equals("无", ignoreCase = true) && !custom.equals("none", ignoreCase = true) &&
+            (custom.equals(keyStr, ignoreCase = true) || (custom == "Space(长按)" && keyStr == "Space"))
     }
+    val targetDef = customMatch ?: ALL_SHORTCUT_DEFINITIONS.firstOrNull { def ->
+        val bound = getShortcutKey(def.id)
+        if (bound.equals("无", ignoreCase = true) || bound.equals("none", ignoreCase = true)) false
+        else bound.equals(keyStr, ignoreCase = true) || (bound == "Space(长按)" && keyStr == "Space")
+    }
+
+    if (targetDef != null) {
+        executeShortcutAction(targetDef.id)
+        return true
+    }
+
+    // 检查用户是否显式解绑了此快捷键 (避免桌面兜底重新激活已解绑的热键)
+    val isExplicitlyDisabled = ALL_SHORTCUT_DEFINITIONS.any { def ->
+        val custom = shortcutBindings[def.id]
+        custom != null && (custom.equals("无", ignoreCase = true) || custom.equals("none", ignoreCase = true)) &&
+            def.defaultKey.equals(keyStr, ignoreCase = true)
+    }
+    if (isExplicitlyDisabled) return false
 
     // 3. 行业标准桌面快捷键兜底 (Photoshop / Krita 规范)
     return when (keyStr) {

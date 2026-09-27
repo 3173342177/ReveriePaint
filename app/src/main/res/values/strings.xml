@@ -1892,6 +1892,14 @@
     <string name="brush_import_dialog_default_group">导入</string>
     <string name="toast_brush_import_success_single">已成功导入笔刷：%s</string>
     <string name="toast_brush_import_success_multiple">已成功导入 %d 个笔刷文件</string>
+
+    <!-- Shortcut Conflict & Toolbar Squeeze Warning -->
+    <string name="shortcut_conflict_unbound">快捷键冲突：%1$s 占用的 %2$s 已自动解绑</string>
+    <string name="toolbar_squeezed_title">工具栏显示空间不足</string>
+    <string name="toolbar_squeezed_desc">当前屏幕高度不足以完整显示工具按钮。建议缩小界面缩放或缩短快捷滑块长度，以恢复工具栏显示</string>
+    <string name="toolbar_squeezed_slider_length">快捷滑块长度</string>
+    <string name="toolbar_squeezed_ui_scale">界面缩放</string>
+    <string name="toolbar_squeezed_dismiss_forever">不再提示</string>
 </resources>
 
 

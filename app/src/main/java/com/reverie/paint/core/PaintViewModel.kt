@@ -791,6 +791,22 @@ class PaintViewModel : ViewModel() {
 
     /** 左侧工具条滑块面板的实时高度 (px), 由 ToolRail 测量写入; 时间轴"展开至同高"对齐用 */
     var railSliderPanelHeightPx by mutableFloatStateOf(0f)
+    var showToolbarSqueezedDialog by mutableStateOf(false)
+    var toolbarSqueezedWarningDismissed by mutableStateOf(false)
+
+    fun dismissToolbarSqueezedWarning(forever: Boolean) {
+        showToolbarSqueezedDialog = false
+        if (forever) {
+            toolbarSqueezedWarningDismissed = true
+            if (::appContext.isInitialized) {
+                appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("toolbarSqueezedWarningDismissed", true)
+                    .apply()
+            }
+        }
+    }
+
     var extendToCutout by mutableStateOf(true)
     var homeSelectedTab by mutableIntStateOf(0)
 
@@ -1881,6 +1897,7 @@ class PaintViewModel : ViewModel() {
             paintingUiScale = prefs.getFloat("paintingUiScale", 1.0f).coerceIn(0.70f, 1.40f)
             layerRowHeightDp = prefs.getInt("layerRowHeightDp", 52).coerceIn(40, 80)
             quickSliderHeightDp = prefs.getInt("quickSliderHeightDp", 175).coerceIn(100, 260)
+            toolbarSqueezedWarningDismissed = prefs.getBoolean("toolbarSqueezedWarningDismissed", false)
             panelPinningEnabled = prefs.getBoolean("panelPinningEnabled", false)
             leftHandMode = prefs.getBoolean("leftHandMode", false)
             selectionMaskColorHex = prefs.getString("selection_mask_color", "#141416") ?: "#141416"

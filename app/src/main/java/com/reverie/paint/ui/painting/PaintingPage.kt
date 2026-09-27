@@ -777,6 +777,13 @@ fun PaintingPage(
             )
         }
 
+        if (vm.showToolbarSqueezedDialog) {
+            ToolbarSqueezedDialog(
+                vm = vm,
+                onDismiss = { vm.showToolbarSqueezedDialog = false },
+            )
+        }
+
         com.reverie.paint.ui.components.DragHoverOverlay(
             visible = vm.isDraggingExternal,
             hint = stringResource(R.string.drag_drop_import_hint),
@@ -788,6 +795,7 @@ fun PaintingPage(
                 filterController != null -> filterController.cancel()
                 vm.pendingExternalImageUri != null -> vm.pendingExternalImageUri = null
                 vm.pendingExternalBrushUris != null -> vm.pendingExternalBrushUris = null
+                vm.showToolbarSqueezedDialog -> vm.showToolbarSqueezedDialog = false
                 showDiscardConfirmDialog -> showDiscardConfirmDialog = false
                 showExitSaveDialog -> showExitSaveDialog = false
                 brushPanelOpen && !(vm.panelPinningEnabled && vm.isBrushPanelPinned) -> {

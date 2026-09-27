@@ -84,19 +84,36 @@ class PaperSoundEngine(private val context: Context? = null) {
         if (running.get()) return
         pencilSamples = loadPencilSample()
         try {
-            val minBuf = AudioTrack.getMinBufferSize(
+            val minBufBytes = AudioTrack.getMinBufferSize(
                 SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
-            ).coerceAtLeast(CHUNK_FRAMES * 2)
+            ).coerceAtLeast(CHUNK_FRAMES * 2 * 2)
             val attrs = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setFlags(AudioAttributes.FLAG_LOW_LATENCY)
                 .build()
             val format = AudioFormat.Builder()
                 .setSampleRate(SAMPLE_RATE)
                 .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                 .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                 .build()
-            track = AudioTrack(attrs, format, minBuf * 2, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
+            val builder = AudioTrack.Builder()
+                .setAudioAttributes(attrs)
+                .setAudioFormat(format)
+                .setBufferSizeInBytes(minBufBytes * 2)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+            }
+
+            val newTrack = builder.build()
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                try {
+                    newTrack.setBufferSizeInFrames(CHUNK_FRAMES * 2)
+                } catch (_: Throwable) {}
+            }
+            track = newTrack
         } catch (_: Throwable) {
             track = null
         }
@@ -122,6 +139,11 @@ class PaperSoundEngine(private val context: Context? = null) {
             if (isTickType) {
                 pendingTick = true
             } else {
+                if (!writing && currentGain <= SILENCE_GAIN) {
+                    val p = strokePressure
+                    val pressureGain = 0.35f + 0.65f * p
+                    currentGain = 0.35f * speedGain * pressureGain * eraseScale * (volume * volume) * profile.masterGain
+                }
                 writing = true
             }
             lock.notifyAll()

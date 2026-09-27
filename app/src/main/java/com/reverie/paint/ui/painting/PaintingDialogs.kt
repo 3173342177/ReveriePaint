@@ -394,3 +394,158 @@ fun ExternalImageImportDialog(
     }
 }
 
+@Composable
+internal fun ToolbarSqueezedDialog(
+    vm: PaintViewModel,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
+    ) {
+        androidx.compose.material3.Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Morandi.panel,
+            border = androidx.compose.foundation.BorderStroke(1.dp, Morandi.border),
+            shadowElevation = 16.dp,
+            modifier = Modifier.width(360.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Morandi.accent.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_help_circle),
+                            contentDescription = null,
+                            tint = Morandi.accent,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.toolbar_squeezed_title),
+                        color = Morandi.text,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = stringResource(R.string.toolbar_squeezed_desc),
+                    color = Morandi.subText,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(20.dp))
+
+                // Slider 1: UI Scale (0.70x ~ 1.30x)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.toolbar_squeezed_ui_scale),
+                            color = Morandi.text,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "${(vm.paintingUiScale * 100).toInt()}%",
+                            color = Morandi.subText,
+                            fontSize = 13.sp,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    ReSlider(
+                        value = ((vm.paintingUiScale - 0.70f) / 0.60f).coerceIn(0f, 1f),
+                        onValue = { fraction ->
+                            val newScale = 0.70f + fraction * 0.60f
+                            vm.updatePaintingUiScale(newScale)
+                        },
+                        height = 24,
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Slider 2: Quick Slider Height (100dp ~ 260dp)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.toolbar_squeezed_slider_length),
+                            color = Morandi.text,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "${vm.quickSliderHeightDp} dp",
+                            color = Morandi.subText,
+                            fontSize = 13.sp,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    ReSlider(
+                        value = ((vm.quickSliderHeightDp - 100f) / 160f).coerceIn(0f, 1f),
+                        onValue = { fraction ->
+                            val newHeight = (100f + fraction * 160f).roundToInt()
+                            vm.updateQuickSliderHeight(newHeight)
+                        },
+                        height = 24,
+                    )
+                }
+
+                Spacer(Modifier.height(24.dp))
+
+                // Confirm button
+                ReTextButton(
+                    text = stringResource(R.string.common_confirm),
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = Morandi.accent,
+                    contentColor = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // Don't show again button
+                ReTextButton(
+                    text = stringResource(R.string.toolbar_squeezed_dismiss_forever),
+                    onClick = {
+                        vm.dismissToolbarSqueezedWarning(forever = true)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = Color.Transparent,
+                    contentColor = Morandi.subText,
+                    fontSize = 13.sp,
+                )
+            }
+        }
+    }
+}
+
+

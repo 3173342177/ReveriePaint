@@ -14,6 +14,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -120,7 +121,26 @@ fun ToolRail(
         RoundedCornerShape(topEnd = 16.dp)
     }
 
-    Box(modifier = modifier.systemHoverIcon(context).fillMaxHeight().width(36.dp)) {
+    BoxWithConstraints(modifier = modifier.systemHoverIcon(context).fillMaxHeight().width(36.dp)) {
+        val totalHeightDp = maxHeight
+        val density = LocalDensity.current
+        val totalHeightPx = with(density) { totalHeightDp.toPx() }
+        val spacerHeight = if (totalHeightDp < 520.dp) 8.dp else 48.dp
+
+        // 检测上方工具栏是否被底部面板挤压消失 (可用高度不足以容纳两个工具按钮)
+        val remainingHeightPx = totalHeightPx - vm.railSliderPanelHeightPx - with(density) { spacerHeight.toPx() }
+        LaunchedEffect(remainingHeightPx, vm.toolbarSqueezedWarningDismissed, mainTools.size) {
+            if (vm.railSliderPanelHeightPx > 0 && mainTools.isNotEmpty() && !vm.toolbarSqueezedWarningDismissed) {
+                if (remainingHeightPx < with(density) { 72.dp.toPx() }) {
+                    delay(300)
+                    val curRemaining = totalHeightPx - vm.railSliderPanelHeightPx - with(density) { spacerHeight.toPx() }
+                    if (curRemaining < with(density) { 72.dp.toPx() } && !vm.toolbarSqueezedWarningDismissed) {
+                        vm.showToolbarSqueezedDialog = true
+                    }
+                }
+            }
+        }
+
         Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.Bottom
@@ -238,7 +258,7 @@ fun ToolRail(
                 }
             }
             
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(spacerHeight))
             
             // Lower panel
             Column(
