@@ -1900,6 +1900,30 @@
     <string name="toolbar_squeezed_slider_length">快捷滑块长度</string>
     <string name="toolbar_squeezed_ui_scale">界面缩放</string>
     <string name="toolbar_squeezed_dismiss_forever">不再提示</string>
+
+    <!-- Canvas Adjustment / Crop & Scale -->
+    <string name="canvas_adjust_title">调整画布与尺寸</string>
+    <string name="canvas_adjust_mode_crop">裁切与扩展</string>
+    <string name="canvas_adjust_mode_scale">图像缩放</string>
+    <string name="canvas_adjust_anchor_title">锚点定位</string>
+    <string name="canvas_adjust_lock_ratio">锁定比例</string>
+    <string name="canvas_adjust_unlock_ratio">解锁比例</string>
+    <string name="canvas_adjust_reset">重置</string>
+    <string name="canvas_adjust_apply">应用</string>
+    <string name="canvas_ratio_free">自由</string>
+    <string name="canvas_ratio_original">原始</string>
+    <string name="canvas_ratio_1_1">1:1</string>
+    <string name="canvas_ratio_4_3">4:3</string>
+    <string name="canvas_ratio_3_4">3:4</string>
+    <string name="canvas_ratio_16_9">16:9</string>
+    <string name="canvas_ratio_9_16">9:16</string>
+    <string name="canvas_ratio_3_2">3:2</string>
+    <string name="canvas_ratio_2_3">2:3</string>
+    <string name="canvas_ratio_a4">A4</string>
+    <string name="canvas_resample_bicubic">双三次平滑 (推荐)</string>
+    <string name="canvas_resample_nearest">邻近点 (像素画)</string>
+    <string name="canvas_resample_bilinear">双线性</string>
+    <string name="canvas_toast_scale_success">已将图像缩放至 %1$d × %2$d</string>
 </resources>
 
 

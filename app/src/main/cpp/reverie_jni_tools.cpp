@@ -210,6 +210,12 @@ Java_com_reverie_paint_core_ReverieCoreBridge_cropCanvas(JNIEnv *, jobject, jint
     core()->cropCanvas(x, y, w, h);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_scaleImage(JNIEnv *, jobject, jint w, jint h, jint filterType)
+{
+    core()->scaleImage(w, h, filterType);
+}
+
 JNIEXPORT void JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_floodFillAt(
     JNIEnv *, jobject, jint x, jint y, jint tolerance, jboolean sampleMerged,

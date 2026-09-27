@@ -402,6 +402,12 @@ object ReverieCoreBridge {
         h: Int,
     )
 
+    external fun scaleImage(
+        w: Int,
+        h: Int,
+        filterType: Int,
+    )
+
     external fun contentBounds(): IntArray?
 
     external fun contentBoundsLayers(layers: IntArray): IntArray?

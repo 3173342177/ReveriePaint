@@ -1900,6 +1900,30 @@
     <string name="toolbar_squeezed_slider_length">Quick Slider Length</string>
     <string name="toolbar_squeezed_ui_scale">UI Scale</string>
     <string name="toolbar_squeezed_dismiss_forever">Don\'t show again</string>
+
+    <!-- Canvas Adjustment / Crop & Scale -->
+    <string name="canvas_adjust_title">Canvas &amp; Image Size</string>
+    <string name="canvas_adjust_mode_crop">Crop &amp; Expand</string>
+    <string name="canvas_adjust_mode_scale">Resample &amp; Scale</string>
+    <string name="canvas_adjust_anchor_title">Anchor Position</string>
+    <string name="canvas_adjust_lock_ratio">Lock Ratio</string>
+    <string name="canvas_adjust_unlock_ratio">Unlock Ratio</string>
+    <string name="canvas_adjust_reset">Reset</string>
+    <string name="canvas_adjust_apply">Apply</string>
+    <string name="canvas_ratio_free">Free</string>
+    <string name="canvas_ratio_original">Original</string>
+    <string name="canvas_ratio_1_1">1:1</string>
+    <string name="canvas_ratio_4_3">4:3</string>
+    <string name="canvas_ratio_3_4">3:4</string>
+    <string name="canvas_ratio_16_9">16:9</string>
+    <string name="canvas_ratio_9_16">9:16</string>
+    <string name="canvas_ratio_3_2">3:2</string>
+    <string name="canvas_ratio_2_3">2:3</string>
+    <string name="canvas_ratio_a4">A4</string>
+    <string name="canvas_resample_bicubic">Bicubic Smooth (Recommended)</string>
+    <string name="canvas_resample_nearest">Nearest Neighbor (Pixel Art)</string>
+    <string name="canvas_resample_bilinear">Bilinear</string>
+    <string name="canvas_toast_scale_success">Scaled image to %1$d × %2$d</string>
 </resources>
 
 

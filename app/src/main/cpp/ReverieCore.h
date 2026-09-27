@@ -535,6 +535,7 @@ public:
     // band). Empty (w<=0) when the target layer is empty.
     QRect contentBounds(const QVector<int> &layers = QVector<int>());
     void cropCanvas(int x, int y, int w, int h);
+    void scaleImage(int w, int h, int filterStrategyType = 0);
     
     // Transform preview mechanism (extracts target pixels and hides them in C++)
     bool startTransformPreview(const QVector<int> &layers, QImage* outImage, bool copyOnly = false);

@@ -835,6 +835,23 @@ internal fun PaintViewModel.cropCanvas(
     }
 }
 
+internal fun PaintViewModel.scaleImage(
+    w: Int,
+    h: Int,
+    filterType: Int = 0,
+) {
+    runCore(after = {
+        coreW = ReverieCoreBridge.docWidth()
+        coreH = ReverieCoreBridge.docHeight()
+        renderW = -1
+        renderH = -1
+        syncLayersFromNative()
+        notifyLayerChanged(pixelChanged = true)
+    }) {
+        ReverieCoreBridge.scaleImage(w, h, filterType)
+    }
+}
+
 internal fun PaintViewModel.contentBounds(): IntArray? {
     val targets = editTargetLayers().toIntArray()
     val h = renderHandler ?: return null

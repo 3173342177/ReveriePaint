@@ -74,10 +74,6 @@ internal fun CanvasTabPage(
 ) {
     var showSaveAsDialog by remember { mutableStateOf(false) }
     var saveAsName by remember { mutableStateOf(vm.docName) }
-    var showCanvasResizeDialog by remember { mutableStateOf(false) }
-
-    var resizeW by remember { mutableStateOf(vm.docWidth.toString()) }
-    var resizeH by remember { mutableStateOf(vm.docHeight.toString()) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val imagePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -161,95 +157,6 @@ internal fun CanvasTabPage(
         }
     }
 
-    // Custom Styled Dialog: Resize Canvas
-    if (showCanvasResizeDialog) {
-        androidx.compose.ui.window.Dialog(onDismissRequest = { showCanvasResizeDialog = false }) {
-            Box(
-                modifier = Modifier
-                    .width(320.dp)
-                    .shadow(20.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.4f))
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Morandi.panel)
-                    .glassBorder(RoundedCornerShape(16.dp))
-                    .padding(20.dp)
-            ) {
-                Column {
-                    Text(
-                        text = stringResource(R.string.canvas_dialog_resize_title),
-                        color = Morandi.text,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = stringResource(R.string.canvas_dialog_resize_desc),
-                        color = Morandi.subText,
-                        fontSize = 12.sp
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        androidx.compose.material3.OutlinedTextField(
-                            value = resizeW,
-                            onValueChange = { resizeW = it },
-                            singleLine = true,
-                            label = { Text(stringResource(R.string.canvas_dialog_resize_width), color = Morandi.subText, fontSize = 12.sp) },
-                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Morandi.text,
-                                unfocusedTextColor = Morandi.text,
-                                focusedBorderColor = Morandi.accent,
-                                unfocusedBorderColor = Morandi.border,
-                                focusedContainerColor = Morandi.panelHi,
-                                unfocusedContainerColor = Morandi.panelHi,
-                                cursorColor = Morandi.accent
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                        androidx.compose.material3.OutlinedTextField(
-                            value = resizeH,
-                            onValueChange = { resizeH = it },
-                            singleLine = true,
-                            label = { Text(stringResource(R.string.canvas_dialog_resize_height), color = Morandi.subText, fontSize = 12.sp) },
-                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Morandi.text,
-                                unfocusedTextColor = Morandi.text,
-                                focusedBorderColor = Morandi.accent,
-                                unfocusedBorderColor = Morandi.border,
-                                focusedContainerColor = Morandi.panelHi,
-                                unfocusedContainerColor = Morandi.panelHi,
-                                cursorColor = Morandi.accent
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Spacer(Modifier.height(18.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        ReTextButton(stringResource(R.string.common_cancel), { showCanvasResizeDialog = false }, textColor = Morandi.subText)
-                        Spacer(Modifier.width(8.dp))
-                        ReTextButton(
-                            stringResource(R.string.common_confirm),
-                            onClick = {
-                            val targetW = resizeW.toIntOrNull() ?: vm.docWidth
-                            val targetH = resizeH.toIntOrNull() ?: vm.docHeight
-                            vm.cropCanvas(0, 0, targetW, targetH)
-                            android.widget.Toast.makeText(context, context.getString(R.string.canvas_toast_resized, targetW, targetH), android.widget.Toast.LENGTH_SHORT).show()
-                            showCanvasResizeDialog = false
-                            onClose()
-                        },
-                            textColor = Morandi.accent,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-            }
-        }
-    }
-
 
 
 
@@ -305,9 +212,8 @@ internal fun CanvasTabPage(
                 showSaveAsDialog = true
             }, modifier = Modifier.weight(1f))
             ReMenuItem(R.drawable.ic_canvas_resize, stringResource(R.string.canvas_action_resize), {
-                resizeW = vm.docWidth.toString()
-                resizeH = vm.docHeight.toString()
-                showCanvasResizeDialog = true
+                onClose()
+                vm.enterCanvasAdjustMode(com.reverie.paint.model.CanvasAdjustMode.CROP_EXPAND)
             }, modifier = Modifier.weight(1f))
             ReMenuItem(R.drawable.ic_image, stringResource(R.string.canvas_action_import_image), {
                 imagePickerLauncher.launch("image/*")

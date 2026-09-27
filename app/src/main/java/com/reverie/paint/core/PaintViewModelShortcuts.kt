@@ -294,6 +294,19 @@ fun keyEventToString(event: KeyEvent): String {
  * Global Hardware Keyboard Event Dispatcher
  */
 internal fun PaintViewModel.handleKeyEvent(event: KeyEvent): Boolean {
+    // 0. 画布调整模式下截获 Esc (取消) 与 Enter (应用)
+    if (isCanvasAdjustActive) {
+        if (event.type == KeyEventType.KeyDown) {
+            if (event.key == Key.Escape) {
+                exitCanvasAdjustMode()
+                return true
+            } else if (event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                applyCanvasAdjustment()
+                return true
+            }
+        }
+    }
+
     // 1. 空格键按住临时平移画布 (Spacebar Hold-to-Pan)
     if (event.key == Key.Spacebar) {
         if (event.type == KeyEventType.KeyDown) {

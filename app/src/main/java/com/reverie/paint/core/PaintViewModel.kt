@@ -807,6 +807,57 @@ class PaintViewModel : ViewModel() {
         }
     }
 
+    var isCanvasAdjustActive by mutableStateOf(false)
+    var canvasAdjustState by mutableStateOf(com.reverie.paint.model.CanvasAdjustState())
+
+    fun enterCanvasAdjustMode(mode: com.reverie.paint.model.CanvasAdjustMode = com.reverie.paint.model.CanvasAdjustMode.CROP_EXPAND) {
+        val w = docWidth
+        val h = docHeight
+        canvasAdjustState = com.reverie.paint.model.CanvasAdjustState(
+            mode = mode,
+            origWidth = w,
+            origHeight = h,
+            targetWidth = w,
+            targetHeight = h,
+            lockAspectRatio = mode == com.reverie.paint.model.CanvasAdjustMode.RESAMPLE_SCALE,
+            selectedPreset = com.reverie.paint.model.AspectRatioPreset.FREE,
+            anchor = com.reverie.paint.model.AnchorPosition.CENTER,
+            resampleFilter = com.reverie.paint.model.ResampleFilter.BICUBIC,
+            cropX = 0,
+            cropY = 0,
+        )
+        isCanvasAdjustActive = true
+    }
+
+    fun exitCanvasAdjustMode() {
+        isCanvasAdjustActive = false
+        if (currentToolId == "crop") {
+            val prev = lastToolId.ifEmpty { "brush" }
+            applyTool(if (prev == "crop") "brush" else prev)
+        }
+    }
+
+    fun applyCanvasAdjustment() {
+        val s = canvasAdjustState
+        isCanvasAdjustActive = false
+        if (currentToolId == "crop") {
+            val prev = lastToolId.ifEmpty { "brush" }
+            applyTool(if (prev == "crop") "brush" else prev)
+        }
+        if (s.mode == com.reverie.paint.model.CanvasAdjustMode.CROP_EXPAND) {
+            val (cx, cy) = if (s.selectedPreset != com.reverie.paint.model.AspectRatioPreset.FREE || s.lockAspectRatio || s.cropX != 0 || s.cropY != 0) {
+                s.cropX to s.cropY
+            } else {
+                com.reverie.paint.model.AnchorPosition.computeOffset(s.origWidth, s.origHeight, s.targetWidth, s.targetHeight, s.anchor)
+            }
+            cropCanvas(cx, cy, s.targetWidth, s.targetHeight)
+            showActionToast(R.string.canvas_toast_resized, R.drawable.ic_crop, s.targetWidth, s.targetHeight)
+        } else {
+            scaleImage(s.targetWidth, s.targetHeight, s.resampleFilter.filterType)
+            showActionToast(R.string.canvas_toast_scale_success, R.drawable.ic_crop, s.targetWidth, s.targetHeight)
+        }
+    }
+
     var extendToCutout by mutableStateOf(true)
     var homeSelectedTab by mutableIntStateOf(0)
 
