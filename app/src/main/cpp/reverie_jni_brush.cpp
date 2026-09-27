@@ -100,6 +100,27 @@ Java_com_reverie_paint_core_ReverieCoreBridge_brushPresetName(JNIEnv *env, jobje
     return env->NewStringUTF(name.toUtf8().constData());
 }
 
+JNIEXPORT jstring JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_brushPresetPaintOpId(JNIEnv *env, jobject, jint index)
+{
+    const QString id = core()->brushPresetPaintOpId(index);
+    return env->NewStringUTF(id.toUtf8().constData());
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_currentBrushPaintOpId(JNIEnv *env, jobject)
+{
+    const QString id = core()->currentBrushPaintOpId();
+    return env->NewStringUTF(id.toUtf8().constData());
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_brushPresetTipFilename(JNIEnv *env, jobject, jint index)
+{
+    const QString tip = core()->brushPresetTipFilename(index);
+    return env->NewStringUTF(tip.toUtf8().constData());
+}
+
 JNIEXPORT jbyteArray JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_brushPresetThumbData(JNIEnv *env, jobject, jint index)
 {

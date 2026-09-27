@@ -391,7 +391,8 @@ import kotlinx.coroutines.withContext
     }
 
     internal fun PaintViewModel.updateBrushPaintOpId(id: String) {
-        brushPaintOpId = id
+        val resolved = if (id == "defaultpaintop") "paintbrush" else id
+        brushPaintOpId = resolved
         saveBrushParam()
     }
 
@@ -778,19 +779,28 @@ import kotlinx.coroutines.withContext
         brushOpacity = (d?.getOrNull(1) ?: 1.0).coerceIn(0.0, 1.0)
         brushFlow = (d?.getOrNull(2) ?: 1.0).coerceIn(0.0, 1.0)
         brushSpacing = d?.getOrNull(3) ?: 0.15
-        brushAngle = 0.0
-        brushScatter = 0.0
+        brushAirbrush = (d?.getOrNull(4) ?: 0.0) > 0.5
+        val defaultRate = d?.getOrNull(5) ?: 30.0
+        brushAirbrushRate = if (defaultRate >= 5.0) defaultRate else 30.0
+        brushSmudgeRate = d?.getOrNull(6) ?: 0.5
+        brushSmudgeLength = d?.getOrNull(7) ?: 0.5
+        brushAngle = d?.getOrNull(8) ?: 0.0
+        brushScatter = d?.getOrNull(9) ?: 0.0
+        brushSoftness = d?.getOrNull(10) ?: 0.5
+        brushRatio = d?.getOrNull(11) ?: 1.0
+        brushSharpness = d?.getOrNull(12) ?: 0.0
+        brushRotation = d?.getOrNull(13) ?: 0.0
+        brushPressureSize = d?.getOrNull(14) ?: 1.0
+        brushPressureOpacity = d?.getOrNull(15) ?: 0.0
+        brushPressureFlow = d?.getOrNull(16) ?: 0.0
+        brushFollowDirection = (d?.getOrNull(17) ?: 0.0) > 0.5
+        brushRandomFlipX = (d?.getOrNull(18) ?: 0.0) > 0.5
+        brushRandomFlipY = (d?.getOrNull(19) ?: 0.0) > 0.5
+        brushAntiAliasing = if ((d?.getOrNull(20) ?: 1.0) > 0.5) 1 else 0
+
         brushFade = 0.0
-        brushSoftness = 0.5
-        brushRatio = 1.0
-        brushSharpness = 0.0
-        brushRotation = 0.0
         brushCompositeOp = "normal"
-        brushAntiAliasing = 1
         brushTipShape = 0
-        brushRandomFlipX = false
-        brushRandomFlipY = false
-        brushFollowDirection = false
         brushStreamline = 0.0
         brushTaper = 0.0
         brushTextureEnabled = false
@@ -803,20 +813,12 @@ import kotlinx.coroutines.withContext
         brushSecondaryMix = 0.0
         brushPressureColorMix = false
         brushPressureEnabled = true
-        brushPressureSize = 1.0
-        brushPressureOpacity = 1.0
-        brushPressureFlow = 1.0
         brushSpeedSize = 0.0
         brushPressureCurve = 0
         brushMinSizeLimit = 1.0
         brushMaxSizeLimit = 500.0
-        brushTipAsset = ""
-        brushPaintOpId = "defaultpaintop"
-        brushAirbrush = (d?.getOrNull(4) ?: 0.0) > 0.5
-        val defaultRate = d?.getOrNull(5) ?: 30.0
-        brushAirbrushRate = if (defaultRate >= 5.0) defaultRate else 30.0
-        brushSmudgeRate = d?.getOrNull(6) ?: 0.5
-        brushSmudgeLength = d?.getOrNull(7) ?: 0.5
+        brushTipAsset = if (index >= 0) ReverieCoreBridge.brushPresetTipFilename(index) else ""
+        brushPaintOpId = if (index >= 0) ReverieCoreBridge.brushPresetPaintOpId(index) else "paintbrush"
         brushSpikes = 2
         brushJitterAngle = 0.0
         brushJitterSize = 0.0
@@ -1112,8 +1114,13 @@ import kotlinx.coroutines.withContext
                 brushPressureCurve = saved.pressureCurve
                 brushMinSizeLimit = saved.minSizeLimit
                 brushMaxSizeLimit = saved.maxSizeLimit
-                brushTipAsset = saved.tipAsset
-                brushPaintOpId = saved.paintOpId
+                val realTip = if (index >= 0) ReverieCoreBridge.brushPresetTipFilename(index) else ""
+                brushTipAsset = if (saved.tipAsset.isNotBlank()) saved.tipAsset else realTip
+                brushPaintOpId = if (saved.paintOpId.isBlank() || saved.paintOpId == "defaultpaintop") {
+                    if (index >= 0) ReverieCoreBridge.brushPresetPaintOpId(index) else "paintbrush"
+                } else {
+                    saved.paintOpId
+                }
                 brushAirbrush = saved.airbrush
                 brushAirbrushRate = if (saved.airbrushRate >= 5.0) saved.airbrushRate else 30.0
                 brushSmudgeRate = saved.smudgeRate
@@ -1143,24 +1150,31 @@ import kotlinx.coroutines.withContext
                     brushOpacity = d[1].coerceIn(0.0, 1.0)
                     brushFlow = d[2].coerceIn(0.0, 1.0)
                 }
+                brushAngle = d.getOrNull(8) ?: 0.0
+                brushScatter = d.getOrNull(9) ?: 0.0
+                brushSoftness = d.getOrNull(10) ?: 0.5
+                brushRatio = d.getOrNull(11) ?: 1.0
+                brushSharpness = d.getOrNull(12) ?: 0.0
+                brushRotation = d.getOrNull(13) ?: 0.0
+                brushPressureSize = d.getOrNull(14) ?: 1.0
+                brushPressureOpacity = d.getOrNull(15) ?: 0.0
+                brushPressureFlow = d.getOrNull(16) ?: 0.0
+                brushFollowDirection = (d.getOrNull(17) ?: 0.0) > 0.5
+                brushRandomFlipX = (d.getOrNull(18) ?: 0.0) > 0.5
+                brushRandomFlipY = (d.getOrNull(19) ?: 0.0) > 0.5
+                brushAntiAliasing = if ((d.getOrNull(20) ?: 1.0) > 0.5) 1 else 0
+
                 brushCompositeOp = effectiveCompOp
                 brushMinSizeLimit = 1.0
                 brushMaxSizeLimit = maxOf(500.0, brushSize)
                 brushAuthor = if (isBuiltIn) "Krita" else (saved?.author ?: "外部创作者 (分享)")
                 brushIsAuthorLocked = if (isBuiltIn) true else (saved?.isAuthorLocked ?: true)
-                brushTipAsset = saved?.tipAsset ?: ""
-                brushAngle = 0.0
-                brushScatter = 0.0
+                val realTip = if (index >= 0) ReverieCoreBridge.brushPresetTipFilename(index) else ""
+                brushTipAsset = if (realTip.isNotBlank()) realTip else (saved?.tipAsset ?: "")
+                brushPaintOpId = if (index >= 0) ReverieCoreBridge.brushPresetPaintOpId(index) else "paintbrush"
+
                 brushFade = 0.0
-                brushSoftness = 0.5
-                brushRatio = 1.0
-                brushSharpness = 0.0
-                brushRotation = 0.0
-                brushAntiAliasing = 1
                 brushTipShape = 0
-                brushRandomFlipX = false
-                brushRandomFlipY = false
-                brushFollowDirection = false
                 brushStreamline = 0.0
                 brushTaper = 0.0
                 brushTextureEnabled = false
@@ -1173,9 +1187,6 @@ import kotlinx.coroutines.withContext
                 brushSecondaryMix = 0.0
                 brushPressureColorMix = false
                 brushPressureEnabled = true
-                brushPressureSize = 1.0
-                brushPressureOpacity = 1.0
-                brushPressureFlow = 1.0
                 brushSpeedSize = 0.0
                 brushPressureCurve = 0
                 brushSpikes = 2
@@ -1474,19 +1485,90 @@ import kotlinx.coroutines.withContext
         brushParams.remove(preset.name)
         persistBrushParams()
         userBrushGroups = userBrushGroups - preset.name
+        favoriteBrushNames = favoriteBrushNames - preset.name
+        recentBrushNames = recentBrushNames.filter { it != preset.name }
+        brushOrder = brushOrder.filter { it != preset.name }
+        persistBrushPanelState()
+        saveBrushOrder()
         saveBrushGroups()
         reloadBrushPresets()
         return true
     }
 
-    /** 删除自定义笔刷组 (内置组不可删除) */
-    internal fun PaintViewModel.deleteBrushGroup(name: String): Boolean {
+    /** 删除笔刷组 (内置组不可删除)，支持联动物理删除组内所有自定义笔刷 */
+    internal fun PaintViewModel.deleteBrushGroup(name: String, deletePresets: Boolean = true): Boolean {
         if (isBuiltInGroup(name)) return false // 内置组禁止删除
-        if (!customBrushGroups.contains(name)) return false
-        customBrushGroups = customBrushGroups.filter { it != name }
+        val dir = File(appContext.filesDir, "paintoppresets")
+        val presetsInGroup = brushPresets.filter { it.group == name }
+
+        if (deletePresets) {
+            val customPresets = presetsInGroup.filter { !it.isBuiltIn }
+            val deletedNames = customPresets.map { it.name }.toSet()
+            for (p in customPresets) {
+                val file = File(dir, "${p.name}.kpp")
+                if (file.exists()) file.delete()
+                brushParams.remove(p.name)
+            }
+            if (deletedNames.isNotEmpty()) {
+                persistBrushParams()
+                userBrushGroups = userBrushGroups - deletedNames
+                favoriteBrushNames = favoriteBrushNames - deletedNames
+                recentBrushNames = recentBrushNames.filter { it !in deletedNames }
+                brushOrder = brushOrder.filter { it !in deletedNames }
+                persistBrushPanelState()
+                saveBrushOrder()
+            }
+        }
+
+        // 解除该分组下残留预设（如内置笔刷，或未勾选删除笔刷时的自定义笔刷）与当前组的映射
         userBrushGroups = userBrushGroups.filterValues { it != name }
+        customBrushGroups = customBrushGroups.filter { it != name }
+        categoryOrder = categoryOrder.filter { it != name }
         saveBrushGroups()
+        saveCategoryOrder()
+        reloadBrushPresets()
         return true
+    }
+
+    /** 批量删除笔刷 (内置只读笔刷会自动跳过并保留) */
+    internal fun PaintViewModel.deleteBrushPresetsBatch(presetNames: List<String>): Int {
+        val dir = File(appContext.filesDir, "paintoppresets")
+        val targets = brushPresets.filter { it.name in presetNames && !it.isBuiltIn }
+        if (targets.isEmpty()) return 0
+
+        val deletedNames = targets.map { it.name }.toSet()
+        for (p in targets) {
+            val file = File(dir, "${p.name}.kpp")
+            if (file.exists()) file.delete()
+            brushParams.remove(p.name)
+            userBrushGroups = userBrushGroups - p.name
+        }
+        persistBrushParams()
+        favoriteBrushNames = favoriteBrushNames - deletedNames
+        recentBrushNames = recentBrushNames.filter { it !in deletedNames }
+        brushOrder = brushOrder.filter { it !in deletedNames }
+        persistBrushPanelState()
+        saveBrushOrder()
+        saveBrushGroups()
+
+        reloadBrushPresets()
+        return targets.size
+    }
+
+    /** 批量移动笔刷到指定分组 */
+    internal fun PaintViewModel.moveBrushPresetsBatch(presetNames: List<String>, targetGroup: String) {
+        val cleanGroup = targetGroup.trim()
+        if (presetNames.isEmpty() || cleanGroup.isBlank()) return
+        var updated = userBrushGroups
+        for (name in presetNames) {
+            updated = updated + (name to cleanGroup)
+        }
+        userBrushGroups = updated
+        if (!customBrushGroups.contains(cleanGroup) && !BUILT_IN_BRUSH_GROUPS.contains(cleanGroup)) {
+            customBrushGroups = customBrushGroups + cleanGroup
+        }
+        saveBrushGroups()
+        reloadBrushPresets()
     }
 
     /** 创建全新自定义笔刷 (默认基于 Basic-1) */

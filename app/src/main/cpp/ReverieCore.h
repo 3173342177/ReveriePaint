@@ -636,6 +636,9 @@ public:
     QVector<double> brushPresetDefaults(int index);
     QString brushPresetName(int index) const;
     QString brushPresetPath(int index) const;
+    QString brushPresetPaintOpId(int index);
+    QString currentBrushPaintOpId() const;
+    QString brushPresetTipFilename(int index);
     QByteArray brushPresetThumbData(int index) const;
     void setBrushFlow(qreal v);
     void setBrushSmudgeRate(qreal v);

@@ -201,10 +201,12 @@ object KppHelper {
 
         // 1. Update <Preset name="..." paintopid="...">
         xml = xml.replace(Regex("""<Preset\s+name="[^"]*""""), """<Preset name="$presetName"""")
-        if (params.paintOpId.isNotBlank() && params.paintOpId != "defaultpaintop") {
-            xml = xml.replace(Regex("""paintopid="[^"]*""""), """paintopid="${params.paintOpId}"""")
-            xml = updateParam(xml, "paintop", params.paintOpId)
+        val resolvedPaintOpId = when {
+            params.paintOpId.isBlank() || params.paintOpId == "defaultpaintop" -> "paintbrush"
+            else -> params.paintOpId
         }
+        xml = xml.replace(Regex("""paintopid="[^"]*""""), """paintopid="$resolvedPaintOpId"""")
+        xml = updateParam(xml, "paintop", resolvedPaintOpId)
 
         // 2. Update paintopSize
         xml = updateParam(xml, "paintopSize", params.size.toString())
@@ -215,21 +217,73 @@ object KppHelper {
 
         // 4. Update Spacing
         xml = updateParam(xml, "Spacing", params.spacing.toString())
+        xml = updateParam(xml, "SpacingValue", params.spacing.toString())
 
-        // 5. Update Airbrush
+        // 5. Update Angle & Scatter
+        xml = updateParam(xml, "paintopAngle", params.angle.toString())
+        xml = updateParam(xml, "AngleValue", params.angle.toString())
+        xml = updateParam(xml, "ScatterValue", params.scatter.toString())
+        xml = updateParam(xml, "Scatter/strengthValue", params.scatter.toString())
+        val hasScatter = params.scatter > 0.001
+        xml = updateParam(xml, "PressureScatter", hasScatter.toString())
+        xml = updateParam(xml, "Scatter/isChecked", hasScatter.toString())
+
+        // 6. Update Softness, Ratio, Sharpness, Rotation
+        xml = updateParam(xml, "SoftnessValue", params.softness.toString())
+        xml = updateParam(xml, "RatioValue", params.ratio.toString())
+        xml = updateParam(xml, "SharpnessValue", params.sharpness.toString())
+        xml = updateParam(xml, "RotationValue", params.rotation.toString())
+
+        // 7. Update AntiAliasing
+        val aa = params.antiAliasing > 0
+        xml = updateParam(xml, "Antialiasing", aa.toString())
+        xml = updateParam(xml, "antialiasEdges", aa.toString())
+
+        // 8. Update Airbrush
         xml = updateParam(xml, "AirbrushOption/isAirbrushing", params.airbrush.toString())
+        xml = updateParam(xml, "PaintOpSettings/isAirbrushing", params.airbrush.toString())
         xml = updateParam(xml, "AirbrushOption/rate", params.airbrushRate.toString())
+        xml = updateParam(xml, "PaintOpSettings/rate", params.airbrushRate.toString())
 
-        // 6. Update Smudge
+        // 9. Update Smudge
         xml = updateParam(xml, "ColorRateValue", params.smudgeRate.toString())
+        xml = updateParam(xml, "MixValue", params.smudgeRate.toString())
         xml = updateParam(xml, "SmudgeRateValue", params.smudgeLength.toString())
 
-        // 7. Update CompositeOp
+        // 10. Update CompositeOp
         if (params.compositeOp.isNotBlank()) {
             xml = updateParam(xml, "CompositeOp", params.compositeOp)
         }
 
-        // 8. Update tipAsset
+        // 11. Dynamics
+        if (params.dynamicsCustomized) {
+            val curveStr = when (params.pressureCurve) {
+                1 -> "0,0;0.25,0.5;0.75,0.9;1,1;"
+                2 -> "0,0;0.25,0.1;0.75,0.5;1,1;"
+                3 -> "0,0;0.25,0.1;0.75,0.9;1,1;"
+                else -> "0,0;1,1;"
+            }
+            val sensorXml = """<!DOCTYPE params><params id="pressure"><curve>$curveStr</curve></params>"""
+            val useSize = params.pressureEnabled && (params.pressureSize > 0.001)
+            xml = updateParam(xml, "PressureSize", useSize.toString())
+            xml = updateParam(xml, "SizeUseCurve", useSize.toString())
+            xml = updateParam(xml, "SizeValue", params.pressureSize.toString())
+            if (useSize) xml = updateParam(xml, "SizeSensor", sensorXml)
+
+            val useOpacity = params.pressureEnabled && (params.pressureOpacity > 0.001)
+            xml = updateParam(xml, "PressureOpacity", useOpacity.toString())
+            xml = updateParam(xml, "OpacityUseCurve", useOpacity.toString())
+            xml = updateParam(xml, "OpacityValue", params.pressureOpacity.toString())
+            if (useOpacity) xml = updateParam(xml, "OpacitySensor", sensorXml)
+
+            val useFlow = params.pressureEnabled && (params.pressureFlow > 0.001)
+            xml = updateParam(xml, "PressureFlow", useFlow.toString())
+            xml = updateParam(xml, "FlowUseCurve", useFlow.toString())
+            xml = updateParam(xml, "FlowValue", params.pressureFlow.toString())
+            if (useFlow) xml = updateParam(xml, "FlowSensor", sensorXml)
+        }
+
+        // 12. Update tipAsset & brush_definition
         if (params.tipAsset.isNotBlank()) {
             val tipFile = params.tipAsset
             val ext = tipFile.substringAfterLast(".").lowercase()
@@ -244,6 +298,22 @@ object KppHelper {
                 xml = xml.replace(Regex("""<param[^>]*name="brush_definition".*?</param>""", RegexOption.DOT_MATCHES_ALL), brushDef)
             } else {
                 xml = xml.replace("</Preset>", " $brushDef\n</Preset>")
+            }
+        } else if (xml.contains("""name="brush_definition"""")) {
+            // Retain original tip asset, but sync spacing and angle attributes within the existing <Brush ... /> tag
+            xml = xml.replace(Regex("""<Brush\b([^>]*)>""")) { m ->
+                var attrs = m.groupValues[1]
+                attrs = if (attrs.contains("spacing=")) {
+                    attrs.replace(Regex("""spacing="[^"]*""""), """spacing="${params.spacing}"""")
+                } else {
+                    """$attrs spacing="${params.spacing}""""
+                }
+                attrs = if (attrs.contains("angle=")) {
+                    attrs.replace(Regex("""angle="[^"]*""""), """angle="${params.angle}"""")
+                } else {
+                    """$attrs angle="${params.angle}""""
+                }
+                "<Brush$attrs>"
             }
         }
 
@@ -261,6 +331,10 @@ object KppHelper {
     }
 
     private fun buildMinimalPresetXml(presetName: String, params: BrushParams): String {
+        val resolvedOpId = when {
+            params.paintOpId.isBlank() || params.paintOpId == "defaultpaintop" -> "paintbrush"
+            else -> params.paintOpId
+        }
         val tipDef = if (params.tipAsset.isNotBlank()) {
             val ext = params.tipAsset.substringAfterLast(".").lowercase()
             val tipType = if (ext == "gbr") "gbr_brush" else "png_brush"
@@ -270,11 +344,18 @@ object KppHelper {
         }
 
         return """<?xml version="1.0" encoding="UTF-8"?>
-<Preset name="$presetName" paintopid="${if (params.paintOpId.isNotBlank()) params.paintOpId else "paintbrush"}">
+<Preset name="$presetName" paintopid="$resolvedOpId">
   <param type="string" name="paintopSize"><![CDATA[${params.size}]]></param>
   <param type="string" name="OpacityValue"><![CDATA[${params.opacity}]]></param>
   <param type="string" name="FlowValue"><![CDATA[${params.flow}]]></param>
   <param type="string" name="Spacing"><![CDATA[${params.spacing}]]></param>
+  <param type="string" name="paintopAngle"><![CDATA[${params.angle}]]></param>
+  <param type="string" name="AngleValue"><![CDATA[${params.angle}]]></param>
+  <param type="string" name="ScatterValue"><![CDATA[${params.scatter}]]></param>
+  <param type="string" name="SoftnessValue"><![CDATA[${params.softness}]]></param>
+  <param type="string" name="RatioValue"><![CDATA[${params.ratio}]]></param>
+  <param type="string" name="SharpnessValue"><![CDATA[${params.sharpness}]]></param>
+  <param type="string" name="RotationValue"><![CDATA[${params.rotation}]]></param>
   <param type="string" name="CompositeOp"><![CDATA[${params.compositeOp}]]></param>
   <param type="string" name="AirbrushOption/isAirbrushing"><![CDATA[${params.airbrush}]]></param>
   <param type="string" name="AirbrushOption/rate"><![CDATA[${params.airbrushRate}]]></param>

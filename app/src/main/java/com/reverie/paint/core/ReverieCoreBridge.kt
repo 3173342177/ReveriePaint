@@ -480,6 +480,12 @@ object ReverieCoreBridge {
 
     external fun brushPresetName(index: Int): String
 
+    external fun brushPresetPaintOpId(index: Int): String
+
+    external fun currentBrushPaintOpId(): String
+
+    external fun brushPresetTipFilename(index: Int): String
+
     external fun brushPresetThumbData(index: Int): ByteArray
 
     external fun currentBrushPreset(): Int

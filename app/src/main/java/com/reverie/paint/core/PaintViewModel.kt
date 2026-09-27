@@ -289,7 +289,7 @@ class PaintViewModel : ViewModel() {
     var brushMinSizeLimit by mutableDoubleStateOf(1.0)
     var brushMaxSizeLimit by mutableDoubleStateOf(500.0)
     var brushTipAsset by mutableStateOf("")
-    var brushPaintOpId by mutableStateOf("defaultpaintop")
+    var brushPaintOpId by mutableStateOf("paintbrush")
     var brushAirbrush by mutableStateOf(false)
     var brushAirbrushRate by mutableDoubleStateOf(30.0)
     var brushSmudgeRate by mutableDoubleStateOf(0.5)
@@ -3272,7 +3272,7 @@ data class BrushPresetInfo(
 
 val BUILT_IN_BRUSH_GROUPS = setOf(
     "全部", "常用", "最近", "基础", "铅笔", "勾线", "马克笔", "绘画", "水彩", "混合",
-    "速写", "形状", "特效与滤镜", "纹理与排线", "印章与喷溅", "像素画", "橡皮擦", "导入"
+    "速写", "形状", "特效与滤镜", "纹理与排线", "印章与喷溅", "像素画", "橡皮擦"
 )
 
 fun isBuiltInBrushGroup(group: String, presets: List<BrushPresetInfo> = emptyList()): Boolean {
@@ -3281,4 +3281,7 @@ fun isBuiltInBrushGroup(group: String, presets: List<BrushPresetInfo> = emptyLis
     return false
 }
 
-fun PaintViewModel.isBuiltInGroup(group: String): Boolean = isBuiltInBrushGroup(group, brushPresets)
+fun PaintViewModel.isBuiltInGroup(group: String): Boolean {
+    if (customBrushGroups.contains(group)) return false
+    return isBuiltInBrushGroup(group, brushPresets)
+}

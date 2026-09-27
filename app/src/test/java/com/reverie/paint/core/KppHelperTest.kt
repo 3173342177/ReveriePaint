@@ -52,6 +52,13 @@ class KppHelperTest {
             opacity = 0.8,
             flow = 0.9,
             spacing = 0.25,
+            angle = 45.0,
+            scatter = 0.3,
+            softness = 0.8,
+            ratio = 0.5,
+            sharpness = 0.2,
+            rotation = 90.0,
+            antiAliasing = 1,
             tipAsset = "mooncake.png",
             airbrush = true,
             airbrushRate = 50.0,
@@ -65,9 +72,33 @@ class KppHelperTest {
         assertTrue(updatedXml.contains("""<param type="string" name="OpacityValue"><![CDATA[0.8]]></param>"""))
         assertTrue(updatedXml.contains("""<param type="string" name="FlowValue"><![CDATA[0.9]]></param>"""))
         assertTrue(updatedXml.contains("""<param type="string" name="Spacing"><![CDATA[0.25]]></param>"""))
+        assertTrue(updatedXml.contains("""<param type="string" name="paintopAngle"><![CDATA[45.0]]></param>"""))
+        assertTrue(updatedXml.contains("""<param type="string" name="ScatterValue"><![CDATA[0.3]]></param>"""))
+        assertTrue(updatedXml.contains("""<param type="string" name="SoftnessValue"><![CDATA[0.8]]></param>"""))
+        assertTrue(updatedXml.contains("""<param type="string" name="RatioValue"><![CDATA[0.5]]></param>"""))
+        assertTrue(updatedXml.contains("""<param type="string" name="SharpnessValue"><![CDATA[0.2]]></param>"""))
+        assertTrue(updatedXml.contains("""<param type="string" name="RotationValue"><![CDATA[90.0]]></param>"""))
+        assertTrue(updatedXml.contains("""<param type="string" name="Antialiasing"><![CDATA[true]]></param>"""))
         assertTrue(updatedXml.contains("""filename="mooncake.png""""))
         assertTrue(updatedXml.contains("""<param type="string" name="AirbrushOption/isAirbrushing"><![CDATA[true]]></param>"""))
         assertTrue(updatedXml.contains("""<param type="string" name="ColorRateValue"><![CDATA[0.7]]></param>"""))
+    }
+
+    @Test
+    fun `injectParamsIntoXml updates spacing and angle in existing brush_definition without replacing tip`() {
+        val originalXml = """<Preset name="Test" paintopid="paintbrush">
+  <param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="gbr_brush" filename="my_tip.gbr" spacing="0.1" angle="0.0"/>]]></param>
+</Preset>"""
+        val params = BrushParams(
+            spacing = 0.35,
+            angle = 120.0,
+            tipAsset = "", // blank means keep original tip
+        )
+
+        val updatedXml = KppHelper.injectParamsIntoXml(originalXml, "Test", params)
+        assertTrue(updatedXml.contains("""filename="my_tip.gbr""""))
+        assertTrue(updatedXml.contains("""spacing="0.35""""))
+        assertTrue(updatedXml.contains("""angle="120.0""""))
     }
 
     @Test
