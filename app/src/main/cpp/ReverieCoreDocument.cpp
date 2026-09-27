@@ -8,12 +8,14 @@
  * ReverieCoreInternal.h, public API in ReverieCore.h)
  * ============================================================ */
 #include "ReverieCoreInternal.h"
+#include "ReverieCoreColorSpaceHook.h"
 
 #include <future>
 #include <QSet>
 
 ReverieCore::ReverieCore()
 {
+    ensureRgbU8DifferenceHook();
 }
 
 ReverieCore::~ReverieCore()

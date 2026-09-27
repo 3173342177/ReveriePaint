@@ -9,6 +9,7 @@
  * ============================================================ */
 #include "ReverieCoreInternal.h"
 #include "ReverieCoreFilterKernels.h"
+#include "ReverieCoreColorSpaceHook.h"
 #include <android/log.h>
 #include <kis_image_animation_interface.h>
 
@@ -280,6 +281,7 @@ bool ReverieCore::renderPendingDirty() const
 
 void ReverieCore::floodFillAt(int x, int y, int tolerance, bool sampleMerged, int expand, int feather, int closeGap)
 {
+    ensureRgbU8DifferenceHook();
     KisImageSP image = m_document ? m_document : KisImageSP();
     if (!image) return;
     if (x < 0 || y < 0 || x >= image->width() || y >= image->height()) return;
