@@ -136,7 +136,7 @@
     <string name="gallery_action_delete_artwork">删除作品</string>
     <string name="gallery_batch_share">分享 (%d)</string>
     <string name="gallery_batch_move">移动 (%d)</string>
-    <string name="gallery_drop_hint">释放以导入作品到画廊</string>
+    <string name="gallery_drop_hint">释放以导入作品或笔刷</string>
     <string name="gallery_toast_stack_created">已创建画集: %s</string>
     <string name="gallery_toast_stack_deleted">画集已删除</string>
     <string name="gallery_toast_artwork_deleted">作品已删除</string>
@@ -1522,7 +1522,7 @@
     <string name="toast_undo_vertex">撤销顶点</string>
     <string name="toast_undo_lasso_point">撤销套索点</string>
     <string name="toast_project_saved">工程已保存</string>
-    <string name="drag_drop_import_hint">释放以导入图层或参考图</string>
+    <string name="drag_drop_import_hint">释放以导入图层、参考图或笔刷</string>
     <string name="selection_select_layer">选中图层</string>
     <string name="selection_clear">清除选区</string>
     <string name="selection_active_hint">选区生效中</string>
@@ -1855,6 +1855,19 @@
     <string name="theme_selection_mask_opacity_title">选区蒙版不透明度</string>
     <string name="theme_selection_mask_opacity_desc">调整活动选区遮罩层的透明度深度</string>
     <string name="theme_selection_custom_color_title">自定义选区蒙版颜色</string>
+
+    <!-- External Brush Import -->
+    <string name="brush_import_dialog_title_single">导入笔刷</string>
+    <string name="brush_import_dialog_title_multiple">批量导入笔刷 (%d)</string>
+    <string name="brush_import_dialog_desc_single">将笔刷预设或笔刷包导入至应用笔刷库</string>
+    <string name="brush_import_dialog_desc_multiple">检测到 %d 个笔刷文件，选择归属分组后导入</string>
+    <string name="brush_import_dialog_target_group">目标分组</string>
+    <string name="brush_import_dialog_new_group">+ 新建分组</string>
+    <string name="brush_import_dialog_new_group_hint">输入新分组名称</string>
+    <string name="brush_import_dialog_btn_import">导入</string>
+    <string name="brush_import_dialog_default_group">导入</string>
+    <string name="toast_brush_import_success_single">已成功导入笔刷：%s</string>
+    <string name="toast_brush_import_success_multiple">已成功导入 %d 个笔刷文件</string>
 </resources>
 
 

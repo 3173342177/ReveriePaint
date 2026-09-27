@@ -136,7 +136,7 @@
     <string name="gallery_action_delete_artwork">Delete Artwork</string>
     <string name="gallery_batch_share">Share (%d)</string>
     <string name="gallery_batch_move">Move (%d)</string>
-    <string name="gallery_drop_hint">Release to import into gallery</string>
+    <string name="gallery_drop_hint">Release to import projects or brushes</string>
     <string name="gallery_toast_stack_created">Stack created: %s</string>
     <string name="gallery_toast_stack_deleted">Stack deleted</string>
     <string name="gallery_toast_artwork_deleted">Artwork deleted</string>
@@ -1522,7 +1522,7 @@
     <string name="toast_undo_vertex">Undo Vertex</string>
     <string name="toast_undo_lasso_point">Undo Lasso Point</string>
     <string name="toast_project_saved">Project saved</string>
-    <string name="drag_drop_import_hint">Release to import layer or reference image</string>
+    <string name="drag_drop_import_hint">Release to import layer, reference image, or brush</string>
     <string name="selection_select_layer">Select Layer</string>
     <string name="selection_clear">Clear Selection</string>
     <string name="selection_active_hint">Selection Active</string>
@@ -1855,6 +1855,19 @@
     <string name="theme_selection_mask_opacity_title">Mask Opacity</string>
     <string name="theme_selection_mask_opacity_desc">Adjust transparency of the selection mask overlay</string>
     <string name="theme_selection_custom_color_title">Custom Mask Color</string>
+
+    <!-- External Brush Import -->
+    <string name="brush_import_dialog_title_single">Import Brush</string>
+    <string name="brush_import_dialog_title_multiple">Import Brushes (%d)</string>
+    <string name="brush_import_dialog_desc_single">Import brush preset or bundle to the brush library</string>
+    <string name="brush_import_dialog_desc_multiple">Detected %d brush files, choose target group to import</string>
+    <string name="brush_import_dialog_target_group">Target Group</string>
+    <string name="brush_import_dialog_new_group">+ New Group</string>
+    <string name="brush_import_dialog_new_group_hint">Enter new group name</string>
+    <string name="brush_import_dialog_btn_import">Import</string>
+    <string name="brush_import_dialog_default_group">Imported</string>
+    <string name="toast_brush_import_success_single">Successfully imported brush: %s</string>
+    <string name="toast_brush_import_success_multiple">Successfully imported %d brush files</string>
 </resources>
 
 

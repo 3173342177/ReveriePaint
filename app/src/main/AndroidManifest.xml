@@ -57,6 +57,9 @@
                 <data android:mimeType="application/octet-stream" />
                 <data android:mimeType="application/zip" />
                 <data android:mimeType="application/x-krita" />
+                <data android:mimeType="application/x-krita-paintoppreset" />
+                <data android:mimeType="application/x-krita-bundle" />
+                <data android:mimeType="application/x-photoshop-brush" />
                 <data android:mimeType="image/vnd.adobe.photoshop" />
                 <data android:mimeType="image/x-psd" />
                 <data android:mimeType="*/*" />
@@ -68,7 +71,7 @@
                 <data android:mimeType="image/*" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <!-- 文件管理器关联打开工程文件与图片 -->
+            <!-- 文件管理器关联打开工程文件、笔刷与图片 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -84,6 +87,19 @@
                 <data android:scheme="file" />
                 <data android:scheme="content" />
                 <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.kpp" />
+                <data android:pathPattern=".*\\.bundle" />
+                <data android:pathPattern=".*\\.abr" />
+                <data android:pathPattern=".*\\.gbr" />
+                <data android:pathPattern=".*\\.gih" />
             </intent-filter>
         </activity>
 

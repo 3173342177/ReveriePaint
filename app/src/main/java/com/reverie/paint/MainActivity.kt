@@ -628,4 +628,13 @@ fun ReverieApp(vm: PaintViewModel = viewModel()) {
             onDismiss = { UpdateManager.dismissDialog() },
         )
     }
+
+    val brushImportUris = vm.pendingExternalBrushUris
+    if (!brushImportUris.isNullOrEmpty()) {
+        com.reverie.paint.ui.dialog.ExternalBrushImportDialog(
+            uris = brushImportUris,
+            vm = vm,
+            onDismiss = { vm.pendingExternalBrushUris = null },
+        )
+    }
 }

@@ -787,6 +787,7 @@ fun PaintingPage(
             when {
                 filterController != null -> filterController.cancel()
                 vm.pendingExternalImageUri != null -> vm.pendingExternalImageUri = null
+                vm.pendingExternalBrushUris != null -> vm.pendingExternalBrushUris = null
                 showDiscardConfirmDialog -> showDiscardConfirmDialog = false
                 showExitSaveDialog -> showExitSaveDialog = false
                 brushPanelOpen && !(vm.panelPinningEnabled && vm.isBrushPanelPinned) -> {

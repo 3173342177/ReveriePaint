@@ -1359,7 +1359,7 @@ internal fun openStreamSafely(context: android.content.Context, uri: android.net
     }
 }
 
-private fun queryFileName(context: android.content.Context, uri: android.net.Uri): String? {
+internal fun queryFileName(context: android.content.Context, uri: android.net.Uri): String? {
     if (uri.scheme == "content") {
         try {
             context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -1381,6 +1381,41 @@ private fun queryFileName(context: android.content.Context, uri: android.net.Uri
         return "web_image_${System.currentTimeMillis() % 10000}.jpg"
     }
     return uri.path?.substringAfterLast('/')
+}
+
+fun isBrushUri(context: android.content.Context, uri: android.net.Uri): Boolean {
+    val name = queryFileName(context, uri) ?: uri.path ?: ""
+    val ext = name.substringAfterLast('.', "").substringBefore('?').lowercase()
+    if (ext in listOf("kpp", "bundle", "abr", "gbr", "gih")) return true
+    if (ext == "zip") {
+        try {
+            openStreamSafely(context, uri)?.use { inStream ->
+                java.util.zip.ZipInputStream(inStream).use { zipIn ->
+                    var count = 0
+                    while (count < 100) {
+                        val entry = zipIn.nextEntry ?: break
+                        val eName = entry.name
+                        if (eName.contains("paintoppresets/") ||
+                            eName.contains("brushes/") ||
+                            eName.endsWith(".kpp", ignoreCase = true) ||
+                            eName.endsWith(".gbr", ignoreCase = true) ||
+                            eName.endsWith(".abr", ignoreCase = true) ||
+                            eName.endsWith(".bundle", ignoreCase = true) ||
+                            eName == "META-INF/manifest.xml"
+                        ) {
+                            return true
+                        }
+                        count++
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+    val mime = try { context.contentResolver.getType(uri) } catch (_: Exception) { null }
+    if (mime != null && (mime.contains("kpp") || mime.contains("bundle") || mime.contains("photoshop-brush") || mime.contains("paintoppreset"))) {
+        return true
+    }
+    return false
 }
 
 fun isImageFile(context: android.content.Context, uri: android.net.Uri): Boolean {
@@ -1448,15 +1483,34 @@ fun PaintViewModel.handleIncomingUris(
     context: android.content.Context,
 ) {
     if (uris.isEmpty()) return
-    if (currentPage == Page.PAINTING) {
-        if (uris.size == 1 && isImageFile(context, uris[0])) {
-            pendingExternalImageUri = uris[0]
-        } else {
-            importDocuments(uris, context)
-            showActionToast(R.string.toast_project_imported_to_gallery, R.drawable.ic_import)
+    viewModelScope.launch(Dispatchers.IO) {
+        val brushUris = mutableListOf<android.net.Uri>()
+        val otherUris = mutableListOf<android.net.Uri>()
+        for (u in uris) {
+            if (isBrushUri(context, u)) {
+                brushUris.add(u)
+            } else {
+                otherUris.add(u)
+            }
         }
-    } else {
-        importDocuments(uris, context)
+
+        withContext(Dispatchers.Main) {
+            if (brushUris.isNotEmpty()) {
+                pendingExternalBrushUris = brushUris
+            }
+            if (otherUris.isNotEmpty()) {
+                if (currentPage == Page.PAINTING) {
+                    if (otherUris.size == 1 && isImageFile(context, otherUris[0])) {
+                        pendingExternalImageUri = otherUris[0]
+                    } else {
+                        importDocuments(otherUris, context)
+                        showActionToast(R.string.toast_project_imported_to_gallery, R.drawable.ic_import)
+                    }
+                } else {
+                    importDocuments(otherUris, context)
+                }
+            }
+        }
     }
 }
 

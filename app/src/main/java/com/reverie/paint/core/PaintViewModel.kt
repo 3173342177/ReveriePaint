@@ -3104,6 +3104,7 @@ class PaintViewModel : ViewModel() {
     var currentFolder by mutableStateOf<com.reverie.paint.model.Project?>(null)
     var searchQuery by mutableStateOf("")
     var pendingExternalImageUri by mutableStateOf<android.net.Uri?>(null)
+    var pendingExternalBrushUris by mutableStateOf<List<android.net.Uri>?>(null)
     var isDraggingExternal by mutableStateOf(false)
 
     /** Injected by MainActivity; the engine needs it for file paths. */
