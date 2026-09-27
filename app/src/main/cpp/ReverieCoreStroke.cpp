@@ -870,9 +870,23 @@ void ReverieCore::undo()
 
     m_undoStore->undo();
     ++m_redoCount;
+    m_document->waitForDone();
     syncLayersFromImage();
 
-    bool structureChanged = isStructuralCmd || oldNodes.size() != m_layers.size();
+    const int newW = m_document->width();
+    const int newH = m_document->height();
+    const bool sizeChanged = (newW != m_docWidth || newH != m_docHeight);
+    if (sizeChanged) {
+        m_docWidth = newW;
+        m_docHeight = newH;
+        m_renderBufW = -1;
+        m_renderBufH = -1;
+        m_dirtyRect = QRect(0, 0, m_docWidth, m_docHeight);
+        m_bitmapInited = false;
+        m_lastDirty = QRect();
+    }
+
+    bool structureChanged = sizeChanged || isStructuralCmd || oldNodes.size() != m_layers.size();
     if (!structureChanged) {
         for (int i = 0; i < oldNodes.size(); ++i) {
             if (oldNodes[i] != m_layers[i].node || oldVisibilities[i] != m_layers[i].visible) {
@@ -884,8 +898,6 @@ void ReverieCore::undo()
 
     if (structureChanged) {
         recompositeProjection();
-    } else {
-        m_document->waitForDone();
     }
     markDirty();
     m_snapshotPending = false;
@@ -913,9 +925,23 @@ void ReverieCore::redo()
 
     m_undoStore->redo();
     --m_redoCount;
+    m_document->waitForDone();
     syncLayersFromImage();
 
-    bool structureChanged = oldNodes.size() != m_layers.size();
+    const int newW = m_document->width();
+    const int newH = m_document->height();
+    const bool sizeChanged = (newW != m_docWidth || newH != m_docHeight);
+    if (sizeChanged) {
+        m_docWidth = newW;
+        m_docHeight = newH;
+        m_renderBufW = -1;
+        m_renderBufH = -1;
+        m_dirtyRect = QRect(0, 0, m_docWidth, m_docHeight);
+        m_bitmapInited = false;
+        m_lastDirty = QRect();
+    }
+
+    bool structureChanged = sizeChanged || oldNodes.size() != m_layers.size();
     if (!structureChanged) {
         for (int i = 0; i < oldNodes.size(); ++i) {
             if (oldNodes[i] != m_layers[i].node || oldVisibilities[i] != m_layers[i].visible) {
@@ -927,8 +953,6 @@ void ReverieCore::redo()
 
     if (structureChanged) {
         recompositeProjection();
-    } else {
-        m_document->waitForDone();
     }
     markDirty();
     m_snapshotPending = false;

@@ -828,10 +828,28 @@ private fun PaintViewModel.dispatchToolOpLocked(
             // same order as the live session, so a plain native undo pops the
             // exact transaction the user undid while recording.
             ReverieCoreBridge.undo()
+            val nw = ReverieCoreBridge.docWidth()
+            val nh = ReverieCoreBridge.docHeight()
+            if (nw > 0 && nh > 0 && (nw != coreW || nh != coreH)) {
+                coreW = nw
+                coreH = nh
+                renderW = -1
+                renderH = -1
+                setRenderViewport(coreW, coreH)
+            }
         }
 
         T_REDO -> {
             ReverieCoreBridge.redo()
+            val nw = ReverieCoreBridge.docWidth()
+            val nh = ReverieCoreBridge.docHeight()
+            if (nw > 0 && nh > 0 && (nw != coreW || nh != coreH)) {
+                coreW = nw
+                coreH = nh
+                renderW = -1
+                renderH = -1
+                setRenderViewport(coreW, coreH)
+            }
         }
 
         T_PRESET_SELECT -> {
