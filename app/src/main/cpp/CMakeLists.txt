@@ -97,6 +97,7 @@ set(KRITA_INCLUDES
     ${KRITA_SRC_DIR}/libs/ui/flake
     ${KRITA_SRC_DIR}/libs/ui/ora
     ${KRITA_SRC_DIR}/libs/ui/tool
+    ${KRITA_SRC_DIR}/libs/ui/tool/strokes
     ${KRITA_SRC_DIR}/libs/ui/utils
     ${KRITA_SRC_DIR}/libs/ui/widgets
     ${KRITA_SRC_DIR}/libs/version
@@ -212,6 +213,8 @@ add_library(reverie_jni SHARED
     ReverieCoreColorSpaceHook.cpp
     ${KRITA_SRC_DIR}/plugins/impex/psd/psd_colormode_block.cpp
     ${KRITA_SRC_DIR}/plugins/impex/psd/psd_image_data.cpp
+    ${KRITA_SRC_DIR}/libs/ui/tool/strokes/KisMaskingBrushRenderer.cpp
+    ${KRITA_SRC_DIR}/libs/ui/tool/strokes/KisMaskingBrushCompositeOpFactory.cpp
 )
 
 target_include_directories(reverie_jni PRIVATE

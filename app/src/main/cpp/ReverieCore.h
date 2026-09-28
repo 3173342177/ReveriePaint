@@ -43,6 +43,10 @@ class KisDistanceInformation;
 class ReverieUndoStore;
 class KisTransaction;
 class KUndo2Command;
+
+class KisMaskingBrushRenderer;
+class KisMaskedFreehandStrokePainter;
+class KisFreehandStrokeInfo;
 class KoStore;
 
 class ReverieCore
@@ -931,6 +935,10 @@ private:
     // point (it would dab the same spot a second time, doubling ink density).
     bool m_idleKickPainted = false;
     KisPainter *m_strokePainter = nullptr;
+    KisMaskingBrushRenderer *m_maskingBrushRenderer = nullptr;
+    KisMaskedFreehandStrokePainter *m_maskedStrokePainter = nullptr;
+    KisFreehandStrokeInfo *m_strokeInfo = nullptr;
+    KisFreehandStrokeInfo *m_maskInfo = nullptr;
     void *m_strokeDevice = nullptr;
     bool m_strokeBatchOpen = false;
     QPointF m_strokeStartImg;

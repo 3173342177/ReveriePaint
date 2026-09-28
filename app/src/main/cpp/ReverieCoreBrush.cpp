@@ -321,6 +321,22 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
                 KoResourceSP resSp(res);
                 if (lr) {
                     lr->addResource(resSp);
+                    if (baseName != bareName) {
+                        KoResourceSP altSp(resSp->clone());
+                        if (altSp) {
+                            altSp->setFilename(baseName);
+                            altSp->setMD5Sum(md5Hex);
+                            lr->addResource(altSp);
+                        }
+                    }
+                    if (bareName.toLower() != bareName) {
+                        KoResourceSP lowerSp(resSp->clone());
+                        if (lowerSp) {
+                            lowerSp->setFilename(bareName.toLower());
+                            lowerSp->setMD5Sum(md5Hex);
+                            lr->addResource(lowerSp);
+                        }
+                    }
                 }
                 f.close();
                 return true;
@@ -345,27 +361,36 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
     // Check PNG signature
     if (data.size() < 8 || memcmp(data.constData(), "\x89PNG\r\n\x1a\n", 8) != 0) return;
 
-    // Scan PNG chunks for zTXt chunk with keyword "preset"
+    // Scan PNG chunks for zTXt or tEXt chunk with keyword "preset"
     int idx = 8;
     while (idx + 12 <= data.size()) {
         const quint32 length = qFromBigEndian<quint32>(reinterpret_cast<const uchar*>(data.constData() + idx));
         const char *type = data.constData() + idx + 4;
-        if (memcmp(type, "zTXt", 4) == 0 && idx + 8 + int(length) <= data.size()) {
+        const bool isZTxt = (memcmp(type, "zTXt", 4) == 0);
+        const bool isTExt = (memcmp(type, "tEXt", 4) == 0);
+        if ((isZTxt || isTExt) && idx + 8 + int(length) <= data.size()) {
             const char *chunkData = data.constData() + idx + 8;
             int nullPos = 0;
             while (nullPos < int(length) && chunkData[nullPos] != 0) {
                 ++nullPos;
             }
-            if (nullPos < int(length) - 2 && memcmp(chunkData, "preset", 6) == 0) {
-                const uchar *zStream = reinterpret_cast<const uchar*>(chunkData + nullPos + 2);
-                uLongf zLen = length - (nullPos + 2);
-                uLongf destLen = 1024 * 1024; // 1MB max uncompressed XML
-                QByteArray decomp;
-                decomp.resize(destLen);
-                if (uncompress(reinterpret_cast<Bytef*>(decomp.data()), &destLen, zStream, zLen) == Z_OK) {
+            if (nullPos < int(length) && memcmp(chunkData, "preset", 6) == 0) {
+                QString xmlStr;
+                if (isZTxt && nullPos < int(length) - 2) {
+                    const uchar *zStream = reinterpret_cast<const uchar*>(chunkData + nullPos + 2);
+                    uLongf zLen = length - (nullPos + 2);
+                    uLongf destLen = 1024 * 1024; // 1MB max uncompressed XML
+                    QByteArray decomp;
                     decomp.resize(destLen);
-                    const QString xmlStr = QString::fromUtf8(decomp);
+                    if (uncompress(reinterpret_cast<Bytef*>(decomp.data()), &destLen, zStream, zLen) == Z_OK) {
+                        decomp.resize(destLen);
+                        xmlStr = QString::fromUtf8(decomp);
+                    }
+                } else if (isTExt) {
+                    xmlStr = QString::fromUtf8(chunkData + nullPos + 1, length - (nullPos + 1));
+                }
 
+                if (!xmlStr.isEmpty()) {
                     // 1. Embedded base64 resources in Krita 5.0+ presets (<resources><resource ...>BASE64</resource></resources>)
                     static const QRegularExpression embResRe(
                         QStringLiteral("<resource\\b([^>]*?)>(.*?)</resource>"),
@@ -400,7 +425,44 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
                         }
                     }
 
-                    // 2. Explicit filename="..." and pattern="..." XML attributes
+                    // 2. Embedded Texture/Pattern in Krita presets (<param name="Texture/Pattern/Pattern">BASE64</param>)
+                    static const QRegularExpression patDataRe(
+                        QStringLiteral("<param\\b[^>]*?name=[\"']Texture/Pattern/Pattern[\"'][^>]*>(?:<!\\[CDATA\\[)?([A-Za-z0-9+/=\\r\\n]+)(?:\\]\\]>)?</param>"),
+                        QRegularExpression::CaseInsensitiveOption);
+                    auto mrPat = patDataRe.match(xmlStr);
+                    if (mrPat.hasMatch()) {
+                        const QString b64 = mrPat.captured(1).trimmed();
+                        const QByteArray patBytes = QByteArray::fromBase64(b64.toLatin1());
+                        if (!patBytes.isEmpty()) {
+                            static const QRegularExpression patNameRe(
+                                QStringLiteral("<param\\b[^>]*?name=[\"']Texture/Pattern/Name[\"'][^>]*>(?:<!\\[CDATA\\[)?([^\\]<]+)(?:\\]\\]>)?</param>"),
+                                QRegularExpression::CaseInsensitiveOption);
+                            auto mrName = patNameRe.match(xmlStr);
+                            QString patName = mrName.hasMatch() ? mrName.captured(1).trimmed() : QStringLiteral("embedded_pattern.png");
+                            if (patName.isEmpty()) patName = QStringLiteral("embedded_pattern.png");
+
+                            static const QRegularExpression patFileRe(
+                                QStringLiteral("<param\\b[^>]*?name=[\"']Texture/Pattern/PatternFileName[\"'][^>]*>(?:<!\\[CDATA\\[)?([^\\]<]+)(?:\\]\\]>)?</param>"),
+                                QRegularExpression::CaseInsensitiveOption);
+                            auto mrFile = patFileRe.match(xmlStr);
+                            const QString patFileName = mrFile.hasMatch() ? QFileInfo(mrFile.captured(1).trimmed()).fileName() : QString();
+
+                            if (!m_patternDir.isEmpty()) {
+                                const QString outPath = QDir(m_patternDir).filePath(QFileInfo(patName).fileName());
+                                QFile outF(outPath);
+                                if (outF.open(QIODevice::WriteOnly)) {
+                                    outF.write(patBytes);
+                                    outF.close();
+                                }
+                            }
+                            loadSingleBrushResource(patName);
+                            if (!patFileName.isEmpty() && patFileName != patName) {
+                                loadSingleBrushResource(patFileName);
+                            }
+                        }
+                    }
+
+                    // 3. Explicit filename="..." and pattern="..." XML attributes
                     static const QRegularExpression attrRe(
                         QStringLiteral("(?:filename|pattern)\\s*=\\s*\"([^\"]+)\""),
                         QRegularExpression::CaseInsensitiveOption);
@@ -412,7 +474,7 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
                         }
                     }
 
-                    // 2. Fallback regex to capture any brush resource file names in XML
+                    // 4. Fallback regex to capture any brush resource file names in XML
                     static const QRegularExpression re(
                         QStringLiteral("([\\w\\-\\._ %]+\\.(?:gbr|gih|png|svg|pat|abr|jpg|jpeg))"),
                         QRegularExpression::CaseInsensitiveOption);
@@ -422,8 +484,8 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
                         loadSingleBrushResource(file);
                     }
                 }
+                break;
             }
-            break;
         }
         idx += 12 + length;
     }

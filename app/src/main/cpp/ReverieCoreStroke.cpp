@@ -9,6 +9,10 @@
  * ============================================================ */
 #include "ReverieCoreInternal.h"
 #include "ReverieCoreUndoStore.h"
+#include <strokes/KisMaskingBrushRenderer.h>
+#include <strokes/KisMaskedFreehandStrokePainter.h>
+#include <KisFreehandStrokeInfo.h>
+#include <KoCompositeOpRegistry.h>
 #include <cmath>
 
 void ReverieCore::touchStrokeStart(qreal x, qreal y, qreal pressure, qreal tiltX, qreal tiltY, qreal rotation)
@@ -377,8 +381,10 @@ bool ReverieCore::flushStrokeBatch()
     const bool isSmudgeOp = (m_toolMode == ToolSmudge) ||
         (m_brushPreset && m_brushPreset->paintOp().id() == QStringLiteral("colorsmudge"));
 
-    const bool needsIndirect = !isSmudgeOp && m_brushPreset && m_brushPreset->settings() &&
-        !m_brushPreset->settings()->paintIncremental();
+    const bool hasMasking = !isSmudgeOp && m_brushPreset && m_brushPreset->hasMaskingPreset();
+
+    const bool needsIndirect = (!isSmudgeOp && m_brushPreset && m_brushPreset->settings() &&
+        !m_brushPreset->settings()->paintIncremental()) || hasMasking;
 
     KisPaintLayer *pl = (m_currentLayer >= 0 && m_currentLayer < m_layers.size())
         ? dynamic_cast<KisPaintLayer *>(m_layers[m_currentLayer].node)
@@ -423,7 +429,7 @@ bool ReverieCore::flushStrokeBatch()
     KoColor koBgColor(qBgColor, cs);
 
     // Krita-style: reuse one KisPainter for the whole stroke.
-    if (m_snapshotPending || !m_strokePainter || m_strokeDevice != (void *)target.data()) {
+    if (m_snapshotPending || (!m_strokePainter && !m_maskedStrokePainter) || m_strokeDevice != (void *)target.data()) {
         endStrokeBatch();
         m_strokeDevice = (void *)target.data();
         // Deferred Krita undo: for direct painting, start transaction on the layer.
@@ -452,84 +458,117 @@ bool ReverieCore::flushStrokeBatch()
             m_strokeTxnActive = true;
         }
         m_snapshotPending = false;
-        m_strokePainter = new KisPainter(target);
-        m_strokePainter->setFillStyle(KisPainter::FillStyleForegroundColor);
-        m_strokePainter->setStrokeStyle(KisPainter::StrokeStyleBrush);
-        m_strokePainter->setCompositeOpId(painterCompOp);
-        m_strokePainter->setOpacityF(needsIndirect ? 1.0 : (m_brushPreset ? 1.0 : qBound<qreal>(0.0, m_strokeOpacity, 1.0)));
-        m_strokePainter->setPaintColor(koColor);
-        m_strokePainter->setBackgroundColor(koBgColor);
 
-        // Constrain the whole stroke to the active selection (if any)
-        if (m_selection) {
-            m_strokePainter->setSelection(m_selection);
-        }
-        m_strokePainter->setChannelFlags(pl && pl->alphaLocked() ? pl->channelLockFlags() : QBitArray());
-        // Real Krita brush engine: construct the brush op once per stroke
-        // and drive its async dab pipeline synchronously (the fake executor
-        // runs the rendering jobs inline, exactly like Krita's own tests).
-        if (m_brushPreset && m_strokePainter) {
-            const bool isColorSmudge = (m_toolMode == ToolSmudge) ||
-                (m_brushPreset->paintOp().id() == QStringLiteral("colorsmudge"));
-            KisPaintOpFactory *smudgeFactory =
-                isColorSmudge ? KisPaintOpRegistry::instance()->value(QStringLiteral("colorsmudge")) : nullptr;
+        const int layerIndex = qBound(0, m_currentLayer, m_layers.size() - 1);
+        const QPointF start =
+            m_strokeSamples.isEmpty() ? m_strokeStartImg : m_strokeSamples.first().imgPos;
 
-            std::unique_ptr<KisInterstrokeDataFactory> factory;
-            if (smudgeFactory) {
-                factory.reset(smudgeFactory->createInterstrokeDataFactory(m_brushPreset->settings(), m_brushPreset->resourcesInterface()));
+        if (hasMasking) {
+            const QString maskingCompOpId = (m_brushPreset && m_brushPreset->settings())
+                ? m_brushPreset->settings()->maskingBrushCompositeOp()
+                : QStringLiteral("alphadarken");
+            m_maskingBrushRenderer = new KisMaskingBrushRenderer(target, maskingCompOpId);
+
+            KisDistanceInformation startDist(start, 0.0);
+            m_strokeInfo = new KisFreehandStrokeInfo(startDist);
+            m_maskInfo = new KisFreehandStrokeInfo(startDist);
+
+            KisPainter *strokeP = m_strokeInfo->painter;
+            strokeP->begin(m_maskingBrushRenderer->strokeDevice(), nullptr);
+            strokeP->setRunnableStrokeJobsInterface(&m_fakeExecutor);
+            strokeP->setFillStyle(KisPainter::FillStyleForegroundColor);
+            strokeP->setStrokeStyle(KisPainter::StrokeStyleBrush);
+            strokeP->setCompositeOpId(QStringLiteral("alphadarken"));
+            strokeP->setOpacityToUnit();
+            strokeP->setPaintColor(koColor);
+            strokeP->setBackgroundColor(koBgColor);
+            strokeP->setChannelFlags(QBitArray());
+            strokeP->setPaintOpPreset(m_brushPreset, KisNodeSP(m_layers[layerIndex].node), image);
+
+            KisPainter *maskP = m_maskInfo->painter;
+            maskP->begin(m_maskingBrushRenderer->maskDevice(), nullptr);
+            maskP->setRunnableStrokeJobsInterface(&m_fakeExecutor);
+            maskP->setFillStyle(KisPainter::FillStyleForegroundColor);
+            maskP->setStrokeStyle(KisPainter::StrokeStyleBrush);
+            maskP->setCompositeOpId(QStringLiteral("alphadarken"));
+            maskP->setOpacityToUnit();
+            maskP->setPaintColor(KoColor(Qt::white, maskP->device()->colorSpace()));
+            maskP->setBackgroundColor(KoColor(Qt::black, maskP->device()->colorSpace()));
+            maskP->setChannelFlags(QBitArray());
+            maskP->setPaintOpPreset(m_brushPreset->createMaskingPreset(), KisNodeSP(m_layers[layerIndex].node), image);
+
+            m_maskedStrokePainter = new KisMaskedFreehandStrokePainter(m_strokeInfo, m_maskInfo);
+        } else {
+            m_strokePainter = new KisPainter(target);
+            m_strokePainter->setFillStyle(KisPainter::FillStyleForegroundColor);
+            m_strokePainter->setStrokeStyle(KisPainter::StrokeStyleBrush);
+            m_strokePainter->setCompositeOpId(painterCompOp);
+            m_strokePainter->setOpacityF(needsIndirect ? 1.0 : (m_brushPreset ? 1.0 : qBound<qreal>(0.0, m_strokeOpacity, 1.0)));
+            m_strokePainter->setPaintColor(koColor);
+            m_strokePainter->setBackgroundColor(koBgColor);
+
+            // Constrain the whole stroke to the active selection (if any)
+            if (m_selection) {
+                m_strokePainter->setSelection(m_selection);
             }
-            if (!factory) {
-                factory.reset(KisPaintOpRegistry::instance()->createInterstrokeDataFactory(m_brushPreset));
-            }
-            if (factory) {
-                KUndo2Command *cmd = target->createChangeInterstrokeDataCommand(toQShared(factory->create(target)));
-                if (cmd) {
-                    cmd->redo();
-                    delete cmd;
+            m_strokePainter->setChannelFlags(pl && pl->alphaLocked() ? pl->channelLockFlags() : QBitArray());
+            // Real Krita brush engine: construct the brush op once per stroke
+            // and drive its async dab pipeline synchronously (the fake executor
+            // runs the rendering jobs inline, exactly like Krita's own tests).
+            if (m_brushPreset && m_strokePainter) {
+                const bool isColorSmudge = (m_toolMode == ToolSmudge) ||
+                    (m_brushPreset->paintOp().id() == QStringLiteral("colorsmudge"));
+                KisPaintOpFactory *smudgeFactory =
+                    isColorSmudge ? KisPaintOpRegistry::instance()->value(QStringLiteral("colorsmudge")) : nullptr;
+
+                std::unique_ptr<KisInterstrokeDataFactory> factory;
+                if (smudgeFactory) {
+                    factory.reset(smudgeFactory->createInterstrokeDataFactory(m_brushPreset->settings(), m_brushPreset->resourcesInterface()));
                 }
+                if (!factory) {
+                    factory.reset(KisPaintOpRegistry::instance()->createInterstrokeDataFactory(m_brushPreset));
+                }
+                if (factory) {
+                    KUndo2Command *cmd = target->createChangeInterstrokeDataCommand(toQShared(factory->create(target)));
+                    if (cmd) {
+                        cmd->redo();
+                        delete cmd;
+                    }
+                }
+                m_strokePainter->setRunnableStrokeJobsInterface(&m_fakeExecutor);
+                if (smudgeFactory) {
+                    m_strokeOp = smudgeFactory->createOp(m_brushPreset->settings(), m_strokePainter,
+                                                         KisNodeSP(m_layers[layerIndex].node), image);
+                }
+                if (!m_strokeOp) {
+                    m_strokeOp = KisPaintOpRegistry::instance()->paintOp(
+                        m_brushPreset, m_strokePainter,
+                        KisNodeSP(m_layers[layerIndex].node), image);
+                }
+                if (!m_strokeOp) {
+                    m_strokeOp = new KisBrushOp(m_brushPreset->settings(), m_strokePainter,
+                                                KisNodeSP(m_layers[layerIndex].node), image);
+                }
+                delete m_strokeDistance;
+                m_strokeDistance = new KisDistanceInformation(start, 0.0);
             }
-            m_strokePainter->setRunnableStrokeJobsInterface(&m_fakeExecutor);
-            const int layerIndex = qBound(0, m_currentLayer, m_layers.size() - 1);
-            if (smudgeFactory) {
-                m_strokeOp = smudgeFactory->createOp(m_brushPreset->settings(), m_strokePainter,
-                                                     KisNodeSP(m_layers[layerIndex].node), image);
-            }
-            if (!m_strokeOp) {
-                // Create the op through the registry so the preset's own paintop
-                // engine is used (paintbrush -> KisBrushOp, experimentbrush ->
-                // KisExperimentPaintOp, roundmarker -> KisRoundMarkerOp, ...).
-                m_strokeOp = KisPaintOpRegistry::instance()->paintOp(
-                    m_brushPreset, m_strokePainter,
-                    KisNodeSP(m_layers[layerIndex].node), image);
-            }
-            if (!m_strokeOp) {
-                // Fall back to the classic brush op if the engine is missing
-                m_strokeOp = new KisBrushOp(m_brushPreset->settings(), m_strokePainter,
-                                            KisNodeSP(m_layers[layerIndex].node), image);
-            }
-            const QPointF start =
-                m_strokeSamples.isEmpty() ? m_strokeStartImg : m_strokeSamples.first().imgPos;
-            delete m_strokeDistance;
-            m_strokeDistance = new KisDistanceInformation(start, 0.0);
         }
     }
     // Re-sync the composite op on every flush so mid-stroke parameter
     // changes (blend-mode dropdown, eraser preset switch) take effect.
-    m_strokePainter->setCompositeOpId(painterCompOp);
-    m_strokePainter->setOpacityF(needsIndirect ? 1.0 : (m_brushPreset ? 1.0 : qBound<qreal>(0.0, m_strokeOpacity, 1.0)));
-    m_strokePainter->setPaintColor(koColor);
-    m_strokePainter->setBackgroundColor(koBgColor);
-    if (m_selection) {
-        m_strokePainter->setSelection(m_selection);
-    } else {
-        m_strokePainter->setSelection(KisSelectionSP());
+    if (m_strokePainter) {
+        m_strokePainter->setCompositeOpId(painterCompOp);
+        m_strokePainter->setOpacityF(needsIndirect ? 1.0 : (m_brushPreset ? 1.0 : qBound<qreal>(0.0, m_strokeOpacity, 1.0)));
+        m_strokePainter->setPaintColor(koColor);
+        m_strokePainter->setBackgroundColor(koBgColor);
+        if (m_selection) {
+            m_strokePainter->setSelection(m_selection);
+        } else {
+            m_strokePainter->setSelection(KisSelectionSP());
+        }
     }
-    KisPainter &painter = *m_strokePainter;
 
-    // Genuine tap only (no movement): paint a round dot. KisPainter::drawLine
-    // with identical start/end returns immediately, so use paintEllipse
-    // (fills with the foreground color) sized to the brush diameter. A
-    // trailing single sample of a real stroke is NOT a dot.
+    // Genuine tap only (no movement): paint a round dot.
     if (m_strokeSamples.size() == 1 && !m_strokeHadMove) {
         if (m_idleKickPainted) {
             // Already painted by touchStrokeKickIdle, do not re-dab on pen-up
@@ -541,7 +580,31 @@ bool ReverieCore::flushStrokeBatch()
         const QPointF p = first.imgPos;
         const qreal pressure =
             qBound<qreal>(0.0, first.pressure, 1.0);
-        if (m_brushPreset && m_strokeOp) {
+        QRect strokeDirty;
+        if (m_maskedStrokePainter) {
+            KisPaintInformation info(p, pressure, first.tiltX, first.tiltY, first.rotation, 0.0, 0.0, first.time, 0.0);
+            if (m_randomSource) info.setRandomSource(m_randomSource);
+            if (m_perStrokeRandomSource) info.setPerStrokeRandomSource(m_perStrokeRandomSource);
+            m_maskedStrokePainter->paintAt(info);
+            while (true) {
+                QVector<KisRunnableStrokeJobData *> jobs;
+                auto result = m_maskedStrokePainter->doAsynchronousUpdate(jobs);
+                for (auto *j : jobs) {
+                    j->run();
+                    delete j;
+                }
+                if (jobs.isEmpty() || !result.second) {
+                    break;
+                }
+            }
+            if (m_maskingBrushRenderer) {
+                const QVector<QRect> exactDirty = m_maskedStrokePainter->takeDirtyRegion();
+                for (const QRect &r : exactDirty) {
+                    m_maskingBrushRenderer->updateProjection(r);
+                    strokeDirty = strokeDirty.isNull() ? r : strokeDirty.united(r);
+                }
+            }
+        } else if (m_brushPreset && m_strokeOp) {
             // Krita dab for a genuine tap (paintAt = single dab at pos)
             KisPaintInformation info(p, pressure, first.tiltX, first.tiltY, first.rotation, 0.0, 0.0, first.time, 0.0);
             if (m_randomSource) info.setRandomSource(m_randomSource);
@@ -558,13 +621,10 @@ bool ReverieCore::flushStrokeBatch()
                     break;
                 }
             }
-        } else {
-            // Pressure floor is only a safety net against the dab fully
-            // disappearing (Krita lets the Size curve decide the minimum
-            // dab); the old 15% floor badly flattened light-pressure strokes.
+        } else if (m_strokePainter) {
             qreal w = m_brushSize * pressure;
             w = qMax(w, qMax<qreal>(1.0, m_brushSize * 0.02));
-            painter.paintEllipse(QRectF(p.x() - w / 2.0, p.y() - w / 2.0, w, w));
+            m_strokePainter->paintEllipse(QRectF(p.x() - w / 2.0, p.y() - w / 2.0, w, w));
         }
         // Propagate the tap dot to the projection immediately
         int tw = int(m_brushSize) + 2;
@@ -573,31 +633,55 @@ bool ReverieCore::flushStrokeBatch()
         }
         const QRect tr = QRect(int(p.x()) - tw, int(p.y()) - tw, 2 * tw, 2 * tw).intersected(
             QRect(0, 0, m_docWidth, m_docHeight));
-        markRegionDirty(tr);
+        markRegionDirty(strokeDirty.isNull() ? tr : strokeDirty);
         bumpLayerThumbGen(m_layers[m_currentLayer].node);
-        // Retain sample 0 as the starting anchor with m_strokeCarryCount = 1
-        // Do NOT clear m_strokeSamples! If user starts moving after the idle kick,
-        // the first move segment (sample 0 -> sample 1) will be connected via paintLine!
         m_strokeCarryCount = 1;
         return true;
     }
 
     QRect strokeDirty;
-    if (m_brushPreset && m_strokeOp) {
+    if (m_maskedStrokePainter) {
+        const int firstNewSegment = qBound(1, m_strokeCarryCount, qMax(1, m_strokeSamples.size()));
+        for (int i = firstNewSegment; i < m_strokeSamples.size(); ++i) {
+            const StrokeSample &a = m_strokeSamples[i - 1];
+            const StrokeSample &b = m_strokeSamples[i];
+            const qreal dist = QLineF(a.imgPos, b.imgPos).length();
+            const qreal dt = qMax<qreal>(1e-4, b.time - a.time);
+            // Speed in px/ms to align with Krita's sensor scale
+            const qreal speed = dist / (dt * 1000.0);
+            KisPaintInformation infoA(a.imgPos, a.pressure, a.tiltX, a.tiltY, a.rotation, 0.0, 0.0, a.time, speed);
+            KisPaintInformation infoB(b.imgPos, b.pressure, b.tiltX, b.tiltY, b.rotation, 0.0, 0.0, b.time, speed);
+            if (m_randomSource) {
+                infoA.setRandomSource(m_randomSource);
+                infoB.setRandomSource(m_randomSource);
+            }
+            if (m_perStrokeRandomSource) {
+                infoA.setPerStrokeRandomSource(m_perStrokeRandomSource);
+                infoB.setPerStrokeRandomSource(m_perStrokeRandomSource);
+            }
+            m_maskedStrokePainter->paintLine(infoA, infoB);
+        }
+        while (true) {
+            QVector<KisRunnableStrokeJobData *> jobs;
+            auto result = m_maskedStrokePainter->doAsynchronousUpdate(jobs);
+            for (auto *j : jobs) {
+                j->run();
+                delete j;
+            }
+            if (jobs.isEmpty() || !result.second) {
+                break;
+            }
+        }
+        if (m_maskingBrushRenderer) {
+            const QVector<QRect> exactDirty = m_maskedStrokePainter->takeDirtyRegion();
+            for (const QRect &r : exactDirty) {
+                m_maskingBrushRenderer->updateProjection(r);
+                strokeDirty = strokeDirty.isNull() ? r : strokeDirty.united(r);
+            }
+        }
+    } else if (m_brushPreset && m_strokeOp && m_strokePainter) {
         // ---- Real Krita brush engine ----
-        // Continuous paintLine through the samples (the op interpolates dabs
-        // along the path itself, with the real spacing/softness/flow of the
-        // preset). The async dab pipeline is driven synchronously: render
-        // jobs ran inline via the fake executor at enqueue time, and these
-        // update jobs bitBlt the finished dabs onto the target device.
-        //
-        // Selection constraint: engines like roundmarker/spray/sketch write
-        // pixels DIRECTLY to the layer device (KisMarkerPainter and friends),
-        // bypassing KisPainter::bitBlt/bltFixed, so painter->setSelection is
-        // ignored by them (paintbrush/duplicate go through bltFixed and are
-        // constrained natively). For those engines we snapshot the affected
-        // box before painting and restore the pixels outside the selection
-        // afterwards - the same net effect as a selection-clipped blit.
+        KisPainter &painter = *m_strokePainter;
         const QString opId = (m_toolMode == ToolSmudge) ? QStringLiteral("colorsmudge") : m_brushPreset->paintOp().id();
         const bool isPathEngine = (opId == QLatin1String("experimentbrush") ||
                                    opId == QLatin1String("curvebrush") ||
@@ -629,16 +713,14 @@ bool ReverieCore::flushStrokeBatch()
                                   selClipBox.width(), selClipBox.height());
             }
         }
-        // Segments up to the carry index were painted by the previous flush:
-        // start at the first NEW segment so the retained joint is not dabbed a
-        // second time (which doubled opacity/erase there every flush boundary).
         const int firstNewSegment = qBound(1, m_strokeCarryCount, qMax(1, m_strokeSamples.size()));
         for (int i = firstNewSegment; i < m_strokeSamples.size(); ++i) {
             const StrokeSample &a = m_strokeSamples[i - 1];
             const StrokeSample &b = m_strokeSamples[i];
             const qreal dist = QLineF(a.imgPos, b.imgPos).length();
             const qreal dt = qMax<qreal>(1e-4, b.time - a.time);
-            const qreal speed = dist / dt;
+            // Speed in px/ms to align with Krita's sensor scale
+            const qreal speed = dist / (dt * 1000.0);
             KisPaintInformation infoA(a.imgPos, a.pressure, a.tiltX, a.tiltY, a.rotation, 0.0, 0.0, a.time, speed);
             KisPaintInformation infoB(b.imgPos, b.pressure, b.tiltX, b.tiltY, b.rotation, 0.0, 0.0, b.time, speed);
             if (m_randomSource) {
@@ -663,7 +745,7 @@ bool ReverieCore::flushStrokeBatch()
             }
         }
         // Restore the pixels outside the selection for engines that bypass
-        // KisPainter's selection clipping (see above)
+        // KisPainter's selection clipping
         if (m_selection && engineBypassesSelection && !selClipBox.isEmpty() &&
             !selClipBefore.isEmpty()) {
             const int w = selClipBox.width();
@@ -690,10 +772,6 @@ bool ReverieCore::flushStrokeBatch()
             target->writeBytes(reinterpret_cast<const quint8 *>(after.constData()),
                                selClipBox.x(), selClipBox.y(), w, h);
         }
-        // Exact dirty propagation: path engines like experimentbrush (Shape_fill)
-        // continually fill a polygon spanning across the entire stroke history.
-        // We MUST include the whole accumulated stroke bounding box so the live
-        // projection updates every pixel of the filled shape on screen.
         if (isPathEngine) {
             const int margin = int(m_brushSize) + 8;
             const QRect pathDirty = m_accumulatedStrokeBounds.toAlignedRect().adjusted(-margin, -margin, margin, margin);
@@ -703,7 +781,6 @@ bool ReverieCore::flushStrokeBatch()
         for (const QRect &r : exactDirty) {
             strokeDirty = strokeDirty.isNull() ? r : strokeDirty.united(r);
         }
-        // Conservative fallback: the samples' neighbourhood for direct-write engines
         if (!isPathEngine && (engineBypassesSelection || exactDirty.isEmpty())) {
             for (const StrokeSample &sm : m_strokeSamples) {
                 const int w = int(m_brushSize) + 2;
@@ -712,8 +789,9 @@ bool ReverieCore::flushStrokeBatch()
                 strokeDirty = strokeDirty.isNull() ? r : strokeDirty.united(r);
             }
         }
-    } else {
+    } else if (m_strokePainter) {
         // ---- Fallback: classic round-dab loop (no preset loaded) ----
+        KisPainter &painter = *m_strokePainter;
         const auto addDab = [&](const QPointF &p, qreal w) {
             painter.paintEllipse(QRectF(p.x() - w / 2.0, p.y() - w / 2.0, w, w));
             const QRect r(int(p.x()) - int(w) - 1, int(p.y()) - int(w) - 1,
@@ -794,6 +872,15 @@ void ReverieCore::endStrokeBatch()
             }
         }
     }
+    delete m_maskedStrokePainter;
+    m_maskedStrokePainter = nullptr;
+    delete m_strokeInfo;
+    m_strokeInfo = nullptr;
+    delete m_maskInfo;
+    m_maskInfo = nullptr;
+    delete m_maskingBrushRenderer;
+    m_maskingBrushRenderer = nullptr;
+
     delete m_strokePainter;
     m_strokePainter = nullptr;
     m_strokeDevice = nullptr;
@@ -1010,14 +1097,14 @@ bool ReverieCore::strokeAirbrushTick()
     if (!m_strokeBatchOpen || !m_document) {
         return false;
     }
-    if (!m_strokePainter && !m_strokeSamples.isEmpty()) {
+    if (!m_strokePainter && !m_maskedStrokePainter && !m_strokeSamples.isEmpty()) {
         // The painter/op pipeline is created lazily by the first flush. A
         // pure hold-still stroke never flushes on its own, so force one:
         // the single-sample path paints the initial dot AND leaves
-        // m_strokePainter/m_strokeOp ready for subsequent ticks.
+        // m_strokePainter/m_strokeOp/m_maskedStrokePainter ready for subsequent ticks.
         flushStrokeBatch();
     }
-    if (!m_strokePainter || !m_strokeOp) {
+    if ((!m_strokePainter || !m_strokeOp) && !m_maskedStrokePainter) {
         return false;
     }
     const StrokeSample *lastSample = m_strokeSamples.isEmpty() ? nullptr : &m_strokeSamples.last();
@@ -1031,29 +1118,53 @@ bool ReverieCore::strokeAirbrushTick()
     KisPaintInformation info(p, pressure, tiltX, tiltY, rotation, 0.0, 0.0, m_strokeTimer.elapsed() / 1000.0, 0.0);
     if (m_randomSource) info.setRandomSource(m_randomSource);
     if (m_perStrokeRandomSource) info.setPerStrokeRandomSource(m_perStrokeRandomSource);
-    m_strokeOp->paintAt(info, m_strokeDistance);
-    while (true) {
-        QVector<KisRunnableStrokeJobData *> jobs;
-        auto result = m_strokeOp->doAsynchronousUpdate(jobs);
-        for (auto *j : jobs) {
-            j->run();
-            delete j;
+
+    QRect tickDirty;
+    if (m_maskedStrokePainter) {
+        m_maskedStrokePainter->paintAt(info);
+        while (true) {
+            QVector<KisRunnableStrokeJobData *> jobs;
+            auto result = m_maskedStrokePainter->doAsynchronousUpdate(jobs);
+            for (auto *j : jobs) {
+                j->run();
+                delete j;
+            }
+            if (jobs.isEmpty() || !result.second) {
+                break;
+            }
         }
-        if (jobs.isEmpty() || !result.second) {
-            break;
+        if (m_maskingBrushRenderer) {
+            const QVector<QRect> exactDirty = m_maskedStrokePainter->takeDirtyRegion();
+            for (const QRect &r : exactDirty) {
+                m_maskingBrushRenderer->updateProjection(r);
+                tickDirty = tickDirty.isNull() ? r : tickDirty.united(r);
+            }
+        }
+    } else {
+        m_strokeOp->paintAt(info, m_strokeDistance);
+        while (true) {
+            QVector<KisRunnableStrokeJobData *> jobs;
+            auto result = m_strokeOp->doAsynchronousUpdate(jobs);
+            for (auto *j : jobs) {
+                j->run();
+                delete j;
+            }
+            if (jobs.isEmpty() || !result.second) {
+                break;
+            }
+        }
+        const QVector<QRect> exactDirty = m_strokePainter->takeDirtyRegion();
+        for (const QRect &r : exactDirty) {
+            tickDirty = tickDirty.isNull() ? r : tickDirty.united(r);
         }
     }
+
     KisPaintLayer *pl = (m_currentLayer >= 0 && m_currentLayer < m_layers.size())
         ? dynamic_cast<KisPaintLayer *>(m_layers[m_currentLayer].node)
         : nullptr;
     KisPaintDeviceSP target =
         (pl && pl->hasTemporaryTarget()) ? pl->temporaryTarget() : currentPaintDevice();
     if (target) {
-        const QVector<QRect> exactDirty = m_strokePainter->takeDirtyRegion();
-        QRect tickDirty;
-        for (const QRect &r : exactDirty) {
-            tickDirty = tickDirty.isNull() ? r : tickDirty.united(r);
-        }
         if (tickDirty.isNull()) {
             const int tw = qMax(int(m_brushSize * 2.0), 32) + 16;
             tickDirty = QRect(int(p.x()) - tw, int(p.y()) - tw, 2 * tw, 2 * tw);
