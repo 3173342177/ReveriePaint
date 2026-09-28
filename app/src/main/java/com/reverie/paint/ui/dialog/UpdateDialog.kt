@@ -40,6 +40,7 @@ import com.reverie.paint.R
 import com.reverie.paint.core.UpdateManager
 import com.reverie.paint.model.DownloadStatus
 import com.reverie.paint.model.ReleaseInfo
+import com.reverie.paint.ui.components.MarkdownView
 import com.reverie.paint.ui.components.ReIconButton
 import com.reverie.paint.ui.components.ReTextButton
 import com.reverie.paint.ui.theme.Morandi
@@ -203,19 +204,17 @@ fun UpdateDialog(
                 Box(
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .heightIn(min = 80.dp, max = 220.dp)
+                        .heightIn(min = 90.dp, max = 280.dp)
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(Morandi.panelHi)
-                        .padding(12.dp)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                         .verticalScroll(scrollState),
                 ) {
                     val bodyText = release.body.ifBlank { stringResource(R.string.dialog_update_notes_empty) }
-                    Text(
-                        text = bodyText,
-                        color = colors.text.copy(alpha = 0.9f),
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
+                    MarkdownView(
+                        markdown = bodyText,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
 
