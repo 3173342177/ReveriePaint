@@ -338,7 +338,8 @@ fun CanvasView(
         //
         // 挂载条件除了 property/构建档位, 还认设置页里的"预览方式 = GLES"(没有数据线时唯一的
         // 入口): 所以这里读 Compose 状态 vm.liquifyHostDraw, 页内切换也能重建/摘除覆盖层。
-        if (LiquifyGlesOverlay.enabledFor(vm.liquifyHostDraw, vm.liquifyField)) {
+        // 仅在当前工具为液化时挂载, 避免非液化工具下全屏 TextureView 抢占与干扰触控。
+        if (tool == Tool.LIQUIFY && LiquifyGlesOverlay.enabledFor(vm.liquifyHostDraw, vm.liquifyField)) {
             androidx.compose.ui.viewinterop.AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx -> LiquifyGlesOverlay(ctx) },

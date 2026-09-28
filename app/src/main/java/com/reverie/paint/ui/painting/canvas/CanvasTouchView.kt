@@ -2042,8 +2042,9 @@ class CanvasTouchView(context: Context) : View(context) {
             }
         }
 
-        // 手写笔触控判定：存在手写笔 Pointer 且没有 2 根及以上手指在做手势导航
-        val isStylusTouch = stylusPointerIndex >= 0 && fingerCount < 2
+        // 手写笔触控判定：存在手写笔 Pointer 且未处于双指画布手势导航中
+        // (只要当前未处于双指手势，任何手指接触均视为手掌接触，优先保证手写笔落笔防误触)
+        val isStylusTouch = stylusPointerIndex >= 0 && (!isTransformActive || fingerCount < 2)
 
         // 侧键按住=临时橡皮 (Samsung Notes 语义): 每个笔接触事件重判, 纯手指路径清残留
         if (isStylusTouch) {
@@ -2141,7 +2142,12 @@ class CanvasTouchView(context: Context) : View(context) {
                 (tool == Tool.BRUSH || tool == Tool.ERASER || tool == Tool.SMUDGE || tool == Tool.LIQUIFY)
 
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                    // 若是多指接触，只有当刚按下的指针就是手写笔自身时才触发落笔起画；
+                    // 手写笔画画时手掌压在屏幕上产生的 ACTION_POINTER_DOWN 直接忽略，不打断笔画
+                    if (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN && event.actionIndex != stylusPointerIndex) {
+                        return true
+                    }
                     try {
                         oplusPredictor?.reset()
                     } catch (_: Throwable) {}
@@ -2233,7 +2239,12 @@ class CanvasTouchView(context: Context) : View(context) {
                         }
                     }
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
+                    // 若是多指接触，只有当手写笔自身抬起时才执行抬笔收尾；
+                    // 手掌或非手写笔触控点抬起不影响正在进行的手写笔绘制
+                    if (event.actionMasked == MotionEvent.ACTION_POINTER_UP && event.actionIndex != stylusPointerIndex) {
+                        return true
+                    }
                     if (draggingGuideHandleIndex != -1) {
                         draggingGuideHandleIndex = -1
                         isInteracting = false
@@ -3063,8 +3074,10 @@ class CanvasTouchView(context: Context) : View(context) {
             Tool.BRUSH, Tool.ERASER, Tool.SMUDGE -> {
                 val hasSymmetry = (v.drawingGuide.mode == GuideMode.SYMMETRY && v.drawingGuide.assistedDrawing)
                 if (!strokeStarted) {
+                    val startDoc = if (firstDocPos != Offset.Zero) firstDocPos else docPos
+                    firstDocPos = startDoc
                     updateStylusSensors(event, pointerIndex, isStylus, historyPos = -1)
-                    strokeStarted = v.touchStart(firstDocPos.x, firstDocPos.y, pressure.toDouble(), touchTiltX, touchTiltY, touchRotation)
+                    strokeStarted = v.touchStart(startDoc.x, startDoc.y, pressure.toDouble(), touchTiltX, touchTiltY, touchRotation)
                     if (strokeStarted) {
                         if (isStylus) {
                             getOrCreateStylusDriver()?.feedbackManager?.setWritingHapticsEnabled(true, isEraser = (effTool() == Tool.ERASER))
@@ -3074,7 +3087,7 @@ class CanvasTouchView(context: Context) : View(context) {
                         lastSoundTimeMs = 0L
                         if (hasSymmetry) {
                             updateSymmetryPressureLut(v)
-                            val symPts = computeAllSymmetricPoints(Point2D(firstDocPos.x, firstDocPos.y))
+                            val symPts = computeAllSymmetricPoints(Point2D(startDoc.x, startDoc.y))
                             ensureMirrorBranches(symPts.size)
                             for (idx in symPts.indices) {
                                 appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, pressure.toDouble())

@@ -105,6 +105,11 @@ internal class LiquifyGlesOverlay(context: Context) :
         surfaceTextureListener = this
     }
 
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean = false
+    override fun onTouchEvent(event: android.view.MotionEvent?): Boolean = false
+    override fun onGenericMotionEvent(event: android.view.MotionEvent?): Boolean = false
+    override fun onHoverEvent(event: android.view.MotionEvent?): Boolean = false
+
     // ---------------- TextureView.SurfaceTextureListener ----------------
 
     override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
