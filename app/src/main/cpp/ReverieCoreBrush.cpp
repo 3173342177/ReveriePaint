@@ -19,6 +19,9 @@
 
 #include <kis_abr_brush_collection.h>
 #include <kis_abr_brush.h>
+// calcAutoSpacing(): 自动间距 (useAutoSpacing="1") 的生效值计算, 与
+// KisPaintOpUtils::effectiveSpacing 内部用的是同一个公式。
+#include <kis_paintop_utils.h>
 
 float ReverieCore::brushPressureFraction(float pressure)
 {
@@ -838,7 +841,17 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
     double spacing = 0.15;
     KisBrushBasedPaintOpSettings *bs = dynamic_cast<KisBrushBasedPaintOpSettings *>(s.data());
     if (bs) {
-        spacing = bs->spacing();
+        if (bs->autoSpacingActive()) {
+            // 自动间距开启时 spacing 属性被引擎忽略, 生效值是
+            // calcAutoSpacing(尺寸, 系数)。换算成与手动间距同语义的"尺寸占比"
+            // 再报给 UI, 否则面板显示的是一个完全无效的数字。
+            KisBrushSP b = bs->brush();
+            const qreal dim = b ? qMax<qreal>(b->width(), b->height()) : 0.0;
+            const qreal autoPx = KisPaintOpUtils::calcAutoSpacing(dim, bs->autoSpacingCoeff());
+            spacing = dim > 1.0 ? autoPx / dim : bs->autoSpacingCoeff();
+        } else {
+            spacing = bs->spacing();
+        }
     }
     if (!(spacing > 0.0) || spacing != spacing) {
         spacing = s->getDouble("SpacingValue", s->getDouble("spacing", 0.15));
@@ -1075,15 +1088,29 @@ void ReverieCore::setBrushAirbrush(bool enabled, qreal rate)
 void ReverieCore::setBrushSpacing(qreal v)
 {
     m_brushSpacing = v;
-    if (m_brushPreset && m_brushPreset->settings()) {
-        KisBrushBasedPaintOpSettings *bs =
-            dynamic_cast<KisBrushBasedPaintOpSettings *>(m_brushPreset->settings().data());
-        if (bs) {
-            bs->setSpacing(v);
-        }
-        m_brushPreset->settings()->setProperty("spacing", v);
-        m_brushPreset->settings()->setProperty("SpacingValue", v);
+    if (!m_brushPreset || !m_brushPreset->settings()) {
+        return;
     }
+    KisPaintOpSettingsSP s = m_brushPreset->settings();
+    KisBrushBasedPaintOpSettings *bs =
+        dynamic_cast<KisBrushBasedPaintOpSettings *>(s.data());
+    if (!bs) {
+        // 非笔刷型引擎 (deform / spray / particle ...) 没有 brush_definition,
+        // 保持原有的 settings 属性通道, 不动它的行为。
+        s->setProperty("spacing", v);
+        s->setProperty("SpacingValue", v);
+        return;
+    }
+    // 自动间距 (brush_definition 的 useAutoSpacing="1") 开启时, 引擎实际用的是
+    // calcAutoSpacing(尺寸, 系数), brush_definition 里的 spacing 属性被完全忽略
+    // —— 直接 setSpacing 不会有任何效果。这里显式关掉自动间距, 让用户拖出来的
+    // 数值真正生效, 并与面板上显示的数字保持一致。
+    if (bs->autoSpacingActive()) {
+        bs->setAutoSpacing(false, bs->autoSpacingCoeff());
+    }
+    bs->setSpacing(v);
+    // 不再写 SpacingValue: 它是 KisSpacingOption 的 extraScale 乘数, 会与
+    // brush spacing 相乘把间距再缩一次 (PressureSpacing=true 的预设尤其明显)。
 }
 
 void ReverieCore::setBrushAngle(qreal v)
