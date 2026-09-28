@@ -22,6 +22,9 @@
         <package android:name="com.huawei.stylus.floatmenu" />
         <package android:name="com.huawei.penengine" />
         <package android:name="com.huawei.penkit" />
+        <package android:name="com.hihonor.stylus" />
+        <package android:name="com.hihonor.featurelayer.sharedfeature.stylus" />
+        <package android:name="com.hihonor.penkit" />
     </queries>
 
     <application
@@ -124,6 +127,17 @@
                 <action android:name="huawei.intent.action.STYLUS_BUTTON_CLICK" />
                 <action android:name="com.huawei.stylus.action.BUTTON_CLICK" />
                 <action android:name="com.huawei.stylus.action.BUTTON_PRESSED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".core.stylus.HonorStylusReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.hihonor.stylus.action.STYLUS_DOUBLE_CLICK" />
+                <action android:name="com.hihonor.android.stylus.action.BUTTON_DOUBLE_PRESSED" />
+                <action android:name="com.hihonor.stylus.action.DOUBLE_CLICK" />
+                <action android:name="com.hihonor.stylus.action.DOUBLE_TAP" />
+                <action android:name="com.hihonor.intent.action.STYLUS_BUTTON_CLICK" />
             </intent-filter>
         </receiver>
     </application>

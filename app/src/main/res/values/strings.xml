@@ -1371,6 +1371,7 @@
     <string name="stylus_brand_devices">已适配的手写笔品牌与设备</string>
     <string name="stylus_oppo_features">笔身手势、触控滑动与原笔迹微震专属配置</string>
     <string name="stylus_huawei_features">笔身双击、侧键动作映射与星闪/蓝牙压感适配</string>
+    <string name="stylus_honor_features">笔身双击、折叠屏侧键与触感微震专属配置</string>
     <string name="stylus_samsung_features">侧键动作映射与触觉微震专属配置</string>
     <string name="stylus_generic_features">标准 Android 压感与倾角触控协议</string>
     <string name="stylus_cursor_mode_none">不显示</string>
@@ -1456,6 +1457,26 @@
     <string name="stylus_huawei_haptics_title">手势触发微震反馈</string>
     <string name="stylus_huawei_haptics_desc">双击或按键触发快捷功能时提供瞬态微触反馈</string>
     <string name="stylus_huawei_hint">提示：若笔身双击无响应，请在系统设置 -> 辅助功能 -> 手写笔 -> 双击中开启双击手势支持</string>
+
+    <!-- HONOR Magic-Pencil -->
+    <string name="stylus_honor_title">荣耀 Magic-Pencil 专属设置</string>
+    <string name="stylus_honor_model">手写笔硬件型号</string>
+    <string name="stylus_honor_auto_model">自动匹配 (%s)</string>
+    <string name="stylus_honor_model_gen3">HONOR Magic-Pencil 第三代</string>
+    <string name="stylus_honor_model_gen2">HONOR Magic-Pencil 第二代 / 第一代</string>
+    <string name="stylus_honor_model_pen">HONOR Magic-Pen (折叠屏专属)</string>
+    <string name="stylus_honor_press_4k">4096级标准压感</string>
+    <string name="stylus_honor_double_tap">笔身双击手势</string>
+    <string name="stylus_honor_double_tap_action">双击响应动作</string>
+    <string name="stylus_honor_side_key">物理侧键行为</string>
+    <string name="stylus_honor_hold_eraser">按住侧键临时变橡皮</string>
+    <string name="stylus_honor_hold_eraser_desc">按住侧键下笔即为橡皮擦，松开侧键自动切回原工具</string>
+    <string name="stylus_honor_key_mapping">侧键动作映射</string>
+    <string name="stylus_honor_click_action">侧键单击动作</string>
+    <string name="stylus_honor_haptics">触觉反馈</string>
+    <string name="stylus_honor_haptics_title">手势触发微震反馈</string>
+    <string name="stylus_honor_haptics_desc">双击或按键触发快捷功能时提供瞬态微触反馈</string>
+    <string name="stylus_honor_hint">提示：若笔身双击无响应，请在系统设置 -> 辅助功能 -> 手写笔 -> 双击切换中开启双击手势支持</string>
     <string name="stylus_action_switch_brush_eraser">切换画笔与橡皮</string>
     <string name="stylus_action_follow_system">跟随系统设置</string>
     <string name="stylus_action_undo">撤销</string>

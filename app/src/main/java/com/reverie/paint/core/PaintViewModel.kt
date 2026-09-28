@@ -934,6 +934,22 @@ class PaintViewModel : ViewModel() {
     var huaweiSideButtonErase by mutableStateOf(true)
     var huaweiHapticsEnabled by mutableStateOf(true)
 
+    // HONOR Magic-Pencil 适配参数
+    var honorPencilModelMode by mutableStateOf("AUTO") // "AUTO", "MAGIC_PENCIL_3", "MAGIC_PENCIL_2", "MAGIC_PEN"
+    val detectedHonorPencilModel: com.reverie.paint.core.stylus.HonorPencilModel
+        get() = stylusDriver?.detectHonorPencilModel() ?: com.reverie.paint.core.stylus.HonorPencilModel.MAGIC_PENCIL_3
+    val honorPencilModel: com.reverie.paint.core.stylus.HonorPencilModel
+        get() = when (honorPencilModelMode) {
+            "MAGIC_PENCIL_3" -> com.reverie.paint.core.stylus.HonorPencilModel.MAGIC_PENCIL_3
+            "MAGIC_PENCIL_2" -> com.reverie.paint.core.stylus.HonorPencilModel.MAGIC_PENCIL_2
+            "MAGIC_PEN" -> com.reverie.paint.core.stylus.HonorPencilModel.MAGIC_PEN
+            else -> detectedHonorPencilModel
+        }
+    var honorDoubleTapAction by mutableStateOf("toggle_eraser")
+    var honorSingleClickAction by mutableStateOf("none")
+    var honorSideButtonErase by mutableStateOf(true)
+    var honorHapticsEnabled by mutableStateOf(true)
+
     // 触控预测与输入延迟优化
     var motionPredictorEnabled by mutableStateOf(true)
 
@@ -1593,6 +1609,46 @@ class PaintViewModel : ViewModel() {
         }
     }
 
+    fun updateHonorPencilModelMode(mode: String) {
+        honorPencilModelMode = mode
+        if (::appContext.isInitialized) {
+            appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().putString("honorPencilModelMode", mode).apply()
+        }
+    }
+
+    fun updateHonorDoubleTapAction(actionId: String) {
+        honorDoubleTapAction = actionId
+        if (::appContext.isInitialized) {
+            appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().putString("honorDoubleTapAction", actionId).apply()
+        }
+    }
+
+    fun updateHonorSingleClickAction(actionId: String) {
+        honorSingleClickAction = actionId
+        if (::appContext.isInitialized) {
+            appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().putString("honorSingleClickAction", actionId).apply()
+        }
+    }
+
+    fun updateHonorSideButtonErase(enabled: Boolean) {
+        honorSideButtonErase = enabled
+        if (::appContext.isInitialized) {
+            appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().putBoolean("honorSideButtonErase", enabled).apply()
+        }
+    }
+
+    fun updateHonorHapticsEnabled(enabled: Boolean) {
+        honorHapticsEnabled = enabled
+        if (::appContext.isInitialized) {
+            appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().putBoolean("honorHapticsEnabled", enabled).apply()
+        }
+    }
+
     fun executeStylusAction(action: com.reverie.paint.core.stylus.StylusAction) {
         if (action == com.reverie.paint.core.stylus.StylusAction.NONE) return
         executeShortcutAction(action.actionId)
@@ -2001,6 +2057,11 @@ class PaintViewModel : ViewModel() {
             huaweiLongPressAction = prefs.getString("huaweiLongPressAction", "tool_color") ?: "tool_color"
             huaweiSideButtonErase = prefs.getBoolean("huaweiSideButtonErase", true)
             huaweiHapticsEnabled = prefs.getBoolean("huaweiHapticsEnabled", true)
+            honorPencilModelMode = prefs.getString("honorPencilModelMode", "AUTO") ?: "AUTO"
+            honorDoubleTapAction = prefs.getString("honorDoubleTapAction", "toggle_eraser") ?: "toggle_eraser"
+            honorSingleClickAction = prefs.getString("honorSingleClickAction", "none") ?: "none"
+            honorSideButtonErase = prefs.getBoolean("honorSideButtonErase", true)
+            honorHapticsEnabled = prefs.getBoolean("honorHapticsEnabled", true)
             gestureTwoFingerUndo = prefs.getBoolean("gestureTwoFingerUndo", true)
             gestureThreeFingerRedo = prefs.getBoolean("gestureThreeFingerRedo", true)
             gesturePinchTransform = prefs.getBoolean("gesturePinchTransform", true)

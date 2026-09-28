@@ -1371,6 +1371,7 @@
     <string name="stylus_brand_devices">Adapted Stylus Hardware</string>
     <string name="stylus_oppo_features">Body gestures, touch slide &amp; realistic haptic vibration config</string>
     <string name="stylus_huawei_features">Body double-tap, side button mappings &amp; NearLink/Bluetooth pressure</string>
+    <string name="stylus_honor_features">Double-tap gestures, foldable pen side key, and haptic vibration feedback</string>
     <string name="stylus_samsung_features">Side button mappings &amp; haptic feedback config</string>
     <string name="stylus_generic_features">Standard Android pressure and tilt protocol</string>
     <string name="stylus_cursor_mode_none">Hidden</string>
@@ -1456,6 +1457,26 @@
     <string name="stylus_huawei_haptics_title">Haptic Vibration on Gesture</string>
     <string name="stylus_huawei_haptics_desc">Provide transient tactile vibration when double-tap or button action fires</string>
     <string name="stylus_huawei_hint">Note: If double-tap does not respond, ensure double-tap gesture is enabled in System Settings -> Accessibility features -> Stylus</string>
+
+    <!-- HONOR Magic-Pencil -->
+    <string name="stylus_honor_title">HONOR Magic-Pencil Settings</string>
+    <string name="stylus_honor_model">Stylus Hardware Model</string>
+    <string name="stylus_honor_auto_model">Auto-Match (%s)</string>
+    <string name="stylus_honor_model_gen3">HONOR Magic-Pencil 3</string>
+    <string name="stylus_honor_model_gen2">HONOR Magic-Pencil 2 / 1</string>
+    <string name="stylus_honor_model_pen">HONOR Magic-Pen (Foldable Edition)</string>
+    <string name="stylus_honor_press_4k">4096 Levels Standard Pressure</string>
+    <string name="stylus_honor_double_tap">Double-Tap Gesture</string>
+    <string name="stylus_honor_double_tap_action">Double-Tap Action</string>
+    <string name="stylus_honor_side_key">Physical Side Button</string>
+    <string name="stylus_honor_hold_eraser">Hold Side Button to Erase</string>
+    <string name="stylus_honor_hold_eraser_desc">Holding the side button while touching turns stroke into temporary eraser</string>
+    <string name="stylus_honor_key_mapping">Side Button Action Mappings</string>
+    <string name="stylus_honor_click_action">Single-Click Action</string>
+    <string name="stylus_honor_haptics">Haptic Feedback</string>
+    <string name="stylus_honor_haptics_title">Haptic Vibration on Gesture</string>
+    <string name="stylus_honor_haptics_desc">Provide transient tactile vibration when double-tap or button action fires</string>
+    <string name="stylus_honor_hint">Note: If double-tap does not respond, ensure double-tap gesture is enabled in System Settings -> Accessibility features -> Stylus -> Double-tap</string>
     <string name="stylus_action_switch_brush_eraser">Switch Brush/Eraser</string>
     <string name="stylus_action_follow_system">Follow System</string>
     <string name="stylus_action_undo">Undo</string>

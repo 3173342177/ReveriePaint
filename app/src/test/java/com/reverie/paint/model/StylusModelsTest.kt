@@ -43,6 +43,13 @@ class StylusModelsTest {
         assertNotNull("Samsung brand defined", samsung)
         assertEquals("三星 S Pen", samsung?.displayName)
         assertTrue("Samsung should support side button", samsung?.subtitle?.contains("侧键") == true)
+
+        val honor = brands.firstOrNull { it == StylusBrand.HONOR_MAGIC_PENCIL }
+        assertNotNull("Honor brand defined", honor)
+        assertEquals("荣耀 Magic-Pencil", honor?.displayName)
+        assertTrue("Honor should support double tap", honor?.subtitle?.contains("双击") == true)
+        assertTrue("Honor should support side key", honor?.subtitle?.contains("侧键") == true)
+        assertTrue("Honor should support haptics", honor?.subtitle?.contains("触感") == true)
     }
 
     @Test
@@ -77,6 +84,30 @@ class StylusModelsTest {
         assertEquals(OppoSlideAction.ADJUST_BRUSH_SIZE, OppoSlideAction.fromActionId("adjust_brush_size"))
         assertEquals(OppoSlideAction.ADJUST_OPACITY, OppoSlideAction.fromActionId("adjust_opacity"))
         assertEquals(OppoSlideAction.ADJUST_BRUSH_SIZE, OppoSlideAction.fromActionId("invalid"))
+    }
+
+    @Test
+    fun `honor pencil models correctly specified`() {
+        val models = com.reverie.paint.core.stylus.HonorPencilModel.entries
+        assertEquals(3, models.size)
+
+        val gen3 = com.reverie.paint.core.stylus.HonorPencilModel.MAGIC_PENCIL_3
+        assertEquals(4096, gen3.maxPressure)
+        assertFalse(gen3.hasPhysicalButton)
+        assertEquals("第三代", gen3.editionName)
+
+        val gen2 = com.reverie.paint.core.stylus.HonorPencilModel.MAGIC_PENCIL_2
+        assertEquals(4096, gen2.maxPressure)
+        assertFalse(gen2.hasPhysicalButton)
+
+        val pen = com.reverie.paint.core.stylus.HonorPencilModel.MAGIC_PEN
+        assertEquals(4096, pen.maxPressure)
+        assertTrue("Foldable Magic-Pen has physical button", pen.hasPhysicalButton)
+
+        assertEquals(gen3, com.reverie.paint.core.stylus.HonorPencilModel.fromKey("MAGIC_PENCIL_3"))
+        assertEquals(gen2, com.reverie.paint.core.stylus.HonorPencilModel.fromKey("MAGIC_PENCIL_2"))
+        assertEquals(pen, com.reverie.paint.core.stylus.HonorPencilModel.fromKey("MAGIC_PEN"))
+        assertEquals(pen, com.reverie.paint.core.stylus.HonorPencilModel.fromKey("FOLD"))
     }
 
     @Test

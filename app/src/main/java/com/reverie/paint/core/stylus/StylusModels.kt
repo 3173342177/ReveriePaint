@@ -7,6 +7,7 @@ package com.reverie.paint.core.stylus
 enum class StylusBrand(val displayName: String, val subtitle: String) {
     OPPO_ONEPLUS("OPPO Pencil / 一加智能手写笔", "适配笔身双击、书写震动、拟真发声与低延迟笔迹预测"),
     HUAWEI_MPENCIL("HUAWEI M-Pencil", "适配笔身双击、星闪低延迟、物理侧键映射与触感联动"),
+    HONOR_MAGIC_PENCIL("荣耀 Magic-Pencil", "适配笔身双击、折叠屏侧键、微震触感与防误触"),
     SAMSUNG_SPEN("三星 S Pen", "适配侧键单击/双击/长按、悬空指令与触觉反馈"),
     GENERIC("通用触控手写笔", "标准 Android 压感、倾角检测与防误触"),
 }
@@ -139,6 +140,47 @@ enum class HuaweiPencilModel(
                 key.contains("GEN3", ignoreCase = true) || key.contains("NEARLINK", ignoreCase = true) -> GEN3_NEARLINK
                 key.contains("GEN1", ignoreCase = true) -> GEN1
                 else -> GEN2
+            }
+        }
+    }
+}
+
+enum class HonorPencilModel(
+    val displayName: String,
+    val editionName: String,
+    val maxPressure: Int,
+    val hasPhysicalButton: Boolean,
+    val desc: String,
+) {
+    MAGIC_PENCIL_3(
+        displayName = "HONOR Magic-Pencil 3",
+        editionName = "第三代",
+        maxPressure = 4096,
+        hasPhysicalButton = false,
+        desc = "4096级高精度压感 · 笔身触控双击 · 零时延超清跟手 · 平板线性马达触感联动",
+    ),
+    MAGIC_PENCIL_2(
+        displayName = "HONOR Magic-Pencil 2 / 1",
+        editionName = "第二代 / 第一代",
+        maxPressure = 4096,
+        hasPhysicalButton = false,
+        desc = "4096级压感 · 笔身触控双击 · 磁吸无线快充",
+    ),
+    MAGIC_PEN(
+        displayName = "HONOR Magic-Pen (折叠屏专属)",
+        editionName = "折叠屏专属",
+        maxPressure = 4096,
+        hasPhysicalButton = true,
+        desc = "4096级微压感 · 专属物理侧键 · 侧键长按临时橡皮 · 折叠大屏适配",
+    );
+
+    companion object {
+        fun fromKey(key: String): HonorPencilModel {
+            return when {
+                key.contains("MAGIC_PENCIL_2", ignoreCase = true) || key.contains("GEN2", ignoreCase = true) -> MAGIC_PENCIL_2
+                key.contains("MAGIC_PENCIL_3", ignoreCase = true) || key.contains("GEN3", ignoreCase = true) -> MAGIC_PENCIL_3
+                key.contains("MAGIC_PEN", ignoreCase = true) || key.contains("FOLD", ignoreCase = true) -> MAGIC_PEN
+                else -> MAGIC_PENCIL_3
             }
         }
     }
