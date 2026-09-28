@@ -929,7 +929,7 @@ import kotlinx.coroutines.withContext
                     return KritaBundleManager.shareFile(
                         context = context,
                         file = bundleFile,
-                        mimeType = "application/x-krita-bundle",
+                        mimeType = "application/x-krita-resourcebundle",
                         title = context.getString(R.string.brush_share_title, presetName),
                     )
                 }
@@ -1025,7 +1025,7 @@ import kotlinx.coroutines.withContext
             KritaBundleManager.shareFile(
                 context = context,
                 file = bundleFile,
-                mimeType = "application/x-krita-bundle",
+                mimeType = "application/x-krita-resourcebundle",
                 title = context.getString(R.string.brush_share_group_title, groupName),
             )
         } catch (e: Exception) {

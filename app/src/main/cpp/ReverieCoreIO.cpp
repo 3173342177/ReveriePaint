@@ -1804,9 +1804,11 @@ static void writeKraNodesXml(QXmlStreamWriter &xml,
             xml.writeAttribute(QStringLiteral("visible"), visibleStr);
             xml.writeAttribute(QStringLiteral("locked"), lockedStr);
             xml.writeAttribute(QStringLiteral("inherit-alpha"), inheritAlphaStr);
-            xml.writeAttribute(QStringLiteral("colormodelname"), QStringLiteral("RGBA"));
-            xml.writeAttribute(QStringLiteral("channelformat"), QStringLiteral("U8"));
+            xml.writeAttribute(QStringLiteral("colorspacename"), QStringLiteral("RGBA"));
             xml.writeAttribute(QStringLiteral("nodetype"), QStringLiteral("grouplayer"));
+            xml.writeAttribute(QStringLiteral("uuid"), QUuid::createUuid().toString());
+            xml.writeAttribute(QStringLiteral("colorlabel"), QStringLiteral("0"));
+            xml.writeAttribute(QStringLiteral("collapsed"), QStringLiteral("0"));
             xml.writeAttribute(QStringLiteral("x"), QString::number(layer->x()));
             xml.writeAttribute(QStringLiteral("y"), QString::number(layer->y()));
 
@@ -1818,6 +1820,8 @@ static void writeKraNodesXml(QXmlStreamWriter &xml,
         } else if (KisPaintLayer *pl = dynamic_cast<KisPaintLayer *>(layer)) {
             const QString layerFileName = QString("layer%1").arg(layerCounter++);
             const QString alphaLockedStr = pl->alphaLocked() ? QStringLiteral("1") : QStringLiteral("0");
+            const QString csName = (pl->paintDevice() && pl->paintDevice()->colorSpace())
+                ? pl->paintDevice()->colorSpace()->id() : QStringLiteral("RGBA");
 
             xml.writeStartElement(QStringLiteral("layer"));
             xml.writeAttribute(QStringLiteral("name"), name);
@@ -1828,9 +1832,11 @@ static void writeKraNodesXml(QXmlStreamWriter &xml,
             xml.writeAttribute(QStringLiteral("lockalpha"), alphaLockedStr);
             xml.writeAttribute(QStringLiteral("inherit-alpha"), inheritAlphaStr);
             xml.writeAttribute(QStringLiteral("filename"), layerFileName);
-            xml.writeAttribute(QStringLiteral("colormodelname"), QStringLiteral("RGBA"));
-            xml.writeAttribute(QStringLiteral("channelformat"), QStringLiteral("U8"));
+            xml.writeAttribute(QStringLiteral("colorspacename"), csName);
             xml.writeAttribute(QStringLiteral("nodetype"), QStringLiteral("paintlayer"));
+            xml.writeAttribute(QStringLiteral("uuid"), QUuid::createUuid().toString());
+            xml.writeAttribute(QStringLiteral("colorlabel"), QString::number(layer->colorLabelIndex()));
+            xml.writeAttribute(QStringLiteral("collapsed"), QStringLiteral("0"));
             xml.writeAttribute(QStringLiteral("x"), QString::number(layer->x()));
             xml.writeAttribute(QStringLiteral("y"), QString::number(layer->y()));
             xml.writeEndElement(); // layer
@@ -1847,7 +1853,17 @@ static void writeKraNodesXml(QXmlStreamWriter &xml,
                 store->write(reinterpret_cast<const char*>(pl->paintDevice()->defaultPixel().data()), pxSize);
                 store->close();
             }
+            if (pl->paintDevice() && pl->paintDevice()->colorSpace() && pl->paintDevice()->colorSpace()->profile()) {
+                const KoColorProfile *profile = pl->paintDevice()->colorSpace()->profile();
+                if (profile && !profile->rawData().isEmpty()) {
+                    if (store->open(tileLoc + ".icc")) {
+                        store->write(profile->rawData());
+                        store->close();
+                    }
+                }
+            }
         } else {
+            const QString layerFileName = QString("layer%1").arg(layerCounter++);
             xml.writeStartElement(QStringLiteral("layer"));
             xml.writeAttribute(QStringLiteral("name"), name);
             xml.writeAttribute(QStringLiteral("opacity"), QString::number(opacityVal));
@@ -1855,9 +1871,12 @@ static void writeKraNodesXml(QXmlStreamWriter &xml,
             xml.writeAttribute(QStringLiteral("visible"), visibleStr);
             xml.writeAttribute(QStringLiteral("locked"), lockedStr);
             xml.writeAttribute(QStringLiteral("inherit-alpha"), inheritAlphaStr);
-            xml.writeAttribute(QStringLiteral("colormodelname"), QStringLiteral("RGBA"));
-            xml.writeAttribute(QStringLiteral("channelformat"), QStringLiteral("U8"));
+            xml.writeAttribute(QStringLiteral("filename"), layerFileName);
+            xml.writeAttribute(QStringLiteral("colorspacename"), QStringLiteral("RGBA"));
             xml.writeAttribute(QStringLiteral("nodetype"), QStringLiteral("paintlayer"));
+            xml.writeAttribute(QStringLiteral("uuid"), QUuid::createUuid().toString());
+            xml.writeAttribute(QStringLiteral("colorlabel"), QStringLiteral("0"));
+            xml.writeAttribute(QStringLiteral("collapsed"), QStringLiteral("0"));
             xml.writeAttribute(QStringLiteral("x"), QString::number(layer->x()));
             xml.writeAttribute(QStringLiteral("y"), QString::number(layer->y()));
             xml.writeEndElement();
@@ -1877,11 +1896,8 @@ bool ReverieCore::saveKra(const QString &path)
         return false;
     }
 
-    // 1. mimetype (must be first file, uncompressed)
-    if (store->open("mimetype")) {
-        store->write(QByteArray("application/x-krita"));
-        store->close();
-    }
+    // 1. mimetype: KoQuaZipStore::init automatically writes uncompressed "application/x-krita"
+    // as the first entry in createStore. Do not write manually to avoid duplicate entries.
 
     const QString docName = image->objectName().isEmpty() ? QStringLiteral("Artwork") : image->objectName();
 
@@ -1891,21 +1907,26 @@ bool ReverieCore::saveKra(const QString &path)
         QXmlStreamWriter xml(&maindocBytes);
         xml.setAutoFormatting(true);
         xml.writeStartDocument(QStringLiteral("1.0"), true);
-        xml.writeDTD(QStringLiteral("<!DOCTYPE DOC PUBLIC '-//KDE//DTD create 1.2//EN' 'http://www.calligra.org/DTD/kra-1.2.dtd'>"));
+        xml.writeDTD(QStringLiteral("<!DOCTYPE DOC PUBLIC '-//KDE//DTD krita 2.0//EN' 'http://www.calligra.org/DTD/krita-2.0.dtd'>"));
         xml.writeStartElement(QStringLiteral("DOC"));
-        xml.writeAttribute(QStringLiteral("xmlns"), QStringLiteral("http://www.calligra.org/DTD/kra"));
-        xml.writeAttribute(QStringLiteral("syntaxVersion"), QStringLiteral("2"));
+        xml.writeAttribute(QStringLiteral("xmlns"), QStringLiteral("http://www.calligra.org/DTD/krita"));
+        xml.writeAttribute(QStringLiteral("syntaxVersion"), QStringLiteral("2.0"));
         xml.writeAttribute(QStringLiteral("editor"), QStringLiteral("Krita"));
-        xml.writeAttribute(QStringLiteral("mime"), QStringLiteral("application/x-krita"));
 
         xml.writeStartElement(QStringLiteral("IMAGE"));
         xml.writeAttribute(QStringLiteral("name"), docName);
         xml.writeAttribute(QStringLiteral("width"), QString::number(image->width()));
         xml.writeAttribute(QStringLiteral("height"), QString::number(image->height()));
-        xml.writeAttribute(QStringLiteral("mime"), QStringLiteral("application/x-krita"));
+        xml.writeAttribute(QStringLiteral("mime"), QStringLiteral("application/x-kra"));
+        xml.writeAttribute(QStringLiteral("colorspacename"), image->colorSpace() ? image->colorSpace()->id() : QStringLiteral("RGBA"));
+        if (image->profile() && image->profile()->valid()) {
+            xml.writeAttribute(QStringLiteral("profile"), image->profile()->name());
+        }
         xml.writeAttribute(QStringLiteral("description"), QString());
-        xml.writeAttribute(QStringLiteral("x-res"), QStringLiteral("72"));
-        xml.writeAttribute(QStringLiteral("y-res"), QStringLiteral("72"));
+        const double xResDpi = image->xRes() > 0 ? image->xRes() * 72.0 : 72.0;
+        const double yResDpi = image->yRes() > 0 ? image->yRes() * 72.0 : 72.0;
+        xml.writeAttribute(QStringLiteral("x-res"), QString::number(xResDpi));
+        xml.writeAttribute(QStringLiteral("y-res"), QString::number(yResDpi));
 
         xml.writeStartElement(QStringLiteral("layers"));
         int layerCounter = 0;
@@ -1998,38 +2019,7 @@ bool ReverieCore::saveKra(const QString &path)
         }
     }
 
-    // 4. Save layer image devices as PNGs
-    for (int i = 0; i < m_layers.size(); ++i) {
-        const LayerEntry &e = m_layers[i];
-        if (e.isGroup || e.nodeType == NodeTypeAdjustment) continue;
-        KisPaintDeviceSP dev = layerPaintDeviceFor(e);
-        if (!dev) continue;
 
-        const QRect bounds = dev->exactBounds();
-        QImage layerImg;
-        if (!bounds.isEmpty()) {
-            layerImg = dev->convertToQImage(nullptr, 0, 0, image->width(), image->height());
-        } else {
-            layerImg = QImage(image->width(), image->height(), QImage::Format_ARGB32_Premultiplied);
-            layerImg.fill(Qt::transparent);
-        }
-
-        QByteArray lBytes;
-        QBuffer lBuf(&lBytes);
-        lBuf.open(QIODevice::WriteOnly);
-        layerImg.save(&lBuf, "PNG");
-
-        const QString l1 = QString("layer_%1.png").arg(i, 3, 10, QChar('0'));
-        if (store->open(l1)) {
-            store->write(lBytes);
-            store->close();
-        }
-        const QString l2 = QString("layer%1.png").arg(i);
-        if (store->open(l2)) {
-            store->write(lBytes);
-            store->close();
-        }
-    }
 
     // 5. Also write meta.json for roundtrip
     QJsonObject meta;
@@ -2089,6 +2079,7 @@ bool ReverieCore::saveKra(const QString &path)
         store->close();
     }
 
+    store->finalize();
     store.reset();
     QFile f(path);
     return f.exists() && f.size() > 0;

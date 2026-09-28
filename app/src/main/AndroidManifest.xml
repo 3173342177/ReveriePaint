@@ -62,6 +62,7 @@
                 <data android:mimeType="application/x-krita" />
                 <data android:mimeType="application/x-krita-paintoppreset" />
                 <data android:mimeType="application/x-krita-bundle" />
+                <data android:mimeType="application/x-krita-resourcebundle" />
                 <data android:mimeType="application/x-photoshop-brush" />
                 <data android:mimeType="image/vnd.adobe.photoshop" />
                 <data android:mimeType="image/x-psd" />

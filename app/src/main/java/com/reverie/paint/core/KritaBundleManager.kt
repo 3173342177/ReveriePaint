@@ -5,6 +5,10 @@ import android.content.Intent
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -15,19 +19,41 @@ object KritaBundleManager {
      * Builds and exports a standard Krita .bundle file containing the specified presets and brush tips.
      */
     fun exportBundle(
-        context: Context,
+        context: Context? = null,
         bundleName: String,
         groupName: String,
         presets: List<Pair<String, File>>,
         tipAssets: List<File>,
+        customOutDir: File? = null,
     ): File {
-        val outDir = File(context.cacheDir, "export_bundles").apply { if (!exists()) mkdirs() }
-        val bundleFile = File(outDir, "${bundleName.trim().ifEmpty { "bundle" }}.bundle")
+        val outDir = (customOutDir ?: File(context?.cacheDir ?: File(System.getProperty("java.io.tmpdir") ?: "/tmp"), "export_bundles")).apply {
+            if (!exists()) mkdirs()
+        }
+        val safeBundleName = bundleName.trim().ifEmpty { "bundle" }
+        val bundleFile = File(outDir, "$safeBundleName.bundle")
         if (bundleFile.exists()) bundleFile.delete()
 
+        val validPresets = presets.filter { it.second.exists() }
+        val presetMd5Map = mutableMapOf<String, String>()
+        for ((pName, pFile) in validPresets) {
+            presetMd5Map[pName] = calculateMd5(pFile)
+        }
+
+        val writtenBrushes = mutableListOf<Pair<String, String>>() // (fileName, md5)
+        val writtenBrushNames = mutableSetOf<String>()
+        for (tipFile in tipAssets) {
+            if (!tipFile.exists() || writtenBrushNames.contains(tipFile.name)) continue
+            writtenBrushNames.add(tipFile.name)
+            writtenBrushes.add(tipFile.name to calculateMd5(tipFile))
+        }
+
+        val escapedBundleName = escapeXml(safeBundleName)
+        val escapedGroupName = escapeXml(groupName.trim().ifEmpty { "General" })
+        val dateIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).format(Date())
+
         ZipOutputStream(FileOutputStream(bundleFile)).use { zos ->
-            // 1. First entry MUST be uncompressed 'mimetype' (STORED method)
-            val mimetypeBytes = "application/x-krita-bundle".toByteArray(Charsets.US_ASCII)
+            // 1. First entry MUST be uncompressed 'mimetype' (STORED method) with standard resourcebundle type
+            val mimetypeBytes = "application/x-krita-resourcebundle".toByteArray(Charsets.US_ASCII)
             val crc = CRC32().apply { update(mimetypeBytes) }
             val mEntry = ZipEntry("mimetype").apply {
                 method = ZipEntry.STORED
@@ -40,8 +66,7 @@ object KritaBundleManager {
             zos.closeEntry()
 
             // 2. Preset files in paintoppresets/
-            for ((pName, pFile) in presets) {
-                if (!pFile.exists()) continue
+            for ((pName, pFile) in validPresets) {
                 val entry = ZipEntry("paintoppresets/$pName.kpp")
                 zos.putNextEntry(entry)
                 pFile.inputStream().use { it.copyTo(zos) }
@@ -49,45 +74,69 @@ object KritaBundleManager {
             }
 
             // 3. Tip asset image files in brushes/
-            val writtenBrushes = mutableSetOf<String>()
             for (tipFile in tipAssets) {
-                if (!tipFile.exists() || writtenBrushes.contains(tipFile.name)) continue
-                writtenBrushes.add(tipFile.name)
+                if (!tipFile.exists()) continue
                 val entry = ZipEntry("brushes/${tipFile.name}")
-                zos.putNextEntry(entry)
-                tipFile.inputStream().use { it.copyTo(zos) }
+                try {
+                    zos.putNextEntry(entry)
+                    tipFile.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                } catch (_: java.util.zip.ZipException) {
+                    // Avoid duplicate entry if multiple presets reference same tip
+                }
+            }
+
+            // 4. Bundle preview image (preview.png at zip root)
+            // A .kpp preset file is itself a valid PNG image containing the preset thumbnail
+            val firstPresetFile = validPresets.firstOrNull()?.second
+            if (firstPresetFile != null && firstPresetFile.exists()) {
+                val previewEntry = ZipEntry("preview.png")
+                zos.putNextEntry(previewEntry)
+                firstPresetFile.inputStream().use { it.copyTo(zos) }
                 zos.closeEntry()
             }
 
-            // 4. Tag metadata file: <groupName>.tag
-            val tagContent = """[Desktop Entry]
-Type=Tag
-Name=$groupName
-Name[zh_CN]=$groupName
+            // 5. meta.xml (Standard Krita / OpenDocument bundle metadata required by KoResourceBundle)
+            val metaXml = """<?xml version="1.0" encoding="UTF-8"?>
+<meta:meta xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+ <meta:generator>ReveriePaint</meta:generator>
+ <meta:bundle-version>1</meta:bundle-version>
+ <dc:author>ReveriePaint</dc:author>
+ <dc:title>$escapedBundleName</dc:title>
+ <dc:description></dc:description>
+ <meta:initial-creator>ReveriePaint</meta:initial-creator>
+ <dc:creator>ReveriePaint</dc:creator>
+ <meta:creation-date>$dateIso</meta:creation-date>
+ <meta:dc-date>$dateIso</meta:dc-date>
+ <meta:meta-userdefined meta:name="tag" meta:value="$escapedGroupName"/>
+</meta:meta>
 """
-            val tagEntry = ZipEntry("$groupName.tag")
-            zos.putNextEntry(tagEntry)
-            zos.write(tagContent.toByteArray(Charsets.UTF_8))
+            val metaEntry = ZipEntry("meta.xml")
+            zos.putNextEntry(metaEntry)
+            zos.write(metaXml.toByteArray(Charsets.UTF_8))
             zos.closeEntry()
 
-            // 5. META-INF/manifest.xml
+            // 6. META-INF/manifest.xml (Standard OASIS manifest required by KoResourceBundleManifest)
             val manifestSb = StringBuilder()
             manifestSb.append("""<?xml version="1.0" encoding="UTF-8"?>
-<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
+  <manifest:file-entry manifest:media-type="application/x-krita-resourcebundle" manifest:full-path="/"/>
 """)
-            for ((pName, _) in presets) {
-                manifestSb.append("""  <manifest:file-entry manifest:media-type="" manifest:full-path="paintoppresets/$pName.kpp">
-    <manifest:tag>$groupName</manifest:tag>
+            for ((pName, _) in validPresets) {
+                val md5 = presetMd5Map[pName] ?: ""
+                manifestSb.append("""  <manifest:file-entry manifest:media-type="paintoppresets" manifest:full-path="paintoppresets/$pName.kpp" manifest:md5sum="$md5">
+    <manifest:tags>
+      <manifest:tag>$escapedGroupName</manifest:tag>
+    </manifest:tags>
   </manifest:file-entry>
 """)
             }
-            for (brushName in writtenBrushes) {
-                manifestSb.append("""  <manifest:file-entry manifest:media-type="" manifest:full-path="brushes/$brushName"/>
+            for ((brushName, brushMd5) in writtenBrushes) {
+                manifestSb.append("""  <manifest:file-entry manifest:media-type="brushes" manifest:full-path="brushes/$brushName" manifest:md5sum="$brushMd5"/>
 """)
             }
-            manifestSb.append("""  <manifest:file-entry manifest:media-type="" manifest:full-path="$groupName.tag"/>
-</manifest:manifest>
-""")
+            manifestSb.append("</manifest:manifest>\n")
+
             val manifestEntry = ZipEntry("META-INF/manifest.xml")
             zos.putNextEntry(manifestEntry)
             zos.write(manifestSb.toString().toByteArray(Charsets.UTF_8))
@@ -95,6 +144,31 @@ Name[zh_CN]=$groupName
         }
 
         return bundleFile
+    }
+
+    private fun calculateMd5(file: File): String {
+        return try {
+            val md = MessageDigest.getInstance("MD5")
+            file.inputStream().use { inStream ->
+                val buffer = ByteArray(8192)
+                var read: Int
+                while (inStream.read(buffer).also { read = it } > 0) {
+                    md.update(buffer, 0, read)
+                }
+            }
+            md.digest().joinToString("") { "%02x".format(it) }
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun escapeXml(str: String): String {
+        return str
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
     }
 
     /**
