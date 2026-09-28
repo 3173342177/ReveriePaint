@@ -603,6 +603,9 @@ object ReverieCoreBridge {
 
     /** Open one undo transaction for a whole liquify drag. A non-empty
      *  [layers] list liquifies those layers together (multi-select). */
+    /** Subpixel coordinates for live input and recording playback; legacy Int entry remains available. */
+    external fun liquifyAt(fx: Float, fy: Float, tx: Float, ty: Float, strength: Double, mode: Int)
+
     external fun liquifyBegin(layers: IntArray? = null)
 
     /** Commit the liquify drag transaction. */
@@ -639,8 +642,29 @@ object ReverieCoreBridge {
         bottomUp: Boolean,
     ): Boolean
 
+    /**
+     * Phase 7(性能): **批量 dab 提交** —— 一次 JNI 提交整帧的补点。
+     *
+     * 每补点 6 个 float: `(fx, fy, tx, ty, strength, mode)`, 与 [liquify] 参数同序;
+     * 引擎在 native 内按序循环调用同一实现, 语义与逐点调用逐条一致。
+     * 旧路径每补点一次 JNI(一帧最多 24 次), 快速长距离拖动时是可见的帧时间抖动源。
+     *
+     * @param count 有效补点数(缓冲可能更大, 只读前 `count * 6` 个 float)
+     */
+    external fun liquifyDabs(params: FloatArray, count: Int)
+
     /** Phase 5 · C3-2: 当前手势是否走"场一次性落盘"通路(纯读数)。 */
     external fun liquifyFieldMode(): Boolean
+
+    /**
+     * Phase 6(稳定性 v2): 分帧物化的"空闲推进"。
+     *
+     * 引擎把整块物化(真机峰值 126ms)拆成 64 行的行带入队, 每次本调用最多消费
+     * `debug.reverie.lqmatbudget`(默认 4ms) 的量。**必须在引擎线程调用**(JNI 契约)。
+     *
+     * @return true = 仍有积压, 调用方应继续按帧调用(否则拖动期会出现"半物化"残留)。
+     */
+    external fun liquifyMaterializeTick(): Boolean
 
     external fun setLiquifyBrushSize(size: Double)
 

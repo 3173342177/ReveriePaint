@@ -169,11 +169,7 @@ class LiquifyInteractionSession {
         val dx = targetX - renderedX
         val dy = targetY - renderedY
         val dist = hypot(dx, dy)
-        if (dist <= 0f) return false
-        if (!forceFull && dist < MIN_ADVANCE_PX) {
-            // 位移过小: 直接吸附到目标, 避免空转(与历史 coalescing 路径一致)
-            renderedX = targetX
-            renderedY = targetY
+        if (!dist.isFinite() || dist <= 0f) {
             hasPending = false
             backlogDabs = 0
             settleSequenceLocked()

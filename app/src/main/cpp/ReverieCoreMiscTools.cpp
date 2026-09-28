@@ -255,9 +255,41 @@ int liquifyForcedPrecision()
 // ---------------------------------------------------------------------------
 // 窗口扩大的面积上限(像素): 必须留在 LIQUIFY_HOST_DRAW_MAX_PX(4M)之下, 否则 AGSL 覆盖层会因
 // "源裁剪超预算"退回引擎侧 CPU 预览(见 liquifyPreviewCaptureLocked)。
-const qint64 LIQUIFY_GROW_MAX_PX = 3 * 1024 * 1024;
+// Phase 7 起 rebase 不再走"扩窗口 + 重放补点"(改为位移场精确搬运), 这两个常量仅供
+// `liquifyRebaseNoFlush()` 的对照实验路径使用, 保留以便一键回退验证。
+[[maybe_unused]] const qint64 LIQUIFY_GROW_MAX_PX = 3 * 1024 * 1024;
 // 待重放补点数上限: 超过就退回"物化 + 收紧窗口", 免得重放本身变成新的瓶颈
-const int LIQUIFY_GROW_MAX_DABS = 512;
+[[maybe_unused]] const int LIQUIFY_GROW_MAX_DABS = 512;
+
+// ---------------------------------------------------------------------------
+// Phase 6(稳定性 v2): 物化节流参数
+//
+// 真机 HUD 证据(test15): 单次 `liquify()` 调用峰值 **128.7ms**, 其中 rebase 段的同步物化
+// 126ms —— 相当于一次掉 8 帧, 是拖动期"卡顿/断触"的直接原因。现在整块物化会按行带入队,
+// 由拖动期与渲染帧按下面的时间预算分批消费。
+//   预算默认 4ms(≈1/4 帧): 单次调用不再出现 >10ms 的尖峰;
+//   `setprop debug.reverie.lqmatbudget 0` = 一键回到"整块物化"的旧行为(对照实验用)。
+// ---------------------------------------------------------------------------
+// 4ms → 6ms(test17 之后上调): 更快的消费速度 = 更短的队列寿命; 单帧代价仍 <1/2 帧,
+// 而"积压到收口点一次性消费"才是真正的尖峰来源。
+const qint64 LIQUIFY_MAT_BUDGET_MS_DEFAULT = 6;
+// 行带高度: 越小越平滑, 但每带都要过一次 liquifyApplyLocked 的固定开销(选区/合成/统计)
+const int LIQUIFY_MAT_BAND_ROWS = 64;
+// 队列像素上限: 超过就先整体清空(退化为一次性物化), 防止积压无界增长
+const qint64 LIQUIFY_MAT_QUEUE_MAX_PX = 2 * 1024 * 1024;
+
+/** 分帧物化的时间预算(ms); 0 = 关闭分帧(旧行为)。 */
+qint64 liquifyMatBudgetMs()
+{
+#if defined(Q_OS_ANDROID)
+    char value[PROP_VALUE_MAX] = {0};
+    if (__system_property_get("debug.reverie.lqmatbudget", value) > 0 && value[0]) {
+        // qBound 要求三个实参同类型: 这里全用 int(0/64 是字面量), 再隐式转 qint64
+        return qBound(0, QByteArray(value).toInt(), 64);
+    }
+#endif
+    return LIQUIFY_MAT_BUDGET_MS_DEFAULT;
+}
 
 bool liquifyRebaseNoFlush()
 {
@@ -284,197 +316,56 @@ bool liquifyRebaseNoFlush()
     return false;
 }
 
-/** 把一个 dab 施加到 worker 网格上 —— 实时路径与 rebase 重放共用, 保证两者语义严格一致。 */
-void applyLiquifyDab(KisLiquifyTransformWorker *w, qreal size, qreal s, qreal amp,
-                     qreal fx, qreal fy, qreal tx, qreal ty, int mode)
+// Materialize an inverse map against the gesture's immutable, tile-shared source.
+// Neither writeback bands nor preview cache windows define source boundaries.
+bool warpInverseField(const LiquifyInverseField &field, KisPaintDeviceSP src, KisPaintDeviceSP dst,
+                      const QRect &area, const QRect &doc)
 {
-    if (!w) return;
-    const QPointF base(fx, fy);
-    switch (mode) {
-    case 1:
-        // 膨胀: grid points move away from the brush center
-        w->scalePoints(base, 0.35 * s * amp, size, false, 1.0);
-        break;
-    case 2:
-        // 收缩: grid points move toward the brush center
-        w->scalePoints(base, -0.35 * s * amp, size, false, 1.0);
-        break;
-    case 3:
-        w->rotatePoints(base, 0.6 * s * amp, size, false, 1.0);
-        break;
-    case 4:
-        w->rotatePoints(base, -0.6 * s * amp, size, false, 1.0);
-        break;
-    default:
-        // 推拉: pixels follow the finger delta
-        w->translatePoints(base, QPointF((tx - fx) * s, (ty - fy) * s), size, false, 1.0);
-        break;
-    }
-}
-
-/** 把"尚未落盘"的补点重放到新窗口的网格上(每 6 个 float 一个补点)。 */
-void replayLiquifyDabs(KisLiquifyTransformWorker *w, qreal size, const QVector<float> &dabs)
-{
-    if (!w) return;
-    for (int i = 0; i + 5 < dabs.size(); i += 6) {
-        const qreal fx = dabs[i];
-        const qreal fy = dabs[i + 1];
-        const qreal tx = dabs[i + 2];
-        const qreal ty = dabs[i + 3];
-        const qreal s = dabs[i + 4];
-        const int mode = int(dabs[i + 5]);
-        // 与 liquify() 里同一套幅度公式: 只有 size 不变时重放才与实时施加逐点等价
-        // (拖动期间笔刷尺寸不会变 —— 面板在手势中不可用)
-        const qreal dist = QLineF(QPointF(fx, fy), QPointF(tx, ty)).length();
-        const qreal rate = qBound<qreal>(0.0, dist / size, 1.0);
-        applyLiquifyDab(w, size, s, 0.2 + 0.8 * rate, fx, fy, tx, ty, mode);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Phase 3 · Commit 3: 用"网格位移场 + 反向双线性采样"生成 dst, 替代 worker->run()
-//
-// 真机数据(docs/LIQUIFY-REBASE-INVESTIGATION.md §11): 998K px 的窗口上 run() 要 1459ms,
-// 单次 liquify() 调用峰值 3110ms —— 它每格做多边形填充 + 补集拷贝, 成本随面积非线性膨胀。
-// 本函数是每像素"网格双线性插值 + 源双线性采样", 同面积应在几十 ms 量级。
-//
-// 语义: 采样核为双线性, 与已验收的交互态预览(liquifyPreviewBuildLocked / AGSL 版)是**同一套数学**
-//   ⇒ 所见即所得; 与 Krita 的前向多边形填充不再逐像素一致。越界像素写 alpha=0, 由调用方的
-//   seedTransparentFromSource 用未形变源像素补洞(与既有"白线修复"同一语义)。
-// 只处理 area(真正要回写的区域), 比 run() 的"整块 bounds"更省。
-// `setprop debug.reverie.lqfastwarp 0` 可整体回退到 run()。
-// ---------------------------------------------------------------------------
-bool liquifyFastWarp()
-{
-#if defined(Q_OS_ANDROID)
-    char value[PROP_VALUE_MAX] = {0};
-    if (__system_property_get("debug.reverie.lqfastwarp", value) > 0 && value[0]) {
-        return QByteArray(value).toInt() != 0;
-    }
-#else
-    const QByteArray env = qgetenv("REVERIE_LQ_FASTWARP");
-    if (!env.isEmpty()) return env.toInt() != 0;
-#endif
-    return true;
-}
-
-bool warpFromGrid(KisLiquifyTransformWorker *w, KisPaintDeviceSP src, KisPaintDeviceSP dst,
-                  const QRect &area, const QRect &srcBounds)
-{
-    if (!w || !src || !dst || area.isEmpty() || srcBounds.isEmpty()) return false;
-    const QSize gs = w->gridSize();
-    const QVector<QPointF> &orig = w->originalPoints();
-    QVector<QPointF> &trans = w->transformedPoints();
-    const int cols = gs.width();
-    const int rows = gs.height();
-    const int n = qMin(orig.size(), trans.size());
-    if (cols < 2 || rows < 2 || n != cols * rows) return false;
-    const KoColorSpace *cs = src->colorSpace();
-    const int ps = cs ? cs->pixelSize() : 0;
-    // 与预览同一约束: 只支持 8bit BGRA(ps == 4)文档; 其它色彩空间退回 run()
-    if (ps != 4) return false;
-
-    const int bw = area.width();
-    const int bh = area.height();
-    // 源区域必须按 |最大位移| 外扩: 目标像素 p 的源位置是 p - offset(p), 位移稍大时源就落到
-    // area 之外。若只读 area, 这些像素会被写成 alpha=0, 随后补洞又用**未形变**像素填回 ⇒
-    // 形变区里嵌进大块"未形变补丁", 真机表现就是"画面割裂成大面积像素块"(Commit 3 的回归)。
-    // 补足源区域后, 空洞只会出现在窗口自身的边界(= 位移把源拉出了窗口, 属设计内取舍)。
-    // 原点/步长取自**真实网格点**(与 AGSL 版 LiquifyGpuPreview.applyGridLocked 同一口径)
-    const qreal gx0 = orig[0].x();
-    const qreal gy0 = orig[0].y();
-    const qreal stepX = qMax<qreal>(1.0, orig[1].x() - gx0);
-    const qreal stepY = qMax<qreal>(1.0, orig[cols].y() - gy0);
-
-    // 源区域按"**写区附近**网格点的最大位移"外扩, 而不是"全网格最大位移"。
-    // 后者过于保守: 一次快拖里远端网格点早已被推走几百像素, 会把读区放大到写区的 2~3 倍,
-    // 而落盘成本里 `warpFromGrid` 的反向采样正是大头(真机: 每次 rebase 落盘 ≈21ms)。
-    // 双线性支撑只有一格, 所以离写区超过一格的网格点影响不到这里的像素, 直接跳过。
-    qreal maxOff = 0.0;
-    for (int i = 0; i < n; ++i) {
-        const QPointF &o = orig[i];
-        if (o.x() < area.left() - stepX || o.x() > area.right() + stepX ||
-            o.y() < area.top() - stepY || o.y() > area.bottom() + stepY) {
-            continue;
+    if (!src || !dst || area.isEmpty() || doc.isEmpty()) return false;
+    if (src->colorSpace()->pixelSize() != 4) return false;
+    float left = float(area.left()), top = float(area.top());
+    float right = float(area.right()), bottom = float(area.bottom());
+    // Bounds of a bilinear map attain their extrema at grid vertices. Include
+    // every pixel here as the scratch offsets are also used by the sampling pass.
+    thread_local std::vector<LiquifyInverseField::Point> offsets;
+    offsets.resize(size_t(area.width()) * area.height());
+    for (int y = 0; y < area.height(); ++y) {
+        for (int x = 0; x < area.width(); ++x) {
+            const float px = float(area.x() + x), py = float(area.y() + y);
+            const auto off = field.sample(px + .5f, py + .5f);
+            offsets[size_t(y) * area.width() + x] = off;
+            left = std::min(left, px - off.x); right = std::max(right, px - off.x);
+            top = std::min(top, py - off.y); bottom = std::max(bottom, py - off.y);
         }
-        const QPointF off = trans[i] - o;
-        maxOff = qMax(maxOff, qMax(qAbs(off.x()), qAbs(off.y())));
     }
-    const int pad = int(maxOff) + 2;
-    const QRect need = area.adjusted(-pad, -pad, pad, pad).intersected(srcBounds);
+    const QRect need = QRect(QPoint(int(std::floor(left)), int(std::floor(top))),
+                             QPoint(int(std::ceil(right)) + 1, int(std::ceil(bottom)) + 1)) & doc;
     if (need.isEmpty()) return false;
-    const int nw = need.width();
-    const int nh = need.height();
-    const size_t bytes = size_t(nw) * size_t(nh) * size_t(ps);
-    thread_local QByteArray srcBuf;
-    thread_local QByteArray dstBuf;
-    if (size_t(srcBuf.size()) < bytes) {
-        srcBuf.resize(int(bytes));
-        dstBuf.resize(int(bytes));
-    }
-    src->readBytes(reinterpret_cast<quint8 *>(srcBuf.data()), need.x(), need.y(), nw, nh);
-    const quint8 *s = reinterpret_cast<const quint8 *>(srcBuf.constData());
-    quint8 *d = reinterpret_cast<quint8 *>(dstBuf.data());
-
-    for (int py = 0; py < bh; ++py) {
-        const qreal docY = qreal(area.top() + py) + 0.5;
-        for (int px = 0; px < bw; ++px) {
-            const qreal docX = qreal(area.left() + px) + 0.5;
-            // 位移场双线性插值(权重按 original 坐标算)
-            int c0 = int((docX - gx0) / stepX);
-            int r0 = int((docY - gy0) / stepY);
-            c0 = qBound(0, c0, cols - 2);
-            r0 = qBound(0, r0, rows - 2);
-            const int c1 = c0 + 1;
-            const int r1 = r0 + 1;
-            const QPointF &p00 = orig[r0 * cols + c0];
-            const QPointF &p10 = orig[r0 * cols + c1];
-            const QPointF &p01 = orig[r1 * cols + c0];
-            const QPointF &p11 = orig[r1 * cols + c1];
-            qreal fx = (docX - p00.x()) / qMax<qreal>(1.0, p10.x() - p00.x());
-            qreal fy = (docY - p00.y()) / qMax<qreal>(1.0, p01.y() - p00.y());
-            fx = qBound<qreal>(0.0, fx, 1.0);
-            fy = qBound<qreal>(0.0, fy, 1.0);
-            const QPointF d00 = trans[r0 * cols + c0] - p00;
-            const QPointF d10 = trans[r0 * cols + c1] - p10;
-            const QPointF d01 = trans[r1 * cols + c0] - p01;
-            const QPointF d11 = trans[r1 * cols + c1] - p11;
-            const qreal ax = d00.x() * (1 - fx) + d10.x() * fx;
-            const qreal bx = d01.x() * (1 - fx) + d11.x() * fx;
-            const qreal ay = d00.y() * (1 - fx) + d10.y() * fx;
-            const qreal by = d01.y() * (1 - fx) + d11.y() * fx;
-            const qreal ox = ax * (1 - fy) + bx * fy;
-            const qreal oy = ay * (1 - fy) + by * fy;
-
-            // 反向采样: src(p - offset), 坐标换算到 need 坐标系
-            qreal u = qreal(px) + qreal(area.left() - need.left()) - ox;
-            qreal v = qreal(py) + qreal(area.top() - need.top()) - oy;
-            // 越界处**夹紧到边缘**(与 AGSL 预览的 CLAMP 采样一致), 而不是留 alpha=0。
-            // 留 alpha=0 会让补洞逻辑用"未形变"像素填回 ⇒ 形变区里嵌进大块未形变矩形,
-            // 真机表现就是"割裂成大面积像素块"(越界越多越明显, 位移 300px 时尤其刺眼)。
-            // 夹紧后与已验收的预览是同一套语义 ⇒ 提交与所见一致, 且不再需要补洞兜底。
-            u = qBound<qreal>(0.0, u, qreal(nw - 1));
-            v = qBound<qreal>(0.0, v, qreal(nh - 1));
-            quint8 *o = d + (size_t(py) * bw + px) * ps;
-            const int x0 = int(u);
-            const int y0 = int(v);
-            const int x1 = qMin(x0 + 1, nw - 1);
-            const int y1 = qMin(y0 + 1, nh - 1);
-            const qreal ufx = u - x0;
-            const qreal ufy = v - y0;
-            const quint8 *q00 = s + (size_t(y0) * nw + x0) * ps;
-            const quint8 *q10 = s + (size_t(y0) * nw + x1) * ps;
-            const quint8 *q01 = s + (size_t(y1) * nw + x0) * ps;
-            const quint8 *q11 = s + (size_t(y1) * nw + x1) * ps;
-            // 源与目标是同一色彩空间(都是文档的 8bit BGRA) ⇒ 逐通道拷贝, 不做通道交换
-            for (int ch = 0; ch < 4; ++ch) {
-                const qreal top = q00[ch] * (1 - ufx) + q10[ch] * ufx;
-                const qreal bot = q01[ch] * (1 - ufx) + q11[ch] * ufx;
-                o[ch] = quint8(qBound<qreal>(0.0, top * (1 - ufy) + bot * ufy, 255.0));
+    thread_local QByteArray source, output;
+    source.resize(need.width() * need.height() * 4);
+    output.resize(area.width() * area.height() * 4);
+    src->readBytes(reinterpret_cast<quint8 *>(source.data()), need.x(), need.y(), need.width(), need.height());
+    const auto *bytes = reinterpret_cast<const quint8 *>(source.constData());
+    auto *result = reinterpret_cast<quint8 *>(output.data());
+    for (int y = 0; y < area.height(); ++y) {
+        for (int x = 0; x < area.width(); ++x) {
+            const auto off = offsets[size_t(y) * area.width() + x];
+            const float u = std::clamp(float(area.x() + x - need.x()) - off.x, 0.f, float(need.width() - 1));
+            const float v = std::clamp(float(area.y() + y - need.y()) - off.y, 0.f, float(need.height() - 1));
+            const int ix = int(u), iy = int(v);
+            const int jx = std::min(ix + 1, need.width() - 1), jy = std::min(iy + 1, need.height() - 1);
+            const float ax = u - ix, ay = v - iy;
+            for (int c = 0; c < 4; ++c) {
+                const float a = bytes[(size_t(iy) * need.width() + ix) * 4 + c];
+                const float b = bytes[(size_t(iy) * need.width() + jx) * 4 + c];
+                const float d = bytes[(size_t(jy) * need.width() + ix) * 4 + c];
+                const float e = bytes[(size_t(jy) * need.width() + jx) * 4 + c];
+                result[(size_t(y) * area.width() + x) * 4 + c] =
+                    quint8(std::clamp((a + (b - a) * ax) * (1 - ay) + (d + (e - d) * ax) * ay, 0.f, 255.f));
             }
         }
     }
-    dst->writeBytes(d, area.x(), area.y(), bw, bh);
+    dst->writeBytes(result, area.x(), area.y(), area.width(), area.height());
     return true;
 }
 
@@ -596,11 +487,16 @@ void ReverieCore::resetLiquifyWorker()
         t.src.clear();
         t.dst.clear();
     }
+    m_liquifyInverseField.reset();
     m_liquifyWorkerBounds = QRect();
     m_liquifyPendingDelta = QRect();
     m_liquifyPendingDabs.clear();
+    // Phase 6/7: 分帧物化队列与去重键随 worker 一起作废(队列里的区域属于上一段手势的网格)
+    m_liquifyMatQueue.clear();
+    m_liquifyMatKeys.clear();
     m_liquifyApplyIntervalMs = LIQUIFY_APPLY_MIN_INTERVAL_MS;
     m_liquifyPrecision = 16;
+    m_liquifyPreviewTarget = -1;
     // 预览态随 worker 一起失效(seq 不归零, 只靠 w = 0 通知调用方"预览已结束")
     m_liquifyPreview = false;
     m_liquifyPreviewW = 0;
@@ -610,59 +506,6 @@ void ReverieCore::resetLiquifyWorker()
     m_liquifyPreviewOut = QVector<quint8>();
     m_liquifyPreviewSrcRgba = QVector<quint8>();
     s_liquifyDeltaBudgetPx.store(LIQUIFY_DELTA_BUDGET_DEFAULT_PX);
-}
-
-// Re-run the accumulated warp and write back only the DELTA region: older
-// grid displacements never change afterwards (build-up), so output pixels
-// only change within the newest dabs' influence. Writing back the whole
-// accumulated strokes region instead made every apply cost (and recomposite)
-// grow linearly with drag length.
-// 回写前补洞: worker 的 run() 只覆盖它实际遍历到的瓦片, 其余保持 clear() 后的透明,
-// 而回写用 COMPOSITE_COPY 会把这些透明像素**擦进图层** —— 透明处露出画布白底, 就是
-// 用户看到的"液化白线 + 白色矩形轮廓"(沿瓦片边界与回写区边界)。这里把 area 内 alpha=0
-// 的目标像素补回 src 原内容: 已映射的像素逐像素不变, 只消除"假透明"。
-// thread_local 复用缓冲: 拖动中每几十毫秒调用一次, 不允许每帧分配。
-// 注: 参数按值传 QSharedPointer 而不是 const 引用 —— const 引用下 QSharedPointer 的
-// operator-> 给出的是 const 指针, 无法调用非 const 的 writeBytes (KisPaintDevice 如此)。
-void seedTransparentFromSource(KisPaintDeviceSP dst, KisPaintDeviceSP src,
-                               const QRect &area)
-{
-    if (!dst || !src || area.isEmpty()) return;
-    const KoColorSpace *cs = dst->colorSpace();
-    if (!cs) return;
-    const int ps = cs->pixelSize();
-    if (ps <= 0) return;
-    // 文档色彩空间为 8bit RGBA/BGRA ⇒ alpha 在 ps 范围内的某个字节位置;
-    // 取不到有效位置就整体放弃 (宁可漏补也不写坏像素)
-    const int alphaPos = int(cs->alphaPos());
-    if (alphaPos < 0 || alphaPos >= ps) return;
-
-    const int w = area.width();
-    const int h = area.height();
-    const size_t count = size_t(w) * size_t(h);
-    const size_t bytes = count * size_t(ps);
-    thread_local QByteArray dstBuf;
-    thread_local QByteArray srcBuf;
-    if (size_t(dstBuf.size()) < bytes) {
-        dstBuf.resize(int(bytes));
-        srcBuf.resize(int(bytes));
-    }
-    quint8 *d = reinterpret_cast<quint8 *>(dstBuf.data());
-    quint8 *s = reinterpret_cast<quint8 *>(srcBuf.data());
-    dst->readBytes(d, area.x(), area.y(), w, h);
-    src->readBytes(s, area.x(), area.y(), w, h);
-
-    bool patched = false;
-    for (size_t i = 0; i < count; ++i) {
-        const size_t off = i * size_t(ps);
-        if (d[off + size_t(alphaPos)] == 0) {
-            memcpy(d + off, s + off, size_t(ps));
-            patched = true;
-        }
-    }
-    if (patched) {
-        dst->writeBytes(d, area.x(), area.y(), w, h);
-    }
 }
 
 void ReverieCore::liquifyApplyLocked(const QRect &deltaRect)
@@ -697,42 +540,29 @@ void ReverieCore::liquifyApplyLocked(const QRect &deltaRect)
     for (LiquifyTarget &t : m_liquifyTargets) {
         if (t.worker) warped.append(&t);
     }
-    if (warped.size() > 1 && kLiquifyParallelTargets) {
-        // 引擎专用池 (不借全局池, 避免与 Krita 内部并行争池); 元素是裸指针数组,
-        // 并行期间不触碰 m_liquifyTargets 的容器本身
-        QtConcurrent::blockingMap(reverieBackgroundPool(), warped,
-                                  [&](LiquifyTarget *t) {
-                                      // Phase 3 · Commit 3: 优先自己用位移场反向采样生成 dst,
-                                      // 只覆盖真正要回写的 delta 区(run() 在同面积上要 1.4s);
-                                      // 前提不满足(非 8bit BGRA / 网格不完整)时退回 run()。
-                                      const QRect a =
-                                          deltaRect.intersected(t->bounds).intersected(clipRect);
-                                      if (!(liquifyFastWarp()
-                                            && warpFromGrid(t->worker, t->src, t->dst, a,
-                                                            t->bounds))) {
-                                          // run() 内部本来就会 dst->clear(), 不必重复清
-                                          t->worker->run(t->src, t->dst);
-                                      }
-                                  });
-    } else {
-        for (LiquifyTarget *t : warped) {
-            const QRect a = deltaRect.intersected(t->bounds).intersected(clipRect);
-            if (!(liquifyFastWarp()
-                  && warpFromGrid(t->worker, t->src, t->dst, a, t->bounds))) {
-                t->worker->run(t->src, t->dst);
-            }
+    const QRect docRect(0, 0, m_document->width(), m_document->height());
+    const auto warp = [&](LiquifyTarget *t) {
+        const QRect area = deltaRect.intersected(clipRect);
+        if (!warpInverseField(m_liquifyInverseField, t->src, t->dst, area, docRect)) {
+            // Unsupported formats retain the source instead of copying stale destination pixels.
+            t->dst->makeCloneFrom(t->src, area);
         }
+    };
+    if (warped.size() > 1 && kLiquifyParallelTargets) {
+        QtConcurrent::blockingMap(reverieBackgroundPool(), warped, warp);
+    } else {
+        for (LiquifyTarget *t : warped) warp(t);
     }
     tWarpMs = QDateTime::currentMSecsSinceEpoch() - tw0;
 
     // 阶段 2: 串行写回 (选区/透明像素锁/脏区标记语义与改动前完全一致)
     for (LiquifyTarget &t : m_liquifyTargets) {
         if (!t.worker) continue;
-        const QRect area = deltaRect.intersected(t.bounds).intersected(clipRect);
+        const QRect area = deltaRect.intersected(clipRect);
         if (!area.isEmpty()) {
             // 先补掉 warp 未覆盖的透明像素, 否则 COMPOSITE_COPY 会把它们擦进图层
             const qint64 ts0 = QDateTime::currentMSecsSinceEpoch();
-            seedTransparentFromSource(t.dst, t.src, area);
+            // Transparent samples are valid warped pixels, not holes to fill.
             tSeedMs += QDateTime::currentMSecsSinceEpoch() - ts0;
             const qint64 tb0 = QDateTime::currentMSecsSinceEpoch();
             KisPainter p(t.device);
@@ -804,6 +634,64 @@ void ReverieCore::liquifyApplyLocked(const QRect &deltaRect)
               int(m_liquifyApplyIntervalMs));
 }
 
+// ---------------------------------------------------------------------------
+// Phase 6: 物化队列实现(见 ReverieCore.h · liquifyMaterializeTick 的说明)
+// ---------------------------------------------------------------------------
+void ReverieCore::liquifyEnqueueMaterialize(const QRect &rect)
+{
+    if (rect.isEmpty() || !m_document) return;
+    const QRect clipped = rect & QRect(0, 0, m_document->width(), m_document->height());
+    // Stable tile keys: differing dab rectangles must not queue overlapping bands
+    // or discard the wider part of a rectangle with the same top-left key.
+    constexpr int width = 128, height = 32;
+    for (int y = clipped.top() / height * height; y <= clipped.bottom(); y += height) {
+        for (int x = clipped.left() / width * width; x <= clipped.right(); x += width) {
+            const qint64 key = (qint64(y) << 32) | quint32(x);
+            if (m_liquifyMatKeys.contains(key)) continue;
+            m_liquifyMatKeys.append(key);
+            m_liquifyMatQueue.append(QRect(x, y, width, height).intersected(
+                QRect(0, 0, m_document->width(), m_document->height())));
+        }
+    }
+}
+
+bool ReverieCore::liquifyDrainMaterialize(bool force)
+{
+    if (m_liquifyMatQueue.isEmpty()) return true;
+    const qint64 budget = liquifyMatBudgetMs();
+    // 预算 0 = 关闭分帧物化: 队列只在抬笔/超限的 force 调用里被清空(旧行为)
+    if (!force && budget <= 0) return false;
+    // 出队即清去重键(同一区域之后可以再次入队 —— 那时它又有了新位移)
+    const auto consume = [this](const QRect &band) {
+        const qint64 key = (qint64(band.y()) << 32) | quint32(band.x());
+        m_liquifyMatKeys.removeOne(key);
+        // 每个行带独立物化(选区/Alpha 锁/脏区/投影合成语义与整块物化逐条一致):
+        // 同一像素反复物化是幂等的(build-up 语义下位移不会再变), 分带与整块结果相同。
+        liquifyApplyLocked(band);
+        // Writeback is a cache of original(p - field(p)); the field stays intact.
+    };
+    if (force) {
+        // 收口路径(抬笔 / 队列超限): 必须全部落盘, 不做时间检查
+        while (!m_liquifyMatQueue.isEmpty()) {
+            consume(m_liquifyMatQueue.takeFirst());
+        }
+        return true;
+    }
+    const qint64 t0 = QDateTime::currentMSecsSinceEpoch();
+    while (!m_liquifyMatQueue.isEmpty()) {
+        // 先把第一带做掉(保证前进), 之后按预算停 —— 预算再小也不会"空转不前进"
+        consume(m_liquifyMatQueue.takeFirst());
+        if (QDateTime::currentMSecsSinceEpoch() - t0 >= budget) break;
+    }
+    return m_liquifyMatQueue.isEmpty();
+}
+
+bool ReverieCore::liquifyMaterializeTick()
+{
+    if (m_liquifyMatQueue.isEmpty()) return false;
+    return !liquifyDrainMaterialize(false);
+}
+
 void ReverieCore::liquifyBegin(const QVector<int> &layers)
 {
     if (!m_document || m_liquifyTxnActive) {
@@ -836,15 +724,30 @@ void ReverieCore::liquifyBegin(const QVector<int> &layers)
         LiquifyTarget t;
         t.device = dev;
         t.layer = dynamic_cast<KisPaintLayer *>(m_layers[idx].node);
+        // 可见性以节点为准(m_layers 的镜像字段可能落后于引擎内的真实树)
+        t.visible = m_layers[idx].node ? m_layers[idx].node->visible() : m_layers[idx].visible;
         t.txn = new KisTransaction(kundo2_i18n("Liquify"), dev, nullptr, -1, nullptr);
         m_liquifyTargets.append(t);
     }
-    RPC_TRACE("liquifyBegin req=%d targets=%d cur=%d layerN=%d active=%d",
-              int(layers.size()), int(m_liquifyTargets.size()),
+    // 预览源目标 = 第一个**可见**的目标图层。以前一律用下标 0, 于是多选里只要有隐藏图层
+    // (或当前图层就是隐藏的), 隐藏图层的像素就会被交给 GPU 覆盖层当源纹理 —— 用户看到的
+    // 是"不可见图层被预览出来"并频繁闪烁; 全部目标都不可见时干脆不预览。
+    m_liquifyPreviewTarget = -1;
+    for (int i = 0; i < m_liquifyTargets.size(); ++i) {
+        if (m_liquifyTargets[i].visible) {
+            m_liquifyPreviewTarget = i;
+            break;
+        }
+    }
+    RPC_TRACE("liquifyBegin req=%d targets=%d previewTarget=%d cur=%d layerN=%d active=%d",
+              int(layers.size()), int(m_liquifyTargets.size()), m_liquifyPreviewTarget,
               m_currentLayer, int(m_layers.size()), int(m_liquifyTxnActive));
     if (m_liquifyTargets.isEmpty()) {
         return;
     }
+    int fieldStep = 1;
+    while (fieldStep < 16 && fieldStep * 2 <= m_liquifyBrushSize / 16.0) fieldStep *= 2;
+    m_liquifyInverseField.reset(m_document->width(), m_document->height(), fieldStep);
     m_liquifyTxnActive = true;
     // The grid workers need the dab position - they are created lazily by
     // the first liquify() call (and rebased whenever the brush wanders out)
@@ -856,14 +759,14 @@ void ReverieCore::liquifyEnd()
     // materialize —— 这是"预览近似、提交精确"的收口点(缺失它就会丢形变)。
     const bool previewWasOn = m_liquifyPreview;
     const QRect previewBounds = m_liquifyWorkerBounds;
-    if (previewWasOn && !m_liquifyTargets.isEmpty() && m_liquifyTargets[0].worker) {
-        m_liquifyPendingDelta = m_liquifyWorkerBounds;
-    }
     // Flush any grid displacement that is still under the apply throttle
     if (!m_liquifyTargets.isEmpty() && !m_liquifyPendingDelta.isNull()) {
-        liquifyApplyLocked(m_liquifyPendingDelta);
+        liquifyEnqueueMaterialize(m_liquifyPendingDelta);
         m_liquifyPendingDelta = QRect();
     }
+    // Phase 6: 抬笔收口 —— 队列必须彻底清空。此处允许一次性较大开销(没有输入在等),
+    // 但拖动期"提前物化"已把大部分位移落盘, 收口通常只剩最后几帧的量。
+    liquifyDrainMaterialize(true);
     // 预览收口: 摘掉 overlay, 并让这块区域按真实文档重读一遍 —— 渲染循环只在"脏区"里重读,
     // 若不标脏, 预览像素会永远留在显示缓冲里(看起来像形变没提交, 其实只是没刷新)。
     if (previewWasOn) {
@@ -895,9 +798,9 @@ void ReverieCore::liquifyEnd()
             qDeleteAll(children);
         }
     }
+    resetLiquifyWorker();
     m_liquifyTargets.clear();
     m_liquifyTxnActive = false;
-    resetLiquifyWorker();
 }
 
 void ReverieCore::liquifyCancel()
@@ -920,9 +823,11 @@ void ReverieCore::liquifyCancel()
     // Phase 5 · C3-2: 取消 = 图层从未被改写(拖动期零引擎解算), 只需复位场通路标记
     m_liquifyFieldMode = false;
     m_liquifyPreview = false;
+    // Phase 6: 取消 = 未落盘的位移一律作废(图层回到手势前), 队列直接丢弃, 不物化
+    m_liquifyMatQueue.clear();
+    resetLiquifyWorker();
     m_liquifyTargets.clear();
     m_liquifyTxnActive = false;
-    resetLiquifyWorker();
 }
 
 // ---------------------------------------------------------------------------
@@ -941,29 +846,51 @@ void ReverieCore::liquifyCancel()
 bool ReverieCore::liquifyFieldSource(int x, int y, int w, int h)
 {
     // 只允许"手势进行中"取源: 这条路唯一的调用点是 liquifyBegin 之后, 手滑传进来也不该动状态
-    if (!m_document || !m_liquifyTxnActive || m_liquifyTargets.isEmpty()) return false;
+    if (!m_document || !m_liquifyTxnActive || m_liquifyTargets.size() != 1) return false;
     const QRect docRect(0, 0, m_document->width(), m_document->height());
     const QRect b = QRect(x, y, w, h).intersected(docRect);
     if (b.isEmpty() || b.width() <= 0 || b.height() <= 0) return false;
     const qint64 px = qint64(b.width()) * qint64(b.height());
     // 与主机侧绘制的源裁剪同一预算口径: 超大范围的复制 + 上传得不偿失, 宁可不做(调用方回退)
     if (px > LIQUIFY_HOST_DRAW_MAX_PX) return false;
-    KisPaintDeviceSP src = m_liquifyTargets[0].device;
+    // 只把**可见**目标图层交给覆盖层当源纹理: 隐藏图层若被当源, 覆盖层会把整篇文档的
+    // 隐藏内容画到屏幕上(即"不可见图层被预览出来"的另一条通路)。一个可见目标都没有
+    // 就明确拒绝, 调用方会回退经典逐 dab 路径 —— 此时本来也没有可见结果需要预览。
+    const int pi = m_liquifyPreviewTarget;
+    if (pi < 0 || pi >= m_liquifyTargets.size() || !m_liquifyTargets[pi].visible) return false;
+    KisPaintDeviceSP src = m_liquifyTargets[pi].device;
     if (!src) return false;
     const KoColorSpace *cs = src->colorSpace();
     const int ps = cs ? cs->pixelSize() : 0;
     if (ps != 4) return false;
 
-    m_liquifyPreviewSrc.resize(int(px) * ps);
-    src->readBytes(m_liquifyPreviewSrc.data(), b.x(), b.y(), b.width(), b.height());
-    m_liquifyPreviewSrcRgba.resize(int(px) * 4);
-    const quint8 *s = m_liquifyPreviewSrc.constData();
-    quint8 *d = m_liquifyPreviewSrcRgba.data();
-    for (qint64 i = 0; i < px; ++i) {
-        d[i * 4 + 0] = s[i * 4 + 2]; // BGRA -> RGBA(预乘; 与既有主机侧绘制同一假设)
-        d[i * 4 + 1] = s[i * 4 + 1];
-        d[i * 4 + 2] = s[i * 4 + 0];
-        d[i * 4 + 3] = s[i * 4 + 3];
+    // 按需只准备**消费端真正要的那一份**:
+    //  - 主机侧绘制(AGSL/GLES 覆盖层)只吃 RGBA8888 ⇒ 逐行带从 device 读并展开即可;
+    //  - 引擎侧 CPU 预览(liquifyPreviewBuildLocked)才需要 device 色彩空间的整块源。
+    // 旧实现两份都留 = 一次手势多占 4B/px(4M px 文档 = 16MB), 而场通路 100% 是主机侧绘制。
+    if (liquifyPreviewHostDraw()) {
+        m_liquifyPreviewSrc = QVector<quint8>(); // 释放上一次手势可能留下的整块源
+        m_liquifyPreviewSrcRgba.resize(int(px) * 4);
+        const int bandRows = 64;
+        thread_local QVector<quint8> bandBuf;
+        const int bandBytes = b.width() * bandRows * ps;
+        if (bandBuf.size() < bandBytes) bandBuf.resize(bandBytes);
+        for (int y0 = 0; y0 < b.height(); y0 += bandRows) {
+            const int rows = qMin(bandRows, b.height() - y0);
+            src->readBytes(bandBuf.data(), b.x(), b.y() + y0, b.width(), rows);
+            const quint8 *s = bandBuf.constData();
+            quint8 *d = m_liquifyPreviewSrcRgba.data() + qint64(y0) * b.width() * 4;
+            for (qint64 i = 0, n = qint64(rows) * b.width(); i < n; ++i) {
+                d[i * 4 + 0] = s[i * 4 + 2]; // BGRA -> RGBA(预乘; 与既有主机侧绘制同一假设)
+                d[i * 4 + 1] = s[i * 4 + 1];
+                d[i * 4 + 2] = s[i * 4 + 0];
+                d[i * 4 + 3] = s[i * 4 + 3];
+            }
+        }
+    } else {
+        m_liquifyPreviewSrc.resize(int(px) * ps);
+        src->readBytes(m_liquifyPreviewSrc.data(), b.x(), b.y(), b.width(), b.height());
+        m_liquifyPreviewSrcRgba = QVector<quint8>();
     }
     m_liquifyWorkerBounds = b;
     // 让既有链路原样工作: Kotlin 侧照旧走 liquifyPreviewSourceMeta / Pixels 取数;
@@ -979,19 +906,20 @@ bool ReverieCore::liquifyFieldSource(int x, int y, int w, int h)
     return true;
 }
 
-void ReverieCore::liquifyFieldCommit(int x, int y, int w, int h, const QVector<quint8> &rgba,
-                                     bool bottomUp)
+// Ptr 版: 调用方(JNI 侧)直接把 Java 数组 pin 住交进来, 引擎不再复制整块像素。
+// 返回 false 明确表示"这次提交没有被受理" —— Kotlin 侧据此回退"重放补点", 形变一点不丢。
+bool ReverieCore::liquifyFieldCommitPtr(int x, int y, int w, int h, const quint8 *rgba,
+                                        bool bottomUp)
 {
     // 稳定性硬闸: 只接受"手势进行中"的提交, 且范围/字节数都在明确定义的上限内。
     // 高压连续测试下这里是这条路唯一的大块数据入口, 任何越界都会直接崩进程。
-    if (!m_document || !m_liquifyTxnActive || m_liquifyTargets.isEmpty()) return;
-    if (w <= 0 || h <= 0) return;
+    if (!m_document || !m_liquifyTxnActive || m_liquifyTargets.isEmpty()) return false;
+    if (w <= 0 || h <= 0 || !rgba) return false;
     const qint64 pxIn = qint64(w) * qint64(h);
-    if (pxIn > LIQUIFY_FIELD_COMMIT_MAX_PX) return;
-    if (qint64(rgba.size()) < pxIn * 4) return;
+    if (pxIn > LIQUIFY_FIELD_COMMIT_MAX_PX) return false;
     const QRect docRect(0, 0, m_document->width(), m_document->height());
     const QRect area = QRect(x, y, w, h).intersected(docRect);
-    if (area.isEmpty()) return;
+    if (area.isEmpty()) return false;
 
     const qint64 t0 = QDateTime::currentMSecsSinceEpoch();
     QRect clipRect = docRect;
@@ -1020,7 +948,7 @@ void ReverieCore::liquifyFieldCommit(int x, int y, int w, int h, const QVector<q
             const int relRow = dstRow - y;
             const int srcRow = bottomUp ? (h - 1 - relRow) : relRow;
             if (srcRow < 0 || srcRow >= h) continue;
-            const quint8 *srow = rgba.constData() + (qint64(srcRow) * w + (a.x() - x)) * ps;
+            const quint8 *srow = rgba + (qint64(srcRow) * w + (a.x() - x)) * ps;
             quint8 *drow = rowBuf.data();
             for (int c = 0; c < a.width(); ++c) {
                 drow[c * 4 + 0] = srow[c * 4 + 2];
@@ -1072,6 +1000,15 @@ void ReverieCore::liquifyFieldCommit(int x, int y, int w, int h, const QVector<q
     RPC_TRACE("liquify fieldCommit %dx%d@(%d,%d) total=%dms blit=%d comp=%d targets=%d",
               area.width(), area.height(), area.x(), area.y(),
               int(elapsed), int(tBlitMs), int(tCompositeMs), int(m_liquifyTargets.size()));
+    return true;
+}
+
+// 兼容入口(既有 JNI 方法仍在): 转调 Ptr 版, 忽略返回值 —— 旧调用方没有"重放补点"的能力。
+void ReverieCore::liquifyFieldCommit(int x, int y, int w, int h, const QVector<quint8> &rgba,
+                                     bool bottomUp)
+{
+    if (qint64(rgba.size()) < qint64(w) * qint64(h) * 4) return;
+    liquifyFieldCommitPtr(x, y, w, h, rgba.constData(), bottomUp);
 }
 
 void ReverieCore::liquifyStats(qint64 *out)
@@ -1140,7 +1077,20 @@ void ReverieCore::liquifyPreviewCaptureLocked()
         m_liquifyPreview = false;
         return;
     }
-    KisPaintDeviceSP src = m_liquifyTargets[0].src;
+    // 预览源 = 第一个可见的目标图层(见 liquifyBegin 的 m_liquifyPreviewTarget)。
+    // 一个可见目标都没有 ⇒ 本次手势没有任何"可见结果"可预览: 明确关掉预览并释放缓冲,
+    // 免得隐藏图层的像素(或上一帧的残留)被当成预览叠加到屏幕最上层 —— 那正是"预览把
+    // 不可见图层画出来 + 屏幕频繁闪烁"的成因。
+    const int pi = m_liquifyPreviewTarget;
+    if (pi < 0 || pi >= m_liquifyTargets.size() || !m_liquifyTargets[pi].visible) {
+        m_liquifyPreview = false;
+        m_liquifyPreviewW = 0;
+        m_liquifyPreviewH = 0;
+        m_liquifyPreviewOut = QVector<quint8>();
+        m_liquifyPreviewSrcRgba = QVector<quint8>();
+        return;
+    }
+    KisPaintDeviceSP src = m_liquifyTargets[pi].src;
     const QRect b = m_liquifyWorkerBounds;
     if (!src || b.isEmpty() || b.width() <= 0 || b.height() <= 0) {
         m_liquifyPreview = false;
@@ -1383,8 +1333,29 @@ void ReverieCore::blendLiquifyPreview(quint8 *buffer, int w, int h, const QRect 
     }
 }
 
+void ReverieCore::liquifyDabs(const float *dabs, int count)
+{
+    if (!dabs || count <= 0) return;
+    const bool ownBracket = !m_liquifyTxnActive;
+    if (ownBracket) liquifyBegin();
+    for (int i = 0; i < count; ++i) {
+        m_liquifyBatchRemaining = count - i - 1;
+        const float *d = dabs + i * 6;
+        liquifyAt(d[0], d[1], d[2], d[3], d[4], int(d[5]));
+    }
+    m_liquifyBatchRemaining = 0;
+    if (ownBracket) liquifyEnd();
+}
+
 void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mode)
 {
+    liquifyAt(fx, fy, tx, ty, strength, mode);
+}
+
+void ReverieCore::liquifyAt(qreal fx, qreal fy, qreal tx, qreal ty, qreal strength, int mode)
+{
+    if (!std::isfinite(fx) || !std::isfinite(fy) || !std::isfinite(tx) || !std::isfinite(ty)
+        || !std::isfinite(strength) || strength <= 0 || (fx == tx && fy == ty)) return;
     KisImageSP image = m_document ? m_document : KisImageSP();
     if (!image) return;
 
@@ -1415,8 +1386,8 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
         return;
     }
 
-    const qreal s = qBound<qreal>(0.05, strength, 2.0);
-    // KisLiquifyPaintop passes the brush diameter as sigma (gaussian falloff)
+    const qreal s = qBound<qreal>(0.0, strength, 2.0);
+    // Shared C1 inverse-map kernel uses the same brush size as the GLES field.
     const qreal size = qMax<qreal>(8.0, m_liquifyBrushSize);
 
     // Local grid: rebase when the brush is about to leave the inner margin
@@ -1429,9 +1400,12 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
     if (needRebase) {
         rebaseReason = LqRebaseFirstDab;
     } else {
-        const int margin = qMax(40, qRound(size * 0.7));
+        // Phase 7: 内框判据放宽(0.7σ → 0.35σ)。每次 rebase 都会**重置位移场**(在新窗口上
+        // 重新锚定), 真机表现为轨迹上的接缝短线与手感"被打断"(test16 的红色圆圈)。放宽后
+        // rebase 频率下降约 2~3 倍; 代价是窗口更大(见下方 R), 由分帧物化摊平。
+        const int margin = qMax(28, qRound(size * 0.35));
         const QRect inner = m_liquifyWorkerBounds.adjusted(margin, margin, -margin, -margin);
-        if (!inner.contains(QPoint(tx, ty))) {
+        if (!inner.contains(QPoint(qRound(tx), qRound(ty)))) {
             needRebase = true;
             rebaseReason = LqRebaseLeftInnerBox;
             // 越出内框多少像素(四边取最大) —— 用来真机验证"锚点 R-margin"这条判据
@@ -1445,38 +1419,16 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
         const qint64 rebaseT0 = QDateTime::currentMSecsSinceEpoch();
         qint64 rebaseFlushMs = 0;
         const QRect docRect(0, 0, image->width(), image->height());
-        // Tight bounds: only the brush neighbourhood + the gaussian influence
-        // radius (3 sigma) must fit; anything larger only adds copy cost
-        // 影响半径保持 1.9σ: 试过压到 1.6σ 省面积, 但 bounds 变小后强位移会更频繁地
-        // 需要 bounds 之外的像素 / 让网格退化, 真机上反而更不稳 (68px 就闪退)。稳妥优先。
-        const int R = qMax<int>(192, qRound(size * 1.9));
+        // Preview-only cache: small brushes do not need a 416px-wide dense grid.
+        // The authoritative field is sparse and independent of this window.
+        const int R = qMax<int>(64, qRound(size * 3.2));
         QRect bounds = QRect(tx - R, ty - R, 2 * R, 2 * R).intersected(docRect);
         if (bounds.isEmpty()) {
             if (ownBracket) liquifyEnd();
             return;
         }
-        // ---- Phase 3 · Commit 2: 交互期(预览态)不为 rebase 物化, 改为扩窗口 + 重放待落盘补点 ----
-        // 只有"有网格 + 有预览 + 有未落盘补点 + 未超上限"时才扩; 其余一律走旧路径(flush + 收紧窗口)。
-        bool replayPending = false;
-        if (liquifyRebaseNoFlush() && !ownBracket && m_liquifyPreview && rebaseOldBounds.isValid()
-            && m_liquifyTargets[0].worker && !m_liquifyPendingDabs.isEmpty()
-            && m_liquifyPendingDabs.size() / 6 <= LIQUIFY_GROW_MAX_DABS) {
-            const QRect grown = bounds.united(rebaseOldBounds).intersected(docRect);
-            const qint64 grownArea = qint64(grown.width()) * qint64(grown.height());
-            if (!grown.isEmpty() && grownArea <= LIQUIFY_GROW_MAX_PX) {
-                bounds = grown;
-                replayPending = true;
-            }
-        }
-        if (!replayPending && m_liquifyTargets[0].worker) {
-            const qint64 flushT0 = QDateTime::currentMSecsSinceEpoch();
-            liquifyApplyLocked(m_liquifyPendingDelta.isNull() ? m_liquifyWorkerBounds
-                                                              : m_liquifyPendingDelta);
-            rebaseFlushMs = QDateTime::currentMSecsSinceEpoch() - flushT0;
-            m_liquifyPendingDelta = QRect();
-            // 落盘了才能丢弃重放列表
-            m_liquifyPendingDabs.clear();
-        }
+        // The sparse inverse field and source survive rebase. Only the exported
+        // preview grid is replaced; queued materialization remains valid globally.
         // ---- 网格精度(2 的幂 + 分辨率保底 + 诊断覆盖)提到循环外: 所有目标共用同一档 ----
         //
         // 除数从 8 改成 16(网格加密一倍): **老的 size/8 是为 `run()` 调的** —— 它的成本 ∝ 网格单元数
@@ -1484,9 +1436,9 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
         // 但 `warpFromGrid()` 已经取代了 `run()`: 它按"写区像素"反向采样、每像素 4 次网格取值,
         // **与网格密度无关** ⇒ 精度现在只决定"位移场的分辨率", 加密几乎不花钱, 而 30px 级折线台阶直接减半。
         // 真机若嫌慢: `setprop debug.reverie.lqprec 32` 一键回到粗档。
-        const int rawPrecision = qBound<int>(4, qRound(size / 16.0), 32);
-        int precision = rawPrecision > 16 ? 32
-                        : (rawPrecision > 12 ? 16 : (rawPrecision > 6 ? 8 : 4));
+        const int rawPrecision = qBound<int>(1, int(size / 16.0), 16);
+        int precision = 1;
+        while (precision * 2 <= rawPrecision) precision *= 2;
         const int resolutionFloor = qMax<int>(16, R / 8);
         while (precision > resolutionFloor && precision > 4) {
             precision /= 2;
@@ -1508,8 +1460,10 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
         m_liquifyPrecision = precision;
         m_liquifyWorkerBounds = bounds;
         for (LiquifyTarget &t : m_liquifyTargets) {
-            t.src = new KisPaintDevice(t.device->colorSpace());
-            t.src->makeCloneFrom(t.device, bounds);
+            if (!t.src) {
+                // Krita copy constructor shares tiles until a write (no full pixel copy).
+                t.src = new KisPaintDevice(*t.device);
+            }
             t.dst = new KisPaintDevice(t.device->colorSpace());
             delete t.worker;
             // pixelPrecision is the grid cell size: the warp is piecewise
@@ -1532,11 +1486,7 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
             // 精度已在循环外算好(见上方"网格精度"与"网格原点对齐"两段) —— 所有目标共用同一档
             t.worker = new KisLiquifyTransformWorker(bounds, nullptr, precision);
             t.bounds = bounds;
-            // 扩窗口时把"尚未落盘"的位移重放进来 —— 这一步替代了旧的 flush + run(),
-            // 是拖动期不再出现 40~70ms 尖峰的关键(重放只做网格点运算, 成本 µs 级)
-            if (replayPending) {
-                replayLiquifyDabs(t.worker, size, m_liquifyPendingDabs);
-            }
+
         }
         // Phase 3 埋点: 记下一次 rebase 的构成(纯诊断)。cloneMs 用"整段减去 flush 段"近似,
         // 它覆盖 makeCloneFrom + dst 分配 + worker 重建 —— 正是 §4.6.4 提到的"设备重建抖动"。
@@ -1574,28 +1524,25 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
         }
     }
 
-    const QPointF base(fx, fy);
-    const qreal dist = QLineF(QPointF(fx, fy), QPointF(tx, ty)).length();
-    // Effect magnitude follows how far the finger moved this dab: holding
-    // still applies nothing, faster strokes apply stronger deformation
-    const qreal rate = qBound<qreal>(0.0, dist / size, 1.0);
-    const qreal amp = 0.2 + 0.8 * rate;
-
-    for (LiquifyTarget &t : m_liquifyTargets) {
-        applyLiquifyDab(t.worker, size, s, amp, fx, fy, tx, ty, mode);
-    }
-    // Phase 3 · Commit 2: 记下这个补点, 供 rebase 时"不物化"的重放使用(每 6 个 float 一组)
-    if (!m_liquifyTargets.isEmpty() && m_liquifyTargets[0].worker) {
-        m_liquifyPendingDabs << float(fx) << float(fy) << float(tx) << float(ty)
-                             << float(s) << float(mode);
+    m_liquifyInverseField.apply(float(fx), float(fy), float(tx), float(ty), float(s), float(size), mode);
+    // Legacy preview transport carries BACKWARD offsets, never forward Krita points.
+    if (m_liquifyBatchRemaining == 0) for (LiquifyTarget &t : m_liquifyTargets) {
+        if (!t.worker) continue;
+        const auto &orig = t.worker->originalPoints();
+        auto &trans = t.worker->transformedPoints();
+        for (int i = 0; i < orig.size(); ++i) {
+            const auto off = m_liquifyInverseField.sample(float(orig[i].x()), float(orig[i].y()));
+            trans[i] = orig[i] + QPointF(off.x, off.y);
+        }
     }
 
     // Accumulate the delta region of dabs not yet written back (build-up
     // displacements never change once applied, so only new dabs' influence
     // needs the re-transformed pixels)
     const int infl = qRound(size * 3.2) + 8;
-    const QRect dab(qMin(fx, tx) - infl, qMin(fy, ty) - infl,
-                    qAbs(tx - fx) + 2 * infl, qAbs(ty - fy) + 2 * infl);
+    const QRect dab = QRectF(qMin(fx, tx) - infl, qMin(fy, ty) - infl,
+                    qAbs(tx - fx) + 2 * infl, qAbs(ty - fy) + 2 * infl).toAlignedRect()
+                    .intersected(QRect(0, 0, image->width(), image->height()));
     // 累积前先看预算: 超预算或新 dab 与已累积区脱开就先 flush 再重新累积。
     // build-up 语义下旧位移不会再变, 提前回写与最终结果逐像素一致。
     if (!m_liquifyPendingDelta.isNull()) {
@@ -1607,12 +1554,10 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
         const qint64 dabPx = qint64(dab.width()) * qint64(dab.height());
         const qint64 budget = qMax(s_liquifyDeltaBudgetPx.load(), dabPx * 2);
         if (mergedPx > budget || !m_liquifyPendingDelta.intersects(dab)) {
-            // 预览模式下不落盘: 位移只留在 worker 网格里, 由 liquifyPreviewBuildLocked 生成预览
-            if (!m_liquifyPreview) {
-                liquifyApplyLocked(m_liquifyPendingDelta);
-                // 真的落盘了才能丢弃重放列表; 预览模式下位移仍在网格里, 必须留着
-                m_liquifyPendingDabs.clear();
-            }
+            // Sparse field survives rebase, but dirty pixels still need writeback.
+            // Never discard an old dirty rectangle merely because an overlay is active.
+            liquifyEnqueueMaterialize(m_liquifyPendingDelta);
+            if (m_liquifyBatchRemaining == 0) liquifyDrainMaterialize(false);
             m_liquifyPendingDelta = QRect();
         }
     }
@@ -1622,7 +1567,9 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
     // Throttled writeback: the grid update is cheap, the re-transform +
     // layer copy is not - pace it adaptively and flush once at gesture end
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (m_liquifyPreview) {
+    if (m_liquifyBatchRemaining > 0) {
+        // Publish only after the complete batch, while retaining every subpixel dab.
+    } else if (m_liquifyPreview) {
         if (liquifyPreviewHostDraw()) {
             // Phase 2B: 采样在 GPU 上做 —— 引擎完全不碰像素, 只让调用方知道"网格变了"
             if (!m_liquifyPreviewSrcRgba.isEmpty()) ++m_liquifyPreviewSeq;
@@ -1630,16 +1577,27 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
             // Phase 2A-2: 预览态 —— 只重建低分辨率预览; 不 run()、不写图层、不触投影合成
             liquifyPreviewBuildLocked();
         }
+        // Phase 6: **提前物化** —— 有预览时屏幕上被覆盖层盖住, 分批落盘对用户不可见。
+        // 这样 rebase/抬笔处的积压大幅变小, 126ms 尖峰被摊到拖动期各帧(每帧 ≤ 预算)。
+        // 注意: 只有队列被清空(全部落盘)才能丢弃重放补点列表。
+        if (!m_liquifyPendingDelta.isNull() && liquifyMatBudgetMs() > 0) {
+            liquifyEnqueueMaterialize(m_liquifyPendingDelta);
+            const bool drained = m_liquifyBatchRemaining == 0 && liquifyDrainMaterialize(false);
+            m_liquifyPendingDelta = QRect();
+            if (drained) m_liquifyPendingDabs.clear();
+        }
     } else if (ownBracket || now - m_liquifyLastApplyMs >= m_liquifyApplyIntervalMs) {
         // Phase 3 埋点: 这条边是**节流**触发的物化, 与 rebase 边分开计 —— 否则会把两者混为一谈
         const qint64 throttleT0 = QDateTime::currentMSecsSinceEpoch();
-        liquifyApplyLocked(m_liquifyPendingDelta);
+        // Phase 6: 同样走分帧队列(预算内消费); 队列清空后才能丢弃重放列表
+        liquifyEnqueueMaterialize(m_liquifyPendingDelta);
+        const bool drained = m_liquifyBatchRemaining == 0 && liquifyDrainMaterialize(false);
         const qint64 throttleMs = QDateTime::currentMSecsSinceEpoch() - throttleT0;
         addRebaseStat(LqrThrottleCount, 1);
         addRebaseStat(LqrThrottleMs, throttleMs);
         maxRebaseStat(LqrThrottleMaxMs, throttleMs);
         m_liquifyPendingDelta = QRect();
-        m_liquifyPendingDabs.clear();
+        if (drained) m_liquifyPendingDabs.clear();
     }
 
     // Phase 3 · Commit 1b 埋点: 记下这一次调用的成本。刻意放在 liquifyEnd() **之前** ——

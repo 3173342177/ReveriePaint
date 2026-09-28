@@ -11,6 +11,7 @@
 #ifndef REVERIECORE_H
 #define REVERIECORE_H
 
+#include "LiquifyInverseField.h"
 #include <QImage>
 #include <QPointF>
 #include <QVector>
@@ -555,9 +556,24 @@ public:
     // An empty/absent layer list liquifies the current layer only; multiple
     // layers (multi-select) warp together as ONE undo step.
     void liquify(int fx, int fy, int tx, int ty, qreal strength = 0.9, int mode = 0);
+    void liquifyDabs(const float *dabs, int count);
+    void liquifyAt(qreal fx, qreal fy, qreal tx, qreal ty, qreal strength, int mode);
     void liquifyBegin(const QVector<int> &layers = QVector<int>());
     void liquifyEnd();
     void liquifyCancel();
+
+    /**
+     * Phase 6(稳定性 v2): 物化节流的分帧推进点。
+     *
+     * 真机 HUD 证据(test15): 单次 `liquify()` 调用峰值 **128.7ms**, 其中 rebase 段的
+     * 同步物化 126ms —— 相当于一次掉 8 帧, 是拖动期"卡顿/断触"的直接原因。
+     * 现在整块物化会被拆成 64 行的行带入队, 由拖动期与渲染帧**按时间预算**
+     * (`debug.reverie.lqmatbudget`, 默认 4ms) 分批消费; 屏幕在拖动期由覆盖层预览盖住,
+     * 所以"半物化"状态对用户不可见(可用 `debug.reverie.lqmatbudget 0` 一键回到旧行为)。
+     *
+     * @return true = 仍有积压(调用方应继续按帧调用本方法)。
+     */
+    bool liquifyMaterializeTick();
 
     // -----------------------------------------------------------------------
     // Phase 5 · C3-2: "GPU 常驻位移场"的落盘通路 (docs/LIQUIFY-C3-FIELD-PLAN.md §3)
@@ -579,6 +595,17 @@ public:
      *  @param rgba     RGBA8888(预乘)像素, 至少 `w * h * 4` 字节
      *  @param bottomUp true = 首行是矩形的**最后一行**(GL 读回的原始行序, 引擎内部翻正) */
     void liquifyFieldCommit(int x, int y, int w, int h, const QVector<quint8> &rgba, bool bottomUp);
+
+    /**
+     * 同上, 但直接吃**调用方持有的裸指针**(JNI 侧用 GetPrimitiveArrayCritical 拿到的 Java
+     * 数组视图) —— 消掉旧实现"先整块复制进 QVector"带来的 4B/px 额外分配与内存峰值
+     * (4M px 文档 = 16MB; 高压连测里这一笔分配失败就是 native abort = 闪退)。
+     *
+     * @return true = 提交已被受理(形变写回语义与 liquifyApplyLocked 一致);
+     *         false = 状态/参数不合法(未在手势中 / 空目标 / 超预算 / 空指针), 调用方应回退
+     *                 "重放补点"的经典收口 —— **不允许**把 false 当成"已写回"而丢掉形变。
+     */
+    bool liquifyFieldCommitPtr(int x, int y, int w, int h, const quint8 *rgba, bool bottomUp);
 
     /** 本次手势是否走 C3-2 的场落盘通路(纯读数, 供 HUD/诊断)。 */
     bool liquifyFieldMode() const { return m_liquifyFieldMode; }
@@ -649,6 +676,12 @@ public:
 private:
     void resetLiquifyWorker();
     void liquifyApplyLocked(const QRect &deltaRect);
+
+    // ---- Phase 6: 物化节流(见 liquifyMaterializeTick 的说明) ----
+    /** 把一块待落盘区域按 64 行拆成行带追加进队列(超上限时先整体清空, 防积压失控)。 */
+    void liquifyEnqueueMaterialize(const QRect &rect);
+    /** 按预算消费队列; force = 全部消费。@return true = 队列已清空。 */
+    bool liquifyDrainMaterialize(bool force);
 
     // Phase 2A-2 预览态内部实现(见 LiquifyPreviewMeta 的公开接口说明)
     /** 本次手势是否需要预览(diagnostic property, 或 Kotlin 侧显式指定了绘制模式)。 */
@@ -910,6 +943,8 @@ private:
     qreal m_brushSize = 20.0;
     qreal m_shapeStrokeWidth = 4.0;   // shape tools independent stroke width
     bool m_shapeFilled = false;       // shape tools fill with the brush color
+    int m_liquifyBatchRemaining = 0;
+    LiquifyInverseField m_liquifyInverseField;
     qreal m_liquifyBrushSize = 60.0;   // liquify independent brush size
     // Multi-layer liquify session state. Each target layer keeps its own
     // pristine source copy + grid worker (same displacement ops applied to
@@ -922,12 +957,21 @@ private:
         class KisLiquifyTransformWorker *worker = nullptr;
         KisTransaction *txn = nullptr;
         QRect bounds;
+        // 该目标图层当前是否可见(手势开始时冻结)。预览只允许拿**可见**图层的像素当源纹理 ——
+        // 多选里夹着隐藏图层时, 若仍按"第 0 个目标"取源, 隐藏图层的像素会被当成预览叠加到
+        // 屏幕最上层: 真机表现就是"不可见图层被预览出来 + 屏幕频繁闪烁"(见 m_liquifyPreviewTarget)。
+        // 提交路径不受影响: 写隐藏图层的像素本来就看不见, 与 Krita 的单层行为一致。
+        bool visible = true;
         // Owning paint layer (null for masks/projections): supplies the
         // alpha-lock channel flags for the writeback
         class KisPaintLayer *layer = nullptr;
     };
     QVector<LiquifyTarget> m_liquifyTargets;
     bool m_liquifyTxnActive = false;   // a bracketed drag session is open
+    // 本次手势的预览源目标(m_liquifyTargets 下标): 第一个**可见**的目标图层;
+    // -1 = 全部目标都不可见 ⇒ 不生成任何预览(源裁剪元信息上报 0, 覆盖层据此清空)。
+    // 只在 liquifyBegin 里算一次: 手势期间可见性不会变(层面板在手势中不可用)。
+    int m_liquifyPreviewTarget = -1;
     // The grid worker runs over a LOCAL rect (brush neighbourhood):
     // run() copies the whole bounds complement, so a full-canvas worker
     // cost a full-canvas copy per dab. Rebased when the brush wanders out.
@@ -947,6 +991,12 @@ private:
     qint64 m_liquifyLastApplyMs = 0;
     // Union of dab influence rects not yet written back to the layer
     QRect m_liquifyPendingDelta;
+    // Phase 6: 分帧物化队列(每项 = 一个 64 行的行带, 见 liquifyMaterializeTick)。
+    // 拖动期由覆盖层预览盖住, 分批落盘对用户不可见; 抬笔/超限时强制清空。
+    QVector<QRect> m_liquifyMatQueue;
+    // Phase 7: 队列去重键(=(y<<32)|x)。同一行带重复入队会让队列随帧数线性膨胀,
+    // 收口时一次性消费就是几百 ms 的尖峰(test17: rebase 峰值 975ms)。
+    QVector<qint64> m_liquifyMatKeys;
     // Phase 5 · C3-2: 本次手势是否走"GPU 场一次性落盘"(拖动期不收 dab)。由 Kotlin 侧在
     // liquifyFieldSource 成功后置位; liquifyEnd / liquifyCancel 复位。纯状态, 不改任何几何。
     bool m_liquifyFieldMode = false;

@@ -86,14 +86,49 @@ internal object PerfHud {
     private val hudBounds = Rect()
     private var hudBoundsValid = false
 
+    // ---- 内存峰值与抬笔回读健康读数 (见 docs/LIQUIFY-STABILITY.md §6) ----
+    // 无数据线做真机高压回归时, 这是**唯一**能记录"内存峰值 / 回读超时"的通道:
+    // 堆与 native 各自记一个历史峰值, 标尺上多一行; 回读超时/放弃计数来自
+    // LiquifyGlesPreview, 验收标准要求它们在一次高压测试里保持不变。
+    private var memLine = ""
+    private var memSampleAtMs = 0L
+    private var peakJavaBytes = 0L
+    private var peakNativeBytes = 0L
+
+    /** 采样间隔: 250ms 与 PerfTrace 的文本重建同频, 不额外增加每帧开销。 */
+    private val memSampleIntervalMs = 250L
+
+    private fun memoryLine(): String {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - memSampleAtMs < memSampleIntervalMs) return memLine
+        memSampleAtMs = now
+        try {
+            val rt = Runtime.getRuntime()
+            val javaUsed = rt.totalMemory() - rt.freeMemory()
+            if (javaUsed > peakJavaBytes) peakJavaBytes = javaUsed
+            val nativeAlloc = android.os.Debug.getNativeHeapAllocatedSize()
+            if (nativeAlloc > peakNativeBytes) peakNativeBytes = nativeAlloc
+            memLine = "内存 堆${javaUsed shr 20}/${rt.maxMemory() shr 20}MB" +
+                " 峰${peakJavaBytes shr 20}" +
+                " nat${nativeAlloc shr 20}MB 峰${peakNativeBytes shr 20}" +
+                " 回读超时${LiquifyGlesPreview.commitTimeouts}" +
+                " 放弃${LiquifyGlesPreview.commitAborts}"
+        } catch (_: Throwable) {
+            // 读数失败不能影响绘制: 保留上一次文本
+        }
+        return memLine
+    }
+
     /**
      * 在画布左侧偏中(避开顶栏与底部工具条)叠加标尺。
      * 文本每 250ms 才由 PerfTrace 重建一次, 这里再按"内容变化"才 split, 避免标尺自己
      * 成为掉帧与 GC 的来源 —— 否则量出来的数据不可信。
      */
     fun draw(canvas: Canvas, view: View) {
-        val text = PerfTrace.hudText()
-        if (text.isEmpty()) return
+        val base = PerfTrace.hudText()
+        if (base.isEmpty()) return
+        // 追加一行"内存峰值 + 回读健康": 无数据线做高压回归时的唯一记录通道
+        val text = base + '\n' + memoryLine()
         val d = view.resources.displayMetrics.density
         textPaint.textSize = 11f * d
         if (text != cachedText) {

@@ -46,11 +46,30 @@ private const val MAX_VISIBLE_GRID_LINES = 6000
 /** 对称绘制最多需要的镜像分支数 (径向对称 7 个 + 主笔迹) */
 private const val MAX_MIRROR_BRANCHES = 8
 
-/** C3-2 · 场通路的文档像素预算上限(源纹理 + 场纹理各留一份, 4M px 文档 ≈ 16MB + 8MB)。 */
+/**
+ * C3-2 · 场通路的文档像素预算上限(源纹理 + 场纹理各留一份, 4M px 文档 ≈ 16MB + 8MB)。
+ *
+ * 注: 真正生效的预算由 [fieldPathBudgetPx] 动态给出 —— 它再叠加"堆上限 / 每像素 32B"的
+ * 安全约束(见 [MemoryBudget])。这里的常量只是历史硬上限, 不是最终值。
+ */
 private const val FIELD_PATH_MAX_PX = 4L * 1024L * 1024L
 
 /** C3-2 · 低内存设备的场通路预算(压到 1/4; 超预算直接走经典路径, 宁可慢也不逼近 OOM)。 */
 private const val FIELD_PATH_MAX_PX_LOW_RAM = 1L * 1024L * 1024L
+
+/**
+ * 经典路径"单帧多补点一次提交"的批缓冲步长: `(fx, fy, tx, ty, strength, mode)` ——
+ * 与 JNI `liquifyDabs` 同序(见 [`LiquifyPath.packDab`], 布局由单测守门)。
+ */
+private const val LIQUIFY_BATCH_STRIDE = LiquifyPath.DAB_STRIDE
+
+/**
+ * 引擎队列积压背压阈值: `pendingCoreOps` 超过它时, 本帧不再推进新的液化补点。
+ *
+ * 高压拖动时引擎每帧要跑多个补点 + 一次渲染; 若输入侧继续无条件推进, 任务队列会越积越长,
+ * 用户观感就是"越拖越卡、抬笔后画面还在继续变形"(无响应)。宁可追赶慢一点, 也不让队列雪崩。
+ */
+private const val LIQUIFY_ENGINE_BACKLOG_LIMIT = 8
 
 /** B4 · 静止降频: 交互结束后多久把帧率请求降回 [IDLE_FRAME_RATE_HZ]。 */
 private const val IDLE_DOWNCLOCK_MS = 1500L
@@ -275,6 +294,15 @@ class CanvasTouchView(context: Context) : View(context) {
     private var liquifyDabBuf = FloatArray(0)
     private var liquifyDabCount = 0
 
+    /**
+     * 经典路径的**批量提交**缓冲(复用, 每补点 [LIQUIFY_BATCH_STRIDE] 个 float)。
+     *
+     * 以前每个补点一次 `v.liquify()` = 一次 `runCore` post + 一次 `scheduleRender`; 大笔刷
+     * 快拖时一帧 8~16 个补点就有 8~16 个任务压进引擎队列。现在一帧只 post 一次, 由引擎线程
+     * 内循环调用 JNI(顺序与语义逐点不变), 队列长度与渲染调度次数都降到 1/8~1/16。
+     */
+    private var liquifyBatchBuf = FloatArray(LIQUIFY_BATCH_STRIDE * 64)
+
     /** 受影响文档矩形(各补点影响圆的并集): 覆盖层绘制范围 + 抬笔回读范围都用它。 */
     private var lqAffectedL = Float.MAX_VALUE
     private var lqAffectedT = Float.MAX_VALUE
@@ -286,6 +314,16 @@ class CanvasTouchView(context: Context) : View(context) {
     private val liquifySession = LiquifyInteractionSession()
     private var liquifyFlushPosted = false
     private val liquifyFlushRunnable = Runnable { flushLiquifyPending() }
+
+    // Phase 6(手感/误触): 液化手势是否进行中 —— 多指误触保护与端到端延迟推导都靠它
+    private val isLiquifyGestureActive: Boolean
+        get() = strokeStarted && effTool() == Tool.LIQUIFY
+
+    /** Phase 6: 最近一次液化输入事件的时间戳(event.eventTime, uptime 基准), 用于延迟读数。 */
+    private var lastLiquifyEventTimeMs = 0L
+
+    /** Phase 6: 本段液化手势是否有笔压输入(手写笔/橡皮端) —— 手指路径不参与压力调制。 */
+    private var liquifyPressureActive = false
     // Liquify V2 · Phase 2 (docs/LIQUIFY-V2-PLAN.md §4): 覆盖层局部失效所需的"光标环本帧位置"
     // (屏幕坐标)。环由本类 onDraw 画在同一张画布上, 因此局部重绘必须把环的前后位置一并失效,
     // 否则环的旧位置会留下残影。全部只在 UI 线程读写。
@@ -413,7 +451,9 @@ class CanvasTouchView(context: Context) : View(context) {
     private val continuousUndoRunnable = object : Runnable {
         override fun run() {
             val v = vm ?: return
-            if (maxTouchPointers == 2 && !isPinchMotion && isInteracting) {
+            // 多指误触保护: 液化手势进行中(含场通路的"零解算"阶段)第二指落下**不得**触发
+            // 连续撤销 —— 真机上这是"液化中手指一不小心碰到屏幕, 形变被连续撤销吃掉"的根源。
+            if (maxTouchPointers == 2 && !isPinchMotion && isInteracting && !isLiquifyGestureActive) {
                 isContinuousUndoing = true
                 v.undo()
                 postDelayed(this, 110L)
@@ -424,7 +464,7 @@ class CanvasTouchView(context: Context) : View(context) {
     private val continuousRedoRunnable = object : Runnable {
         override fun run() {
             val v = vm ?: return
-            if (maxTouchPointers >= 3 && !isPinchMotion && isInteracting) {
+            if (maxTouchPointers >= 3 && !isPinchMotion && isInteracting && !isLiquifyGestureActive) {
                 isContinuousUndoing = true
                 v.redo()
                 postDelayed(this, 110L)
@@ -2780,28 +2820,31 @@ class CanvasTouchView(context: Context) : View(context) {
                 liquifyFlushPosted = false
                 removeCallbacks(liquifyFlushRunnable)
                 // Phase 3A 实验开关: `setprop debug.reverie.lqcoalesce <n>` 指定每帧最多推进的
-                // 补点数(0 = 关闭)。AGSL 预览本来就"不阻塞引擎", 因此它默认按 2 步/帧跑;
-                // 引擎侧路径(无预览/CPU 预览)默认关闭, 保持既有行为, 需要时用 property 打开。
+                // 补点数(0 = 不限)。默认值见 LiquifyPath.DEFAULT_MAX_DABS_PER_FLUSH:
+                //   **旧默认 2 是 test16"小笔刷连续拖动串珠状断触"的主根因** —— 场路径每帧
+                //   最多推进 2 个补点, 快速拖动时手指远跑在形变前面, 且被丢掉的中间补点让
+                //   GPU 场上的核变稀疏。现在统一为 24 步/帧(≈1.9 万 px/s 跟随能力, 远超手速)。
                 // 应用内覆盖(debug 设置页)优先于 property —— 无数据线时靠它切换
                 val ov = PerfTrace.liquifyCoalesceOverride
                 val prop = if (ov >= 0) ov else PerfTrace.debugPropInt("debug.reverie.lqcoalesce", -1)
                 val maxDabs = when {
                     // 1) property 最高优先(无数据线时也能靠构建档位兜底)
                     prop >= 0 -> prop
-                    // 2) 构建期档位: 3 = 对照"不做调度合并", 1/2 = 默认 2 步/帧
+                    // 2) 构建期档位: 3 = 对照"不做调度合并"(全量推进), 其余走默认上限
                     BuildConfig.LQ_TEST_PROFILE == 3 -> 0
-                    BuildConfig.LQ_TEST_PROFILE == 1 || BuildConfig.LQ_TEST_PROFILE == 2 ->
-                        LiquifyPath.DEFAULT_MAX_DABS_PER_FLUSH
-                    // 3) AGSL 预览(引擎侧本来就不阻塞)默认开启; 其它路径保持逐点处理
-                    LiquifyGpuPreview.requested -> LiquifyPath.DEFAULT_MAX_DABS_PER_FLUSH
-                    else -> 0
+                    else -> LiquifyPath.DEFAULT_MAX_DABS_PER_FLUSH
                 }
                 // 交互态会话: 以落笔点为已渲染基准, 后续 MOVE 只提交"最新位置"
                 liquifySession.begin(docPos.x, docPos.y, maxDabs)
+                // Phase 6: 压力初值(笔输入才有意义; 手指路径由 updateLiquifyPressure 跳过)
+                smoothedPressure = 0.8f
+                lastLiquifyEventTimeMs = 0L
+                liquifyPressureActive = false
                 v.liquifyBegin()
                 // Phase 5 · C3-2: 能走场通路就走 —— 引擎只交一份"未形变的源像素", 拖动期零解算。
                 // 判定失败(超预算/非 8bit BGRA/覆盖层不在)自动退回下面的逐 dab 路径。
                 liquifyFieldGesture = beginLiquifyFieldGesture(v)
+                if (!liquifyFieldGesture) LiquifyGlesPreview.useGridForGesture()
                 strokeStarted = true
             }
             Tool.PICKER -> {
@@ -3142,6 +3185,10 @@ class CanvasTouchView(context: Context) : View(context) {
             }
             Tool.LIQUIFY -> {
                 if (strokeStarted) {
+                    // Phase 6(手感, 对标 CSP/SAI2 的笔压响应): 强度跟随笔压 —— 只做平滑,
+                    // 不做曲线; 手指输入固定不调制(避免触摸压力噪声让手感发抖)。
+                    updateLiquifyPressure(event, pointerIndex)
+                    lastLiquifyEventTimeMs = event.eventTime
                     if (liquifySession.coalescing) {
                         // Phase 3B: latest-state-wins —— 只留"最新位置", 中间状态(含历史点)全丢,
                         // 由下一帧统一推进。避免"一个事件里多个历史点 → 队列里堆多次 apply"。
@@ -3336,11 +3383,16 @@ class CanvasTouchView(context: Context) : View(context) {
         if (!liquifySession.prepareFlush(liquifyBrushSize, liquifyMode, forceFull)) return
         val steps = liquifySession.planSteps
         if (steps <= 0) return
-        val strength = liquifyStrength * liquifySession.planStrengthScale
+        // Phase 6(手感, 对标 CSP / SAI2 的笔压响应): 手写笔下强度跟随笔压(下限 0.55, 避免
+        // 轻压失效); 手指输入不调制。`setprop debug.reverie.lqpressure 0` 可一键关闭对照。
+        val strength =
+            liquifyStrength * liquifySession.planStrengthScale * liquifyPressureFactor()
         val stepX = liquifySession.planStepX
         val stepY = liquifySession.planStepY
         var px = liquifySession.planStartX
         var py = liquifySession.planStartY
+        // 经典路径的补点先攒进复用缓冲, 循环结束后一次提交(见 liquifyBatch 的说明)
+        var batchCount = 0
         for (i in 0 until steps) {
             val nx = px + stepX
             val ny = py + stepY
@@ -3352,20 +3404,46 @@ class CanvasTouchView(context: Context) : View(context) {
                 // 录制流必须与"逐 dab 提交"完全一致 —— 回放走的是经典路径
                 v.recordLiquifyDab(px, py, nx, ny, liquifyMode, strength)
             } else {
-                v.liquify(px, py, nx, ny, liquifyMode, strength.toDouble())
+                batchCount = appendLiquifyBatch(px, py, nx, ny, strength, batchCount)
             }
             // Phase 5 · C3: 同一个补点再推一份给 GLES 常驻位移场 (docs/LIQUIFY-C3-FIELD-PLAN.md §2.2)。
             // 这里**不新增任何 JNI** —— 参数本来就在手上; 场通路下这是唯一的消费者(引擎那边一个都不收),
             // 场未 armed(开关关/由别的路径画)时 pushDab 只是一次 volatile 读, 不进热路径。
+            // Each dab composes a bounded inverse map; a whole-segment additive kernel is not equivalent.
             LiquifyGlesPreview.pushDab(px, py, nx, ny, liquifyMode, strength, liquifyBrushSize)
             px = nx
             py = ny
+        }
+        if (batchCount > 0) {
+            // 一次 runCore + 一次 JNI 提交全部补点(native 内按序循环): 顺序与逐点路径完全一致,
+            // 但 Handler 消息、渲染调度与跨语言边界都只发生一次。
+            v.liquifyBatch(liquifyBatchBuf, batchCount)
         }
         liquifySession.advanceFlush(steps)
         // 合并倍率: 本帧覆盖的输入事件数 / 实际补点数
         PerfTrace.liquifySchedule(liquifySession.lastFlushInputs, steps)
         // backlog 指标: 滞后事件数 + 仍未提交的补点数(见 PerfTrace.liquifyFlow)
         PerfTrace.liquifyFlow(liquifySession.lag, liquifySession.backlogDabs)
+        // Phase 6(量化验收): 端到端输入延迟 —— 事件时间 → 本次提交进入引擎的滞后。
+        // 目标: 中端机高强度液化 P95 ≤ 2 帧(33ms); 峰值 > 100ms 即"被肉眼感知的掉帧"。
+        val lagMs = if (lastLiquifyEventTimeMs > 0L) {
+            (android.os.SystemClock.uptimeMillis() - lastLiquifyEventTimeMs).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        PerfTrace.liquifyLatency(lagMs, if (liquifyPressureActive) smoothedPressure else 0f)
+    }
+
+    /**
+     * Phase 6: 液化强度的手写笔压力系数(0.55..1.0)。
+     *
+     * 只对**笔**输入生效(与 CSP/SAI2 在触摸屏上的口径一致: 手指 pressure 在多数机型上是
+     * 1.0 或触摸面积噪声, 参与调制会让强度乱跳)。`setprop debug.reverie.lqpressure 0` 关闭。
+     */
+    private fun liquifyPressureFactor(): Float {
+        if (!liquifyPressureActive) return 1f
+        if (PerfTrace.debugPropInt("debug.reverie.lqpressure", 1) == 0) return 1f
+        return 0.55f + 0.45f * smoothedPressure.coerceIn(0f, 1f)
     }
 
     // ---------------- Phase 5 · C3-2: 场通路(拖动期零引擎解算 + 抬笔一次性提交) ----------------
@@ -3382,9 +3460,10 @@ class CanvasTouchView(context: Context) : View(context) {
         val dh = v.docHeight
         if (dw <= 0 || dh <= 0) return false
         // 稳定性硬预算: 源纹理 + 场纹理都是"整篇文档"级别的大块内存(CPU/GPU 各留一份),
-        // 低内存设备压到 1/4; 超预算直接回经典路径 —— 宁可慢一点, 也不能一次手势把进程推到 OOM 边缘。
-        val budget = if (isLowRamDevice()) FIELD_PATH_MAX_PX_LOW_RAM else FIELD_PATH_MAX_PX
-        if (dw.toLong() * dh.toLong() > budget) return false
+        // 这里同时叠加"堆安全预算"(堆上限 / 每像素 32B, 见 [MemoryBudget]) —— 低内存设备压到
+        // 1/4; 超预算直接回经典路径, 宁可慢一点, 也不能一次手势把进程推到 OOM 边缘。
+        val budget = fieldPathBudgetPx()
+        if (budget <= 0L || dw.toLong() * dh.toLong() > budget) return false
         if (!v.liquifyFieldSource(0, 0, dw, dh)) return false
         liquifyDabCount = 0
         lqAffectedL = Float.MAX_VALUE
@@ -3423,14 +3502,14 @@ class CanvasTouchView(context: Context) : View(context) {
         liquifyDabBuf[b + 6] = liquifyBrushSize
         liquifyDabCount++
         val r = LiquifyPath.fieldDabRadius(liquifyBrushSize)
-        lqAffectedL = minOf(lqAffectedL, px - r)
-        lqAffectedT = minOf(lqAffectedT, py - r)
-        lqAffectedR = maxOf(lqAffectedR, px + r)
-        lqAffectedB = maxOf(lqAffectedB, py + r)
+        lqAffectedL = minOf(lqAffectedL, minOf(px, nx) - r)
+        lqAffectedT = minOf(lqAffectedT, minOf(py, ny) - r)
+        lqAffectedR = maxOf(lqAffectedR, maxOf(px, nx) + r)
+        lqAffectedB = maxOf(lqAffectedB, maxOf(py, ny) + r)
         LiquifyGlesPreview.pushDrawRect(
             lqAffectedL, lqAffectedT, lqAffectedR - lqAffectedL, lqAffectedB - lqAffectedT,
         )
-        invalidateLiquifyFieldDab(px, py, r)
+        invalidateLiquifyFieldDab((px + nx) * 0.5f, (py + ny) * 0.5f, r)
     }
 
     /**
@@ -3519,8 +3598,13 @@ class CanvasTouchView(context: Context) : View(context) {
         val x1 = ceil(lqAffectedR).toInt().coerceAtMost(v.docWidth)
         val y1 = ceil(lqAffectedB).toInt().coerceAtMost(v.docHeight)
         if (x1 <= x0 || y1 <= y0) return null
-        if ((x1 - x0).toLong() * (y1 - y0).toLong() > FIELD_PATH_MAX_PX) return null
-        return intArrayOf(x0, y0, x1 - x0, y1 - y0)
+        val w = x1 - x0
+        val h = y1 - y0
+        val budget = fieldPathBudgetPx()
+        if (budget <= 0L || w.toLong() * h.toLong() > budget) return null
+        // 回读一次要三份同尺寸缓冲(Java 数组 / Direct 缓冲 / FBO 纹理) —— 再卡一道字节预算
+        if (!MemoryBudget.commitBytesWithinBudget(w, h)) return null
+        return intArrayOf(x0, y0, w, h)
     }
 
     /** C3-2: 低内存设备判定(用系统自己的分级, 而不是猜总内存)。 */
@@ -3530,6 +3614,48 @@ class CanvasTouchView(context: Context) : View(context) {
         am?.isLowRamDevice == true
     } catch (_: Throwable) {
         false
+    }
+
+    /**
+     * 场通路当前生效的文档像素预算(动态)。
+     *
+     * 取较小值: 历史硬上限(4M px) 与 [MemoryBudget] 的堆安全预算(堆上限 / 每像素 32B)。
+     * `0` = 这台设备上不可用 ⇒ 调用方一律回退经典逐 dab 路径。
+     *
+     * 为什么不能只看 `isLowRamDevice`: 它只覆盖 Android Go 级别的设备; 普通 4~6GB 手机上
+     * Java 堆上限也可能只有 192~256MB, 而此时场通路(源/场/回读各一份)照样能把进程推到 OOM。
+     */
+    private fun fieldPathBudgetPx(): Long {
+        val maxHeap = try {
+            Runtime.getRuntime().maxMemory()
+        } catch (_: Throwable) {
+            -1L
+        }
+        val lowRam = isLowRamDevice()
+        val hard = if (lowRam) FIELD_PATH_MAX_PX_LOW_RAM else FIELD_PATH_MAX_PX
+        return minOf(hard, MemoryBudget.fieldPathBudgetPx(maxHeap, lowRam)).coerceAtLeast(0L)
+    }
+
+    /**
+     * 追加一个补点到批量提交缓冲(按需扩容, 复用), 返回新的补点计数。
+     *
+     * 缓冲只增不减: 一段手势内的补点数有界(移动距离 / 笔刷半径), 不增长就意味着不会反复分配。
+     */
+    private fun appendLiquifyBatch(
+        px: Float,
+        py: Float,
+        nx: Float,
+        ny: Float,
+        strength: Float,
+        count: Int,
+    ): Int {
+        if ((count + 1) * LIQUIFY_BATCH_STRIDE > liquifyBatchBuf.size) {
+            val grown = FloatArray(maxOf(liquifyBatchBuf.size * 2, LIQUIFY_BATCH_STRIDE * 64))
+            System.arraycopy(liquifyBatchBuf, 0, grown, 0, liquifyBatchBuf.size)
+            liquifyBatchBuf = grown
+        }
+        // 打包走 model 层的纯函数(与 JNI liquifyDabs 同序), 布局由 LiquifyModeConsistencyTest 守门
+        return LiquifyPath.packDab(liquifyBatchBuf, count, px, py, nx, ny, strength, liquifyMode)
     }
 
     /**
@@ -3543,12 +3669,46 @@ class CanvasTouchView(context: Context) : View(context) {
     private fun flushLiquifyPending() {
         liquifyFlushPosted = false
         val v = vm ?: return
+        // Phase 6(稳定性 v2): 分帧物化推进 —— 每次最多消费 4ms 的落盘量, 把此前
+        // 单次 126ms 的 rebase 尖峰摊到各帧。放在背压判断**之前**: 停手后即使不再新增
+        // 补点(或引擎忙), 已积压的物化也必须继续推进, 否则会留下"半物化"的陈旧像素。
+        v.tickLiquifyMaterialize()
+        val materializePending = v.liquifyMaterializePending
+        // 引擎背压: 队列里还积压着上一次推进(阈值见 LIQUIFY_ENGINE_BACKLOG_LIMIT)时,
+        // 本帧**不再新增补点** —— 会话保留"最新位置", 下一帧继续追。
+        // 高压拖动下这是把"队列雪崩 / 抬笔后画面还在继续变形"掐掉的关键一步。
+        if (v.pendingCoreOps.get() > LIQUIFY_ENGINE_BACKLOG_LIMIT) {
+            if ((liquifySession.hasPending || materializePending) && !liquifyFlushPosted) {
+                liquifyFlushPosted = true
+                postOnAnimation(liquifyFlushRunnable)
+            }
+            return
+        }
         liquifyFlushNow(v, forceFull = false)
-        if (liquifySession.hasPending && !liquifyFlushPosted) {
-            // 还没追上最新位置: 下一帧继续朝最新位置推进
+        if ((liquifySession.hasPending || materializePending) && !liquifyFlushPosted) {
+            // 还没追上最新位置(或还有待落盘的行带): 下一帧继续推进
             liquifyFlushPosted = true
             postOnAnimation(liquifyFlushRunnable)
         }
+    }
+
+    /**
+     * Phase 6: 液化笔压平滑(指数滑动, 系数 0.35 与笔刷路径同族)。
+     *
+     * 手指/鼠标输入直接跳过 —— Android 的手指 pressure 在多数机型上是 1.0 或噪声,
+     * 参与调制只会让强度随触摸面积乱跳(这正是 SAI2/CSP 在触摸屏上的做法: 只认笔压)。
+     */
+    private fun updateLiquifyPressure(event: MotionEvent, pointerIndex: Int) {
+        val tt = event.getToolType(pointerIndex)
+        if (tt != MotionEvent.TOOL_TYPE_STYLUS && tt != MotionEvent.TOOL_TYPE_ERASER) return
+        val p = event.getPressure(pointerIndex).coerceIn(0.02f, 1f)
+        val dt = if (lastLiquifyEventTimeMs > 0L) {
+            (event.eventTime - lastLiquifyEventTimeMs).coerceIn(0L, 100L).toFloat()
+        } else 0f
+        val alpha = if (!liquifyPressureActive) 1f else 1f - kotlin.math.exp(-dt / 19.35f)
+        smoothedPressure += (p - smoothedPressure) * alpha
+        smoothedPressure = smoothedPressure.coerceIn(0.02f, 1f)
+        liquifyPressureActive = true
     }
 
     private fun handleToolUp(event: MotionEvent, docPos: Offset, isCancel: Boolean) {
@@ -3605,7 +3765,10 @@ class CanvasTouchView(context: Context) : View(context) {
                         liquifyFlushNow(v, forceFull = true)
                     }
                     liquifySession.reset()
-                    if (isCancel) {
+                    // 多指误触保护: 液化手势收到 CANCEL(典型来源 = 第二指落下被系统判成
+                    // 手势接管)时**一律走提交** —— 提交后用户还能撤销, 而取消会直接丢掉
+                    // 整段形变(真机表现为"画到一半手指碰一下, 形变没了")。
+                    if (isCancel && !isLiquifyGestureActive) {
                         liquifyFieldGesture = false
                         v.liquifyCancel()
                     } else if (liquifyFieldGesture) {

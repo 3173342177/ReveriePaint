@@ -23,6 +23,31 @@ class ImageImportTest {
     }
 
     @Test
+    fun `computeSafeSampleSize never exceeds dimension or heap budget`() {
+        val heap = 256L * 1024 * 1024
+        // 小图: 不需要降采样
+        assertEquals(1, ImageImportHelper.computeSafeSampleSize(3000, 2000, 8192, heap))
+        // 大图: 结果只会比"纯边长口径"更保守(≥), 且解码后一定落在堆预算内
+        val byDimension = ImageImportHelper.computeSampleSize(12000, 8000, 8192)
+        val safe = ImageImportHelper.computeSafeSampleSize(12000, 8000, 8192, heap)
+        assert(safe >= byDimension) { "safe=$safe dimension=$byDimension" }
+        val decodedBytes = (12000L / safe) * (8000L / safe) * 4L
+        assert(decodedBytes <= com.reverie.paint.model.MemoryBudget.decodeBudgetBytes(heap))
+        // 8000x8000 = 256MB 位图在 256MB 堆上必须比"只看边长"更激进
+        val safeBig = ImageImportHelper.computeSafeSampleSize(8000, 8000, 8192, heap)
+        assert(safeBig >= 2) { "expected downsample for big PNG, got $safeBig" }
+        val bytes = (8000L / safeBig) * (8000L / safeBig) * 4L
+        assert(bytes <= com.reverie.paint.model.MemoryBudget.decodeBudgetBytes(heap))
+    }
+
+    @Test
+    fun `computeSafeSampleSize degrades on unknown heap`() {
+        // 堆未知(-1)时只按边长上限, 不允许把结果算成 0 或负数
+        val sample = ImageImportHelper.computeSafeSampleSize(4000, 4000, 8192, -1L)
+        assertEquals(1, sample)
+    }
+
+    @Test
     fun `calculateFitPlacement keeps original size and centers if within maxRatio`() {
         val docW = 1000
         val docH = 1000

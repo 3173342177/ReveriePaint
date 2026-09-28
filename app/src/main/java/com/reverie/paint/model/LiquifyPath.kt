@@ -7,29 +7,19 @@ package com.reverie.paint.model
 import kotlin.math.ceil
 import kotlin.math.min
 
-/**
- * 液化笔迹沿路径补点的几何计算
- *
- * 引擎侧一次液化只在起点邻域按高斯衰减铺开形变, 影响半径由笔刷尺寸决定。
- * 触摸事件之间的位移一旦明显大于笔刷尺寸, 两次形变的影响范围就搭接不上,
- * 中间留下未被形变的空档 - 表现为液化笔迹的断线与断口。
- */
+/** Document-space dab geometry shared by native replay and GLES inverse-map composition. */
 object LiquifyPath {
-
-    /** 引擎侧笔刷尺寸下限 (ReverieCore::liquify 内 qMax(8.0, size)) */
     const val MIN_BRUSH_SIZE = 8f
 
-    /** 相邻补点间距占笔刷尺寸的比例, 保证影响范围充分搭接 */
-    const val STEP_RATIO = 0.3f
+    /** Limits the Jacobian change of each midpoint dab, independent of input sampling rate. */
+    const val STEP_RATIO = 0.22f
+    const val MIN_STEP = 1.2f
 
-    /** 补点间距下限, 避免极小笔刷下细分过密 */
-    const val MIN_STEP = 2f
+    /** Legacy batching hint; geometric subdivision must never enlarge dabs to fit this count. */
+    const val MAX_SUBSTEPS = 256
 
-    /** 单段最大补点数, 约束单帧内的跨 JNI 调用次数 */
-    const val MAX_SUBSTEPS = 12
-
-    /** 每帧推进的补点上限(Phase 2C latest-state-wins 实验的默认值) */
-    const val DEFAULT_MAX_DABS_PER_FLUSH = 2
+    /** Per-frame work budget; unconsumed distance remains pending. */
+    const val DEFAULT_MAX_DABS_PER_FLUSH = 24
 
     /** 推拉模式: 位移量与传入 delta 成正比, 不走幅度曲线 */
     const val MODE_PUSH = 0
@@ -61,9 +51,49 @@ object LiquifyPath {
      */
     const val FIELD_DAB_RADIUS_RATIO = 2.5f
 
+    /** Bounded advection speed: prevents a moving brush trapping source coordinates indefinitely. */
+    fun fieldStrength(mode: Int, strength: Float): Float {
+        if (!strength.isFinite()) return 0f
+        val s = strength.coerceIn(0f, 2f)
+        return if (mode == MODE_PUSH) s / (1f + s) else s
+    }
+
     /** Phase 5 · C3: 场累加 pass 的 dab 影响半径(文档像素)。 */
     fun fieldDabRadius(brushSize: Float): Float =
         brushSize.coerceAtLeast(MIN_BRUSH_SIZE) * FIELD_DAB_RADIUS_RATIO
+
+    /**
+     * 批量 dab 的步长: `(fx, fy, tx, ty, strength, mode)` —— 与 JNI `liquifyDabs` 同序。
+     *
+     * 布局是 Kotlin↔native 的隐式契约, 所以打包收敛到这里由单测守门(见
+     * [`LiquifyModeConsistencyTest`]), 而不是散在调用点手写下标。
+     */
+    const val DAB_STRIDE = 6
+
+    /**
+     * 把一个补点写进批量缓冲, 返回下一个写入位置。
+     *
+     * 调用方保证 `out.size >= (index + 1) * DAB_STRIDE`(按此扩容)。
+     */
+    fun packDab(
+        out: FloatArray,
+        index: Int,
+        fx: Float,
+        fy: Float,
+        tx: Float,
+        ty: Float,
+        strength: Float,
+        mode: Int,
+    ): Int {
+        val b = index * DAB_STRIDE
+        out[b] = fx
+        out[b + 1] = fy
+        out[b + 2] = tx
+        out[b + 3] = ty
+        out[b + 4] = strength
+        out[b + 5] = mode.toFloat()
+        return index + 1
+    }
 
     /**
      * Phase 5 · C3: 把"引擎侧一次 dab 的形变幅度"折算成一个标量增益, 供场累加 pass 使用 ——
@@ -87,9 +117,9 @@ object LiquifyPath {
 
     /** 一段位移需要拆成几个补点 */
     fun substepCount(distance: Float, brushSize: Float): Int {
-        if (distance <= 0f) return 0
+        if (!distance.isFinite() || !brushSize.isFinite() || distance <= 0f) return 0
         val step = (brushSize.coerceAtLeast(MIN_BRUSH_SIZE) * STEP_RATIO).coerceAtLeast(MIN_STEP)
-        return ceil(distance / step).toInt().coerceIn(1, MAX_SUBSTEPS)
+        return ceil(distance / step).toInt().coerceAtLeast(1)
     }
 
     /**

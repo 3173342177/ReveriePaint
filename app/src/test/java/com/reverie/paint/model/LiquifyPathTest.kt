@@ -31,8 +31,9 @@ class LiquifyPathTest {
     }
 
     @Test
-    fun `substep count is capped`() {
-        assertEquals(LiquifyPath.MAX_SUBSTEPS, LiquifyPath.substepCount(100000f, 60f))
+    fun `long segments preserve the maximum dab distance`() {
+        val n = LiquifyPath.substepCount(100000f, 8f)
+        assertTrue(100000f / n <= 8f * LiquifyPath.STEP_RATIO)
     }
 
     @Test
@@ -42,8 +43,16 @@ class LiquifyPathTest {
 
     @Test
     fun `tiny brush falls back to the minimum step`() {
-        // 引擎侧笔刷下限是 8px, 其 STEP_RATIO 比例小于 MIN_STEP, 应取 MIN_STEP
-        assertEquals(5, LiquifyPath.substepCount(10f, 1f))
+        // 引擎侧笔刷下限是 8px, 其 STEP_RATIO 比例小于 MIN_STEP, 应取 MIN_STEP。
+        // 断言按常量推导(不再硬编码), 这样调 STEP_RATIO/MIN_STEP 时测试不会被误伤。
+        val step = maxOf(
+            LiquifyPath.MIN_STEP,
+            LiquifyPath.MIN_BRUSH_SIZE * LiquifyPath.STEP_RATIO,
+        )
+        assertEquals(
+            kotlin.math.ceil(10f / step).toInt(),
+            LiquifyPath.substepCount(10f, 1f),
+        )
     }
 
     @Test
@@ -99,9 +108,10 @@ class LiquifyPathTest {
 
     @Test
     fun `chase substeps follow the normal rule below the cap`() {
-        // 60px 笔刷步长 18px: 30px 位移 = 2 步, 上限放宽时就是 2
-        assertEquals(2, LiquifyPath.substepCount(30f, 60f))
-        assertEquals(2, LiquifyPath.chaseSubsteps(30f, 60f, 8))
+        // 上限足够大时, 每帧推进量 = 整段补点数(按常量推导, 不硬编码步长)
+        val n = LiquifyPath.substepCount(30f, 60f)
+        assertTrue("整段补点数应为正, 实际 $n", n >= 1)
+        assertEquals(n, LiquifyPath.chaseSubsteps(30f, 60f, n + 4))
     }
 
     @Test

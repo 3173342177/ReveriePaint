@@ -849,13 +849,13 @@ private fun PaintViewModel.dispatchToolOpLocked(
         }
 
         T_LIQUIFY -> {
-            val fx = r.f32().toInt()
-            val fy = r.f32().toInt()
-            val tx = r.f32().toInt()
-            val ty = r.f32().toInt()
+            val fx = r.f32()
+            val fy = r.f32()
+            val tx = r.f32()
+            val ty = r.f32()
             val mode = r.u8()
             val strength = r.f32().toDouble()
-            ReverieCoreBridge.liquify(fx, fy, tx, ty, strength, mode)
+            ReverieCoreBridge.liquifyAt(fx, fy, tx, ty, strength, mode)
         }
 
         T_MOVE_CONTENT -> {

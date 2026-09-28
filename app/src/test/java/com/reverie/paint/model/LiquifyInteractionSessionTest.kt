@@ -79,7 +79,8 @@ class LiquifyInteractionSessionTest {
         val s = session(2)
         s.submitTarget(300f, 0f)
         assertTrue(s.prepareFlush(60f, LiquifyPath.MODE_PUSH, forceFull = false))
-        assertEquals(12, s.planTotalSteps) // 300/18 = 17 -> 截到 MAX_SUBSTEPS
+        // 300px / (60px × STEP_RATIO) 步 —— 按常量推导(旧断言硬编码 12 = 旧 MAX_SUBSTEPS)
+        assertEquals(LiquifyPath.substepCount(300f, 60f), s.planTotalSteps)
         assertEquals("每帧最多推进 cap 个补点", 2, s.planSteps)
         // 强度折算与步长按整段计算 —— 分帧不改变总量口径
         assertEquals(300f / s.planTotalSteps, s.planStepX, 1e-4f)
@@ -118,14 +119,16 @@ class LiquifyInteractionSessionTest {
     }
 
     @Test
-    fun `tiny movement snaps to target without a flush`() {
-        val s = session(2)
-        s.submitTarget(0.2f, 0f)
-        assertFalse("位移小于阈值时不推进", s.prepareFlush(60f, LiquifyPath.MODE_PUSH, forceFull = false))
-        assertEquals(0.2f, s.renderedX, 1e-6f)
-        assertFalse(s.hasPending)
-        assertEquals("吸附后 lag 归零", 0L, s.lag)
-        assertEquals(0L, s.flushCount)
+    fun `slow subpixel movement is never silently consumed`() {
+        val s = session(24)
+        for (i in 1..100) {
+            s.submitTarget(i * 0.02f, 0f)
+            assertTrue(s.prepareFlush(8f, LiquifyPath.MODE_PUSH, forceFull = false))
+            assertEquals(0.02f, s.planStepX, 1e-5f)
+            s.advanceFlush(s.planSteps)
+        }
+        assertEquals(2f, s.renderedX, 1e-5f)
+        assertEquals(100L, s.flushCount)
     }
 
     @Test
@@ -181,4 +184,13 @@ class LiquifyInteractionSessionTest {
         assertEquals(0, s.backlogDabs)
         assertFalse(s.prepareFlush(60f, LiquifyPath.MODE_PUSH, forceFull = false))
     }
+    @Test
+    fun `stationary input does not keep the frame pump pending`() {
+        val s = session(24)
+        s.submitTarget(0f, 0f)
+        assertFalse(s.prepareFlush(8f, LiquifyPath.MODE_PUSH, forceFull = false))
+        assertFalse(s.hasPending)
+        assertEquals(0L, s.lag)
+    }
+
 }

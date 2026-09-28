@@ -9,6 +9,7 @@ import com.reverie.paint.BuildConfig
 import com.reverie.paint.model.CanvasViewTransform
 import com.reverie.paint.model.LiquifyGridMeta
 import com.reverie.paint.model.LiquifyPath
+import com.reverie.paint.model.MemoryBudget
 import kotlin.math.hypot
 
 /**
@@ -131,6 +132,21 @@ internal object LiquifyGlesPreview {
     var dabsDropped = 0L
         private set
 
+    /**
+     * C3-2: 抬笔回读超时次数 (HUD/验收读数)。
+     *
+     * 每次超时都意味着"这一次收口走了重放补点的经典路径" —— 功能正确但会更慢, 也是
+     * "渲染线程是否被 GPU 卡住"的直接证据。真机高压回归时这个值必须保持低位。
+     */
+    @Volatile
+    var commitTimeouts = 0L
+        private set
+
+    /** C3-2: 因渲染线程已退出/失败而快速放弃的回读次数(与超时分开计数)。 */
+    @Volatile
+    var commitAborts = 0L
+        private set
+
     /** GLES 侧已确认不可用 (EGL/着色器/交换失败)。置上之后本次会话不再尝试, 由引擎 CPU 预览兜底。 */
     @Volatile
     var failed = false
@@ -232,6 +248,7 @@ internal object LiquifyGlesPreview {
     private var drawH = 0f
 
     // C3-2: 抬笔回读的 rendezvous(UI 线程请求 → 渲染线程离屏渲染 + glReadPixels → 唤醒 UI)。
+    private var commitSerial = 0
     private var commitReq: IntArray? = null
     private var commitPixels: ByteArray? = null
     private var commitDone = true
@@ -313,6 +330,7 @@ internal object LiquifyGlesPreview {
         var drawH = 0f
 
         /** C3: 源裁剪世代(snapshot)。与渲染线程自己记的场世代不一致 ⇒ 先重建/清零场。 */
+        var gestureId = 0L
         var srcGen = 0L
 
         /** C3: 本帧待累加的补点数 (0 = 无; 由 [takeDabs] 填)。 */
@@ -332,6 +350,17 @@ internal object LiquifyGlesPreview {
     // ---------------- 手势生命周期 (由 LiquifyGpuPreview 转发, 见其 decideForGesture/clear) ----------------
 
     /** 手势开始: 丢掉上一段手势的暂存, 计数归零, 并声明"本次手势由 GLES 画"。 */
+    @Volatile var gestureId = 0L
+        private set
+
+    fun useGridForGesture() {
+        synchronized(lock) {
+            fieldArmed = false
+            pendingDabCount = 0
+            bumpLocked()
+        }
+    }
+
     fun beginGesture() {
         previewUpdates = 0L
         gridUploads = 0L
@@ -345,6 +374,7 @@ internal object LiquifyGlesPreview {
         // C3: 场判定与"预览由谁画"同口径 —— 手势开始时冻结, 之后改开关只影响下一段手势
         fieldArmed = fieldEnabled
         synchronized(lock) {
+            gestureId++
             cropW = 0
             cropH = 0
             gridCols = 0
@@ -354,7 +384,11 @@ internal object LiquifyGlesPreview {
             pendingSrc = null
             pendingGrid = null
             pendingDabCount = 0
+            // 上一段手势的回读结果绝不能跨手势存活: 否则下一次 readbackCommit 可能取到
+            // 旧像素并把它写回图层(形变错位)。开始新一段时一起作废。
+            commitSerial++
             commitReq = null
+            commitPixels = null
             commitDone = true
             bumpLocked()
         }
@@ -375,7 +409,9 @@ internal object LiquifyGlesPreview {
             pendingSrc = null
             pendingGrid = null
             pendingDabCount = 0
+            commitSerial++
             commitReq = null
+            commitPixels = null
             commitDone = true
             bumpLocked()
         }
@@ -454,8 +490,9 @@ internal object LiquifyGlesPreview {
     ) {
         if (!fieldArmed) return
         if (!px.isFinite() || !py.isFinite() || !nx.isFinite() || !ny.isFinite()) return
+        if (!strength.isFinite() || !brushSize.isFinite() || strength <= 0f) return
         val distance = hypot(nx - px, ny - py)
-        val gain = strength * LiquifyPath.fieldDabGain(mode, distance, brushSize)
+        val gain = LiquifyPath.fieldStrength(mode, strength) * LiquifyPath.fieldDabGain(mode, distance, brushSize)
         val radius = LiquifyPath.fieldDabRadius(brushSize)
         synchronized(lock) {
             if (pendingDabCount >= DAB_CAPACITY) {
@@ -498,22 +535,40 @@ internal object LiquifyGlesPreview {
      * **只在抬笔时调用**(不在拖动热路径上): 阻塞等到渲染线程做完(最长 [timeoutMs] 毫秒),
      * 超时/覆盖层不在 ⇒ 返回 null, 调用方改走经典路径重放补点(绝不丢形变)。
      */
-    fun readbackCommit(x: Int, y: Int, w: Int, h: Int, timeoutMs: Long): ByteArray? {
+    fun readbackCommit(
+        x: Int, y: Int, w: Int, h: Int, timeoutMs: Long, expectedGesture: Long = gestureId,
+    ): ByteArray? {
         if (x < 0 || y < 0 || w <= 0 || h <= 0) return null
+        // 内存硬闸: 一次回读要同时存在 Java 数组 / Direct 缓冲 / FBO 纹理三份, 超大矩形直接
+        // 拒绝 —— 调用方会回退"重放补点"的流式收口(慢但绝不会把进程推到 OOM)。
+        if (!MemoryBudget.commitBytesWithinBudget(w, h)) return null
         synchronized(lock) {
-            if (!alive || failed) return null
-            commitReq = intArrayOf(x, y, w, h)
+            if (!alive || failed || !fieldArmed || dabsDropped > 0L || expectedGesture != gestureId) {
+                commitAborts++
+                return null
+            }
+            commitReq = intArrayOf(x, y, w, h, ++commitSerial)
             commitPixels = null
             commitDone = false
             requested = true
             bumpLocked()
             val deadline = System.nanoTime() + timeoutMs * 1_000_000L
+            // 分段等待: 每 40ms 醒一次检查"渲染线程是否还活着" —— 它挂掉/失败时立刻放弃,
+            // 而不是在引擎线程上干等满超时(那会把下一次手势的输入处理一起拖住)。
             while (!commitDone) {
                 val left = (deadline - System.nanoTime()) / 1_000_000L
-                if (left <= 0L) break
+                if (left <= 0L) {
+                    commitTimeouts++
+                    break
+                }
+                if (failed || !alive) {
+                    commitAborts++
+                    break
+                }
                 try {
-                    (lock as Object).wait(left)
+                    (lock as Object).wait(minOf(left, 40L))
                 } catch (_: InterruptedException) {
+                    commitAborts++
                     break
                 }
             }
@@ -526,8 +581,9 @@ internal object LiquifyGlesPreview {
     }
 
     /** 渲染线程: 取走待处理的回读请求(没有则返回 null)。 */
-    fun takeCommitRequest(): IntArray? {
+    fun takeCommitRequest(frame: Frame): IntArray? {
         synchronized(lock) {
+            if (frame.gestureId != gestureId) return null
             val r = commitReq ?: return null
             commitReq = null
             return r
@@ -535,8 +591,9 @@ internal object LiquifyGlesPreview {
     }
 
     /** 渲染线程: 回读完成(或失败)后交回结果并唤醒等待的 UI 线程。 */
-    fun completeCommit(pixels: ByteArray?) {
+    fun completeCommit(pixels: ByteArray?, serial: Int = 0) {
         synchronized(lock) {
+            if (serial != 0 && serial != commitSerial) return
             commitPixels = pixels
             commitDone = true
             (lock as Object).notifyAll()
@@ -598,6 +655,10 @@ internal object LiquifyGlesPreview {
      */
     fun takeDabs(out: Frame): Int {
         synchronized(lock) {
+            if (out.gestureId != gestureId || out.srcGen != srcGen) {
+                out.dabCount = 0
+                return 0
+            }
             val n = pendingDabCount
             if (n <= 0) {
                 out.dabCount = 0
@@ -636,12 +697,15 @@ internal object LiquifyGlesPreview {
             out.cropOriginX = cropOriginX
             out.cropOriginY = cropOriginY
             // 增量语义: 取走即清, 下一次只有真的变了才会再带数据
-            out.src = pendingSrc
-            out.grid = pendingGrid
-            pendingSrc = null
-            pendingGrid = null
+            out.src = if (out.valid) pendingSrc else null
+            out.grid = if (out.valid) pendingGrid else null
+            if (out.valid) {
+                pendingSrc = null
+                pendingGrid = null
+            }
             // C3: 补点**不在这里取** —— 渲染线程真正要累加时再调 [takeDabs](无效帧不会吞掉它们)
             out.fieldArmed = fieldArmed
+            out.gestureId = gestureId
             out.srcGen = srcGen
             out.drawX = drawX
             out.drawY = drawY

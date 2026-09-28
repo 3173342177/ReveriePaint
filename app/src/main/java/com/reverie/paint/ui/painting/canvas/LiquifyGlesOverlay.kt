@@ -20,6 +20,7 @@ import android.view.TextureView
 import com.reverie.paint.core.LiquifyGlesPreview
 import com.reverie.paint.core.PerfTrace
 import com.reverie.paint.model.LiquifyGridMeta
+import com.reverie.paint.model.MemoryBudget
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -158,6 +159,9 @@ internal class LiquifyGlesOverlay(context: Context) :
         Log.w(TAG, "liquifyGles 关闭: $reason")
         running = false
         LiquifyGlesPreview.markFailed()
+        // 关键: 此刻可能有引擎线程正阻塞在"抬笔回读"上等这一次结果 —— 必须当场唤醒它
+        // (交出 null ⇒ 调用方回退重放补点)。否则引擎线程要干等满超时才继续。
+        LiquifyGlesPreview.completeCommit(null)
         // HUD 读数: 失败原因直接上屏(没有数据线时这一格就是唯一的报错出口)
         PerfTrace.liquifyGlesState("失败 $reason")
         post { visibility = GONE }
@@ -181,54 +185,71 @@ internal class LiquifyGlesOverlay(context: Context) :
         LiquifyGlesPreview.requestRender()
         var frames = 0
         var lastLog = SystemClock.elapsedRealtime()
-        while (running) {
-            val now = SystemClock.elapsedRealtime()
-            if (now - lastLog >= 1000L) {
-                Log.i(
-                    TAG,
-                    "liquifyGles ${frames}fx/s 出帧${LiquifyGlesPreview.renderedFrames}" +
-                        " 源上传${LiquifyGlesPreview.sourceUploadCount}" +
-                        " 网格上传${LiquifyGlesPreview.gridUploads}" +
-                        " 暂存${LiquifyGlesPreview.previewUpdates}" +
-                        " 纹理${LiquifyGlesPreview.textureWidth}x${LiquifyGlesPreview.textureHeight}" +
-                        " vp=${egl.viewportW}x${egl.viewportH}",
-                )
-                frames = 0
-                lastLog = now
+        // 稳定性铁律: 渲染线程**不允许**有任何未捕获异常逃逸 —— 线程一旦静默死亡,
+        // 屏幕上的预览会停在最后一帧(看起来就是"卡死"), 而且后续每次抬笔回读都要
+        // 在引擎线程上干等满超时。任何异常都收敛到 bailOut: 摘掉覆盖层, 让引擎接管。
+        try {
+            while (running) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastLog >= 1000L) {
+                    Log.i(
+                        TAG,
+                        "liquifyGles ${frames}fx/s 出帧${LiquifyGlesPreview.renderedFrames}" +
+                            " 源上传${LiquifyGlesPreview.sourceUploadCount}" +
+                            " 网格上传${LiquifyGlesPreview.gridUploads}" +
+                            " 暂存${LiquifyGlesPreview.previewUpdates}" +
+                            " 纹理${LiquifyGlesPreview.textureWidth}x${LiquifyGlesPreview.textureHeight}" +
+                            " vp=${egl.viewportW}x${egl.viewportH}",
+                    )
+                    frames = 0
+                    lastLog = now
+                }
+                // 没有新状态就一直阻塞(不空烧 GPU), 最长 WAIT_MS 毫秒好让上面的日志有节奏
+                if (!LiquifyGlesPreview.awaitFrame(frame, WAIT_MS)) continue
+                if (!running) break
+                if (!egl.makeCurrent()) {
+                    bailOut("eglMakeCurrent 失败")
+                    break
+                }
+                try {
+                    GLES20.glViewport(0, 0, egl.viewportW, egl.viewportH)
+                    // 全透明清屏: 未绘制处必须让画布透过来
+                    GLES20.glClearColor(0f, 0f, 0f, 0f)
+                    GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+                    if (frame.valid) {
+                        renderer.render(frame, egl.viewportW, egl.viewportH)
+                    } else {
+                        // 手势结束/取消: 场与计数一起作废, 免得下一段手势接着上一段的世代继续累加
+                        renderer.onFrameIdle()
+                    }
+                    // C3-2: 抬笔回读(C3-2 的"一次性提交")—— 必须排在 render 之后: 本帧的补点刚
+                    // 累加进场, 离屏渲染出来的才是"用户最后看到的那份形变"。
+                    val commitReq = LiquifyGlesPreview.takeCommitRequest(frame)
+                    if (commitReq != null) {
+                        val pixels = if (frame.valid) renderer.commitPixels(frame, commitReq) else null
+                        LiquifyGlesPreview.completeCommit(pixels, commitReq[4])
+                    }
+                } catch (t: Throwable) {
+                    // 单帧异常(驱动抛错 / 大缓冲分配失败 / 尺寸不一致)只结束这条路径,
+                    // 绝不让它逃出去杀掉整条渲染线程。
+                    bailOut("渲染帧异常: ${t.javaClass.simpleName}")
+                    break
+                }
+                if (!egl.swapBuffers()) {
+                    bailOut("swapBuffers 失败")
+                    break
+                }
+                frames++
+                LiquifyGlesPreview.noteFrameRendered()
             }
-            // 没有新状态就一直阻塞(不空烧 GPU), 最长 WAIT_MS 毫秒好让上面的日志有节奏
-            if (!LiquifyGlesPreview.awaitFrame(frame, WAIT_MS)) continue
-            if (!running) break
-            if (!egl.makeCurrent()) {
-                bailOut("eglMakeCurrent 失败")
-                break
-            }
-            GLES20.glViewport(0, 0, egl.viewportW, egl.viewportH)
-            // 全透明清屏: 未绘制处必须让画布透过来
-            GLES20.glClearColor(0f, 0f, 0f, 0f)
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
-            if (frame.valid) {
-                renderer.render(frame, egl.viewportW, egl.viewportH)
-            } else {
-                // 手势结束/取消: 场与计数一起作废, 免得下一段手势接着上一段的世代继续累加
-                renderer.onFrameIdle()
-            }
-            // C3-2: 抬笔回读(C3-2 的"一次性提交")—— 必须排在 render 之后: 本帧的补点刚累加进场,
-            // 离屏渲染出来的才是"用户最后看到的那份形变"。
-            val commitReq = LiquifyGlesPreview.takeCommitRequest()
-            if (commitReq != null) {
-                val pixels = if (frame.valid) renderer.commitPixels(frame, commitReq) else null
-                LiquifyGlesPreview.completeCommit(pixels)
-            }
-            if (!egl.swapBuffers()) {
-                bailOut("swapBuffers 失败")
-                break
-            }
-            frames++
-            LiquifyGlesPreview.noteFrameRendered()
+        } catch (t: Throwable) {
+            bailOut("渲染线程异常: ${t.javaClass.simpleName}")
+        } finally {
+            // 退出路径统一收口: 唤醒可能仍在等待回读的引擎线程(给 null ⇒ 走重放补点)
+            LiquifyGlesPreview.completeCommit(null)
+            if (egl.makeCurrent()) renderer.release()
+            egl.release()
         }
-        if (egl.makeCurrent()) renderer.release()
-        egl.release()
     }
 
     // ---------------- GL 资源与绘制 ----------------
@@ -280,6 +301,11 @@ internal class LiquifyGlesOverlay(context: Context) :
         private var dabURadius = -1
         private var dabUGain = -1
         private var dabUMode = -1
+        private var dabUOldField = -1
+        private var dabUOutputOffset = -1
+        private var fieldScratchTex = 0
+        private var fieldScratchW = 0
+        private var fieldScratchH = 0
 
         /** 场纹理与它的 FBO (单张 + 加性混合, 见 [accumulateDabs])。 */
         private var fieldTex = 0
@@ -314,6 +340,15 @@ internal class LiquifyGlesOverlay(context: Context) :
         private var commitW = 0
         private var commitH = 0
         private var commitBuf: ByteBuffer? = null
+
+        /**
+         * 回读结果的 **Java 侧**复用数组。
+         *
+         * 旧实现每次抬笔都 `ByteArray(w * h * 4)` —— 4M px 文档就是 16MB 的突发分配,
+         * 连续高压测试(每几秒一段手势)下会造成明显的 GC 抖动与峰值。这里复用到尺寸变化为止;
+         * 返回值只在同一段收口里被 JNI 同步读走(见 `liquifyFieldEndFromOverlay`), 不存在跨段持有。
+         */
+        private var commitJavaBuf: ByteArray? = null
 
         private var quad: FloatBuffer? = null
 
@@ -411,6 +446,10 @@ internal class LiquifyGlesOverlay(context: Context) :
                 GLES20.glDeleteTextures(1, intArrayOf(gridTex), 0)
                 gridTex = 0
             }
+            if (fieldScratchTex != 0) {
+                GLES20.glDeleteTextures(1, intArrayOf(fieldScratchTex), 0)
+                fieldScratchTex = 0
+            }
             if (fieldTex != 0) {
                 GLES20.glDeleteTextures(1, intArrayOf(fieldTex), 0)
                 fieldTex = 0
@@ -428,6 +467,7 @@ internal class LiquifyGlesOverlay(context: Context) :
                 commitFbo = 0
             }
             commitBuf = null
+            commitJavaBuf = null
             commitW = 0
             commitH = 0
             fieldReady = false
@@ -534,7 +574,7 @@ internal class LiquifyGlesOverlay(context: Context) :
             val h = req[3]
             if (w <= 0 || h <= 0) return null
             if (program == 0 || srcTex == 0 || srcTexW <= 0 || srcTexH <= 0) return null
-            if (fieldTex == 0 || !fieldReady) return null
+            if (fieldTex == 0 || !fieldReady || fieldUnavailable || fieldGen != f.srcGen) return null
             if (!ensureCommitTarget(w, h)) return null
 
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, commitFbo)
@@ -585,9 +625,15 @@ internal class LiquifyGlesOverlay(context: Context) :
                 }
                 buf.clear()
                 GLES20.glReadPixels(0, 0, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buf)
-                val bytes = ByteArray(need)
+                // Java 侧数组复用(见 commitJavaBuf 注释): 只在尺寸变化时重建, 消除每段手势
+                // 一次 16MB 级突发分配。返回的数组长度可能略大于 need, 引擎侧按 (w, h) 读取。
+                var bytes = commitJavaBuf
+                if (bytes == null || bytes.size < need) {
+                    bytes = ByteArray(need)
+                    commitJavaBuf = bytes
+                }
                 buf.position(0)
-                buf.get(bytes)
+                buf.get(bytes, 0, need)
                 out = bytes
             }
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
@@ -597,6 +643,9 @@ internal class LiquifyGlesOverlay(context: Context) :
 
         /** 建/复用 bbox 大小的离屏 RGBA8 目标(抬笔一次; 尺寸随受影响范围变化)。 */
         private fun ensureCommitTarget(w: Int, h: Int): Boolean {
+            // 预算硬闸: 这块离屏纹理一次要 w*h*4 字节(4M px = 16MB), 超预算直接拒绝回读 ——
+            // 调用方会退回"重放补点"的流式收口(慢但不会把 GPU / Java 堆推到 OOM)。
+            if (!MemoryBudget.commitBytesWithinBudget(w, h)) return false
             if (commitTex != 0 && commitFbo != 0 && commitW == w && commitH == h) return true
             if (commitTex == 0) {
                 val t = IntArray(1)
@@ -739,6 +788,9 @@ internal class LiquifyGlesOverlay(context: Context) :
             dabURadius = GLES20.glGetUniformLocation(p, "uDabRadius")
             dabUGain = GLES20.glGetUniformLocation(p, "uDabGain")
             dabUMode = GLES20.glGetUniformLocation(p, "uDabMode")
+            dabUOldField = GLES20.glGetUniformLocation(p, "uOldField")
+            dabUOutputOffset = GLES20.glGetUniformLocation(p, "uOutputOffset")
+            fieldScratchTex = createTexture()
             if (dabAPos < 0) {
                 giveUpField("dab aPos 缺失")
                 return
@@ -856,68 +908,79 @@ internal class LiquifyGlesOverlay(context: Context) :
         private fun clearField() {
             if (fieldFbo == 0 || fieldW <= 0 || fieldH <= 0) return
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fieldFbo)
+            GLES30.glFramebufferTexture2D(
+                GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES20.GL_TEXTURE_2D, fieldTex, 0,
+            )
             GLES20.glViewport(0, 0, fieldW, fieldH)
             GLES20.glClearColor(0f, 0f, 0f, 0f)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
         }
 
-        /**
-         * 把本帧的补点逐个累加进场: 每个 dab 一次**局部** draw (视口 = 它的影响半径包围盒),
-         * 不重建整场、不做网格量化 —— 场本身就已经是全分辨率的浮点数据。
-         *
-         * 混合用 `GL_ONE / GL_ONE` 纯加性 ⇒ 着色器只输出**增量**, 于是不需要读旧场, 也就不存在
-         * "同一张纹理既当采样源又当渲染目标"的反馈环(见类注释 C3 段的说明)。
+        /** Compose backward maps in a local scratch FBO, then copy only that rectangle back.
+         * Source and target textures are distinct; no framebuffer feedback and no whole-field copy.
          */
         private fun accumulateDabs(f: LiquifyGlesPreview.Frame) {
-            val count = f.dabCount
-            if (dabProgram == 0 || fieldFbo == 0 || count <= 0) return
-            val dabs = f.dabs
+            if (dabProgram == 0 || fieldFbo == 0 || f.dabCount <= 0) return
+            val q = quad ?: return
             val res = fieldRes.toFloat()
-            val originX = f.cropOriginX
-            val originY = f.cropOriginY
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fieldFbo)
-            // 防御性解绑: 上一帧的呈现 pass 把场纹理留在了 TEX_UNIT_FIELD 上。dab 程序没有任何
-            // sampler(它不采样旧场), 规范上并不构成反馈环, 但保守驱动会因此报错 —— 解绑零成本。
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + TEX_UNIT_FIELD)
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
             GLES20.glUseProgram(dabProgram)
-            GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE)
-            GLES20.glUniform2f(dabUFieldOrigin, originX, originY)
+            GLES20.glDisable(GLES20.GL_BLEND)
+            GLES20.glUniform1i(dabUOldField, TEX_UNIT_FIELD)
+            GLES20.glUniform2f(dabUFieldOrigin, f.cropOriginX, f.cropOriginY)
             GLES20.glUniform2f(dabUFieldStep, res, res)
             GLES20.glUniform2f(dabUFieldTexSize, fieldW.toFloat(), fieldH.toFloat())
-            GLES20.glUniform4f(dabURect, fullRect[0], fullRect[1], fullRect[2], fullRect[3])
-            val q = quad
+            GLES20.glUniform4f(dabURect, -1f, -1f, 1f, 1f)
+            GLES20.glEnableVertexAttribArray(dabAPos)
+            q.position(0)
+            GLES20.glVertexAttribPointer(dabAPos, 2, GLES20.GL_FLOAT, false, 0, q)
             var drawn = 0
-            if (q != null) {
-                GLES20.glEnableVertexAttribArray(dabAPos)
-                q.position(0)
-                GLES20.glVertexAttribPointer(dabAPos, 2, GLES20.GL_FLOAT, false, 0, q)
-                var i = 0
-                while (i < count) {
-                    val b = i * LiquifyGlesPreview.DAB_STRIDE
-                    i++
-                    val cx = dabs[b]
-                    val cy = dabs[b + 1]
-                    val radius = dabs[b + 6]
-                    val x0 = ((cx - radius - originX) / res).toInt().coerceIn(0, fieldW)
-                    val y0 = ((cy - radius - originY) / res).toInt().coerceIn(0, fieldH)
-                    val x1 = (((cx + radius - originX) / res).toInt() + 1).coerceIn(0, fieldW)
-                    val y1 = (((cy + radius - originY) / res).toInt() + 1).coerceIn(0, fieldH)
-                    if (x1 <= x0 || y1 <= y0) continue
-                    GLES20.glViewport(x0, y0, x1 - x0, y1 - y0)
-                    GLES20.glUniform2f(dabUCenter, cx, cy)
-                    GLES20.glUniform2f(dabUDelta, dabs[b + 2] - cx, dabs[b + 3] - cy)
-                    GLES20.glUniform1f(dabURadius, radius)
-                    GLES20.glUniform1f(dabUGain, dabs[b + 5])
-                    GLES20.glUniform1i(dabUMode, dabs[b + 4].toInt())
-                    GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
-                    drawn++
+            for (i in 0 until f.dabCount) {
+                val b = i * LiquifyGlesPreview.DAB_STRIDE
+                val cx = (f.dabs[b] + f.dabs[b + 2]) * 0.5f
+                val cy = (f.dabs[b + 1] + f.dabs[b + 3]) * 0.5f
+                val radius = f.dabs[b + 6]
+                val x0 = kotlin.math.floor((cx - radius - f.cropOriginX) / res).toInt().coerceIn(0, fieldW)
+                val y0 = kotlin.math.floor((cy - radius - f.cropOriginY) / res).toInt().coerceIn(0, fieldH)
+                val x1 = kotlin.math.ceil((cx + radius - f.cropOriginX) / res).toInt().coerceIn(0, fieldW)
+                val y1 = kotlin.math.ceil((cy + radius - f.cropOriginY) / res).toInt().coerceIn(0, fieldH)
+                val w = x1 - x0
+                val h = y1 - y0
+                if (w <= 0 || h <= 0) continue
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + TEX_UNIT_FIELD)
+                if (w > fieldScratchW || h > fieldScratchH) {
+                    fieldScratchW = maxOf(w, fieldScratchW)
+                    fieldScratchH = maxOf(h, fieldScratchH)
+                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, fieldScratchTex)
+                    GLES30.glTexImage2D(
+                        GLES20.GL_TEXTURE_2D, 0, GLES30.GL_RGBA16F, fieldScratchW, fieldScratchH, 0,
+                        GLES20.GL_RGBA, GLES30.GL_HALF_FLOAT, null,
+                    )
                 }
-                GLES20.glDisableVertexAttribArray(dabAPos)
+                GLES30.glFramebufferTexture2D(
+                    GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0,
+                    GLES20.GL_TEXTURE_2D, fieldScratchTex, 0,
+                )
+                if (GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER) != GLES30.GL_FRAMEBUFFER_COMPLETE) {
+                    giveUpField("scratch FBO incomplete")
+                    break
+                }
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, fieldTex)
+                GLES20.glViewport(0, 0, w, h)
+                GLES20.glUniform2f(dabUOutputOffset, x0.toFloat(), y0.toFloat())
+                GLES20.glUniform2f(dabUCenter, cx, cy)
+                GLES20.glUniform2f(dabUDelta, f.dabs[b + 2] - f.dabs[b], f.dabs[b + 3] - f.dabs[b + 1])
+                GLES20.glUniform1f(dabURadius, radius)
+                GLES20.glUniform1f(dabUGain, f.dabs[b + 5])
+                GLES20.glUniform1i(dabUMode, f.dabs[b + 4].toInt())
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+                GLES20.glCopyTexSubImage2D(GLES20.GL_TEXTURE_2D, 0, x0, y0, 0, 0, w, h)
+                drawn++
             }
+            GLES20.glDisableVertexAttribArray(dabAPos)
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
-            // 呈现 pass 恢复预乘 source-over(类注释第 3 条)
+            GLES20.glEnable(GLES20.GL_BLEND)
             GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
             fieldDabsInGesture += drawn
         }
@@ -1112,9 +1175,9 @@ internal class LiquifyGlesOverlay(context: Context) :
          */
         val FS = """
             precision highp float;
-            uniform sampler2D uSrc;
-            uniform sampler2D uGrid;
-            uniform sampler2D uField;
+            uniform highp sampler2D uSrc;
+            uniform highp sampler2D uGrid;
+            uniform highp sampler2D uField;
             uniform float uUseField;
             uniform vec2 uViewSize;
             uniform vec2 uOrigin;
@@ -1154,7 +1217,8 @@ internal class LiquifyGlesOverlay(context: Context) :
                         gl_FragColor = vec4(0.0);
                         return;
                     }
-                    off = texture2D(uField, fp).rg;
+                    vec4 fieldParts = texture2D(uField, fp);
+                    off = fieldParts.rg + fieldParts.ba;
                 } else {
                     vec2 g = (doc - uGridOrigin) / uGridStep;
                     vec2 gMax = uGridSize - 1.0;
@@ -1168,57 +1232,54 @@ internal class LiquifyGlesOverlay(context: Context) :
             }
         """.trimIndent()
 
-        /**
-         * C3 · dab 累加片元: 往常驻场里**加**一个补点的位移增量。
-         *
-         * 前置条件(由提交侧保证, 见 [LiquifyGlesPreview.pushDab]):
-         *  - 视口已经就设成该 dab 的影响半径包围盒 ⇒ 全视口 quad + `discard` 就是"局部累加";
-         *  - 混合是 `GL_ONE / GL_ONE`, 所以这里只输出**增量**, 旧值由混合自己加上去 ——
-         *    于是着色器无需读旧场, 单张纹理既当渲染目标又不构成反馈环。
-         *
-         * 核函数与网格路径同族(`docs/LIQUIFY-C3-FIELD-PLAN.md` §4), 衰减统一用
-         * `t = 1 - smoothstep(0, 1, r / radius)`; 幅度系数与曲线在 Kotlin 侧已折进 `uDabGain`
-         * (见 `LiquifyPath.fieldDabGain`), 因此"同一笔该有多大形变"与引擎口径一致。
+        /** Dnew(p) = delta(p) + Dold(p - delta(p)), using the same midpoint kernel as native.
+         * RG stores half-float high parts, BA their residuals: slow subpixel moves must not
+         * disappear once accumulated displacement exceeds the half-float mantissa range.
          */
         val DAB_FS = """
             precision highp float;
+            uniform highp sampler2D uOldField;
             uniform vec2 uFieldOrigin;
             uniform vec2 uFieldStep;
             uniform vec2 uFieldTexSize;
+            uniform vec2 uOutputOffset;
             uniform vec2 uDabCenter;
             uniform vec2 uDabDelta;
             uniform float uDabRadius;
             uniform float uDabGain;
             uniform int uDabMode;
 
+            vec2 decodeField(vec2 index) {
+                index = clamp(index, vec2(0.0), uFieldTexSize - 1.0);
+                vec4 parts = texture2D(uOldField, (index + 0.5) / uFieldTexSize);
+                return parts.rg + parts.ba;
+            }
+            vec2 sampleField(vec2 doc) {
+                vec2 grid = (doc - uFieldOrigin) / uFieldStep - 0.5;
+                vec2 base = floor(grid), f = fract(grid);
+                vec2 a = mix(decodeField(base), decodeField(base + vec2(1.0, 0.0)), f.x);
+                vec2 b = mix(decodeField(base + vec2(0.0, 1.0)), decodeField(base + vec2(1.0)), f.x);
+                return mix(a, b, f.y);
+            }
             void main() {
-                // 场纹素 -> 文档坐标(与写入侧同一约定: 场 v=0 与源纹理 v=0 都是文档 top)
-                vec2 doc = uFieldOrigin + gl_FragCoord.xy * uFieldStep;
+                vec2 doc = uFieldOrigin + (gl_FragCoord.xy + uOutputOffset) * uFieldStep;
                 vec2 d = doc - uDabCenter;
-                float r = length(d);
-                float rad = max(uDabRadius, 0.5);
-                if (r >= rad) discard;
-                float t = 1.0 - smoothstep(0.0, 1.0, r / rad);
-                if (t <= 0.0) discard;
-                vec2 dir = normalize(d + vec2(1e-5, 1e-5));
-                vec2 delta;
-                if (uDabMode == 1) {
-                    // 膨胀: 远离笔心(引擎 scalePoints 的正向), 位移随距离线性增长
-                    delta = dir * (r * uDabGain * t);
-                } else if (uDabMode == 2) {
-                    // 收缩: 靠近笔心
-                    delta = -dir * (r * uDabGain * t);
+                float r = length(d) / max(uDabRadius, 0.5);
+                float t = 1.0 - smoothstep(0.0, 1.0, r);
+                vec2 delta = uDabDelta * (uDabGain * t);
+                if (uDabMode == 1 || uDabMode == 2) {
+                    float scale = exp((uDabMode == 1 ? -1.0 : 1.0) * uDabGain * t);
+                    delta = d * (1.0 - scale);
                 } else if (uDabMode == 3 || uDabMode == 4) {
-                    // 旋转: 文档坐标 y 向下, 正角在屏幕上看是顺时针(与工具栏图标一致)
-                    float ang = (uDabMode == 3 ? 1.0 : -1.0) * uDabGain * t;
-                    float c = cos(ang);
-                    float s = sin(ang);
-                    delta = vec2(d.x * c - d.y * s, d.x * s + d.y * c) - d;
-                } else {
-                    // 推拉: 位移方向与幅度 = 本 dab 的拖动向量
-                    delta = uDabDelta * (uDabGain * t);
+                    float angle = (uDabMode == 3 ? -1.0 : 1.0) * uDabGain * t;
+                    float c = cos(angle), s = sin(angle);
+                    delta = d - vec2(d.x * c - d.y * s, d.x * s + d.y * c);
                 }
-                gl_FragColor = vec4(delta, 0.0, 0.0);
+                float retain = uDabMode == 0 ? 1.0 / (1.0 + 2.0 * length(delta) / uDabRadius) : 1.0;
+                vec2 value = delta + sampleField(doc - delta) * retain;
+                vec2 quantum = exp2(max(vec2(-14.0), floor(log2(max(abs(value), vec2(1e-20))))) - 10.0);
+                vec2 hi = floor(value / quantum + 0.5) * quantum;
+                gl_FragColor = vec4(hi, value - hi);
             }
         """.trimIndent()
 

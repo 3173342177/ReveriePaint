@@ -257,6 +257,16 @@ class PaintViewModel : ViewModel() {
      */
     var liquifyCoalesceSteps by mutableIntStateOf(-1)
 
+    /**
+     * Phase 6(稳定性 v2): 分帧物化是否仍有积压(引擎线程写, UI 线程读)。
+     *
+     * 真机 HUD 证据: 单次 `liquify()` 调用峰值 128.7ms(其中 rebase 同步物化 126ms) ——
+     * 引擎现在把整块物化拆成 64 行行带按预算消费, UI 侧靠这个标志决定"是否继续按帧推进"
+     * (见 `CanvasTouchView.flushLiquifyPending`)。队列空时恒 false, 不产生额外调度。
+     */
+    @Volatile
+    internal var liquifyMaterializePending: Boolean = false
+
     fun updateLiquifyCoalesceSteps(steps: Int) {
         liquifyCoalesceSteps = steps
         PerfTrace.liquifyCoalesceOverride = steps
@@ -401,6 +411,8 @@ class PaintViewModel : ViewModel() {
         val crop = ReverieCoreBridge.liquifyPreviewSourceMeta() ?: return
         if (crop.size < 7) return
         if (crop[0] <= 0) {
+            // Field source is prepared asynchronously after begin; do not cancel it mid-flight.
+            if (LiquifyGlesPreview.fieldArmed) return
             // 没有源裁剪(超出面积预算 / 非 8bit BGRA / 手势结束): 摘掉覆盖层, 由引擎侧
             // CPU 预览兜底 —— 不能两边都不画
             LiquifyGpuPreview.clear()

@@ -326,6 +326,12 @@ object PerfTrace {
     private var lqFlowLag = 0L
     private var lqFlowBacklog = 0
     private var lqFlowBacklogMax = 0
+    // Phase 6(手感量化): 液化端到端输入延迟 —— 事件时间(eventTime, uptime 基准)到本次
+    // 提交进入引擎队列的滞后(ms)。这是"跟手程度"的直接读数: PS/CSP 的液化手感优势
+    // 基本都在这一项上(含触摸事件到达 UI 线程的等待 + coalescing 的一帧 + JNI 入队)。
+    private var lqLatencyMs = 0L
+    private var lqLatencyMaxMs = 0L
+    private var lqPressure = 0f
     private var lqUploadCount = 0L
     // 实验 A: 预览源纹理(代理)尺寸与占用, 用于 Proxy Resolution 对照。
     private var lqProxyW = 0
@@ -390,6 +396,20 @@ object PerfTrace {
         lqFlowLag = lag
         lqFlowBacklog = backlogDabs
         if (backlogDabs > lqFlowBacklogMax) lqFlowBacklogMax = backlogDabs
+    }
+
+    /**
+     * Phase 6: 记录一次液化补点提交的**端到端输入延迟**(gauge)与当次生效的笔压。
+     *
+     * [lagMs] = 输入事件时间 → 本次提交进入引擎的滞后。作为量化验收指标:
+     * 中端机高强度液化下 P95 目标 ≤ 2 帧(33ms), 峰值不应超过 100ms(超过就是掉帧被感知)。
+     */
+    @Synchronized
+    fun liquifyLatency(lagMs: Long, pressure: Float) {
+        if (!enabled) return
+        lqLatencyMs = lagMs
+        if (lagMs > lqLatencyMaxMs) lqLatencyMaxMs = lagMs
+        lqPressure = pressure
     }
 
     /**
@@ -827,6 +847,8 @@ object PerfTrace {
                 .append("/源上传").append(lqUploadCount)
                 .append(" 滞后").append(lqFlowBacklog).append("峰").append(lqFlowBacklogMax)
                 .append(" lag").append(lqFlowLag)
+                .append(" 延迟").append(lqLatencyMs).append("ms峰").append(lqLatencyMaxMs)
+                .append(" 压").append("%.2f".format(lqPressure))
                 .append(" 代理").append(lqProxyW).append('x').append(lqProxyH)
         }
 

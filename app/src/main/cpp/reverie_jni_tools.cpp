@@ -232,6 +232,33 @@ Java_com_reverie_paint_core_ReverieCoreBridge_liquify(JNIEnv *, jobject, jint fx
 }
 
 JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_liquifyAt(
+    JNIEnv *, jobject, jfloat fx, jfloat fy, jfloat tx, jfloat ty, jdouble strength, jint mode)
+{
+    core()->liquifyAt(fx, fy, tx, ty, strength, mode);
+}
+
+// Phase 7(性能, test17 回归): **批量 dab 提交** —— 一次 JNI 调用提交整帧的补点。
+//
+// 旧路径每个补点一次 JNI(解冻后一帧最多 24 次), 跨语言边界的固定开销 + 每次调用都要
+// 重新进入引擎的节流/预览判定, 快速长距离拖动时叠加成可见的帧时间抖动。
+// 这里把"引擎线程内循环"搬进 native: Kotlin 只付一次边界成本。
+//
+// 布局: 每补点 6 个 float —— (fx, fy, tx, ty, strength, mode), 与 `liquify()` 参数同序。
+JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_liquifyDabs(JNIEnv *env, jobject, jfloatArray params,
+                                                          jint count)
+{
+    if (params == nullptr || count <= 0) return;
+    const int stride = 6;
+    if (count > env->GetArrayLength(params) / stride) return;
+    jfloat *p = env->GetFloatArrayElements(params, nullptr);
+    if (p == nullptr) return;
+    core()->liquifyDabs(p, count);
+    env->ReleaseFloatArrayElements(params, p, JNI_ABORT);
+}
+
+JNIEXPORT void JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_liquifyBegin(JNIEnv *env, jobject, jintArray layers)
 {
     // Signature must match the Kotlin declaration exactly: JNI resolves by
@@ -279,19 +306,30 @@ Java_com_reverie_paint_core_ReverieCoreBridge_liquifyFieldCommit(JNIEnv *env, jo
 {
     if (pixels == nullptr || w <= 0 || h <= 0) return JNI_FALSE;
     const qint64 need = qint64(w) * qint64(h) * 4;
-    if (qint64(env->GetArrayLength(pixels)) < need) return JNI_FALSE;
-    // 注意: `QVector<quint8> buf(int(need))` 会被当成函数声明(vexing parse), 必须用 resize 形式
-    QVector<quint8> buf;
-    buf.resize(int(need));
-    env->GetByteArrayRegion(pixels, 0, jsize(need), reinterpret_cast<jbyte *>(buf.data()));
-    core()->liquifyFieldCommit(x, y, w, h, buf, bottomUp == JNI_TRUE);
-    return JNI_TRUE;
+    if (need <= 0 || qint64(env->GetArrayLength(pixels)) < need) return JNI_FALSE;
+    // Krita writeback may lock tiles and composite layers. It must not run in
+    // a JNI critical section (which would stall GC while waiting on those locks).
+    jbyte *elems = env->GetByteArrayElements(pixels, nullptr);
+    if (elems == nullptr) return JNI_FALSE;
+    const bool committed = core()->liquifyFieldCommitPtr(
+        x, y, w, h, reinterpret_cast<const quint8 *>(elems), bottomUp == JNI_TRUE);
+    env->ReleaseByteArrayElements(pixels, elems, JNI_ABORT);
+    return committed ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jboolean JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_liquifyFieldMode(JNIEnv *, jobject)
 {
     return core()->liquifyFieldMode() ? JNI_TRUE : JNI_FALSE;
+}
+
+// Phase 6(稳定性 v2): 分帧物化推进 —— Kotlin 侧在拖动/渲染帧的空闲节奏里调用,
+// 每次最多消费 "debug.reverie.lqmatbudget"(默认 4ms) 的落盘量, 把 126ms 的 rebase 尖峰摊开。
+// 队列空时是一次空 QVector 检查, 开销可忽略。
+JNIEXPORT jboolean JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_liquifyMaterializeTick(JNIEnv *, jobject)
+{
+    return core()->liquifyMaterializeTick() ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jlongArray JNICALL

@@ -206,6 +206,14 @@ internal object LiquifyGpuPreview {
 
     /** [`LiquifyGridMeta.of`] 的输出缓冲 (只在引擎线程用, 免得每个 dab 分配一次)。 */
     private val gridMeta = FloatArray(LiquifyGridMeta.FIELD_COUNT)
+
+    /**
+     * 位移网格的半精度上传缓冲(**复用**)。
+     *
+     * 旧实现每个 dab 都 `ShortArray(count * 4)` —— 大画布(网格点 1.6 万+)下每帧几十万
+     * 字节的短期垃圾, 高帧率拖动时正是 GC 抖动源。这里按需增长、只增不减。
+     */
+    private var gridShorts: ShortArray? = null
     private var cropOriginX = 0f
     private var cropOriginY = 0f
     // 实验 A: 源纹理代理比例(1.0 = 全分辨率)。下面三个只读量供 HUD 对照。
@@ -333,6 +341,12 @@ internal object LiquifyGpuPreview {
         synchronized(lock) {
             gridShader = null
             gridBitmap = null
+            // 手势结束后不再需要整块源裁剪位图(4M px ≈ 16MB native)与网格位图 —— 立刻释放,
+            // 而不是留到下一段手势/fail()。AGSL 与 GLES 两条路互斥, 释放能显著压低常驻峰值。
+            // 置空 paint.shader 是必须的: 否则 Shader 仍引用着即将被回收的 Bitmap。
+            srcShader = null
+            paint.shader = null
+            srcBitmap = null
             cropKey = 0L
             clearStagingLocked()
         }
@@ -503,7 +517,17 @@ internal object LiquifyGpuPreview {
         if (pct >= 100) return full
         val pw = (crop[0] * pct / 100).coerceAtLeast(1)
         val ph = (crop[1] * pct / 100).coerceAtLeast(1)
-        return Bitmap.createScaledBitmap(full, pw, ph, true)
+        return try {
+            val scaled = Bitmap.createScaledBitmap(full, pw, ph, true)
+            // 旧实现漏了这一步: 代理分辨率模式下 full 会一直活到 GC 才释放 ——
+            // 4M px 文档等于在整个手势里多留 16MB 峰值。缩放成功就立刻回收。
+            if (scaled != full) full.recycle()
+            scaled
+        } catch (t: Throwable) {
+            // 缩放失败(内存不足等)退回全分辨率源: 宁可多占一点也不能让预览消失
+            android.util.Log.w("LiquifyGpuPreview", "createScaledBitmap failed, keep full", t)
+            full
+        }
     }
 
     /**
@@ -531,14 +555,21 @@ internal object LiquifyGpuPreview {
         val rows = gridMeta[1].toInt()
         val count = gridMeta[6].toInt()
 
-        val shorts = ShortArray(count * 4)
+        val need = count * 4
+        var shorts = gridShorts
+        if (shorts == null || shorts.size < need) {
+            shorts = ShortArray(need)
+            gridShorts = shorts
+        }
         for (i in 0 until count) {
             val base = LiquifyGridMeta.HEADER + i * LiquifyGridMeta.STRIDE
             shorts[i * 4] = Half.toHalf(grid[base + 2])     // dx
             shorts[i * 4 + 1] = Half.toHalf(grid[base + 3]) // dy
         }
         val bmp = Bitmap.createBitmap(cols, rows, Bitmap.Config.RGBA_F16)
-        bmp.copyPixelsFromBuffer(ShortBuffer.wrap(shorts))
+        // wrap(shorts, 0, need): 复用缓冲可能比本帧需要的大, 必须限定长度, 否则多读的尾数据
+        // 会被当成网格点写进纹理。
+        bmp.copyPixelsFromBuffer(ShortBuffer.wrap(shorts, 0, need))
 
         gridOriginX = gridMeta[2]
         gridOriginY = gridMeta[3]
