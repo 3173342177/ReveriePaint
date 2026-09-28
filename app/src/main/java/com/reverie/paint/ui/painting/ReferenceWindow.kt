@@ -38,10 +38,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,14 +58,17 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
 import com.reverie.paint.R
 import com.reverie.paint.core.PaintViewModel
+import com.reverie.paint.core.updateBrushColor
 import com.reverie.paint.ui.components.ReSwitch
 import com.reverie.paint.ui.theme.Morandi
+import com.reverie.paint.ui.theme.parseColor
 import com.reverie.paint.ui.theme.systemHoverIcon
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeChild
 import com.reverie.paint.ui.theme.Motion
 import com.reverie.paint.ui.theme.Glass
 import com.reverie.paint.ui.theme.glassBorder
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -99,6 +105,20 @@ fun ReferenceWindow(
     val context = androidx.compose.ui.platform.LocalContext.current
     val windowShape = RoundedCornerShape(16.dp)
 
+    val haptic = LocalHapticFeedback.current
+    var isEyedropping by remember { mutableStateOf(false) }
+    var eyedropperScreenPos by remember { mutableStateOf(Offset.Zero) }
+    var eyedropperInitialColor by remember { mutableStateOf(Color.Black) }
+    var eyedropperCurrentColor by remember { mutableStateOf(Color.Black) }
+
+    val (placedImages, totalLayoutSize) = remember(vm.referenceImages) {
+        if (vm.referenceImages.isNotEmpty()) {
+            computeOptimalLayout(vm.referenceImages)
+        } else {
+            emptyList<PlacedReferenceImage>() to Size.Zero
+        }
+    }
+
     var viewportSize by remember { mutableStateOf(IntSize(1, 1)) }
     var lastTapTimeMs by remember { mutableLongStateOf(0L) }
 
@@ -133,7 +153,7 @@ fun ReferenceWindow(
                 .fillMaxSize()
                 .background(Color(0xFF101114))
                 .onSizeChanged { viewportSize = it }
-                .pointerInput(vm.referenceAllowRotation) {
+                .pointerInput(vm.referenceAllowRotation, vm.longPressEyedropperEnabled, vm.eyedropperSensitivity) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         var localZoom = vm.referenceZoom
@@ -148,6 +168,125 @@ fun ReferenceWindow(
                         var previousSinglePoint = down.position
                         val downTime = System.currentTimeMillis()
                         var maxMovement = 0f
+
+                        val canEyedrop = vm.longPressEyedropperEnabled && (
+                            if (vm.referenceActiveTab == 0) vm.referenceImages.isNotEmpty()
+                            else (vm.displayBitmap != null)
+                        )
+                        val delayMs = (520L - (vm.eyedropperSensitivity - 1) * 70L).coerceIn(200L, 600L)
+                        val touchSlop = viewConfiguration.touchSlop
+
+                        var earlyAction: String? = null
+                        if (canEyedrop) {
+                            earlyAction = withTimeoutOrNull<String>(delayMs) {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val pressed = event.changes.filter { it.pressed }
+                                    if (pressed.isEmpty()) {
+                                        return@withTimeoutOrNull "UP"
+                                    }
+                                    if (pressed.size >= 2) {
+                                        return@withTimeoutOrNull "MULTI"
+                                    }
+                                    val change = pressed.first()
+                                    val dist = (change.position - down.position).getDistance()
+                                    if (dist > touchSlop) {
+                                        return@withTimeoutOrNull "MOVE"
+                                    }
+                                }
+                                @Suppress("UNREACHABLE_CODE")
+                                ""
+                            }
+                        }
+
+                        if (earlyAction == "UP") {
+                            val duration = System.currentTimeMillis() - downTime
+                            if (duration < 300L) {
+                                val now = System.currentTimeMillis()
+                                if (now - lastTapTimeMs < 300L) {
+                                    vm.resetReferenceTransform()
+                                    lastTapTimeMs = 0L
+                                } else {
+                                    lastTapTimeMs = now
+                                    vm.referenceBarsCollapsed = !vm.referenceBarsCollapsed
+                                    vm.persistReferenceState()
+                                }
+                            }
+                            return@awaitEachGesture
+                        }
+
+                        if (canEyedrop && earlyAction == null) {
+                            try {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isEyedropping = true
+                                val initColor = parseColor(vm.brushColor)
+                                eyedropperInitialColor = initColor
+                                val offset = if (vm.eyedropperOffsetEnabled) Offset(-36f * density.density, -36f * density.density) else Offset.Zero
+                                var curPos = down.position
+                                var samplePos = curPos + offset
+                                eyedropperScreenPos = samplePos
+
+                                val initialSampled = sampleReferenceColor(
+                                    touchPos = samplePos,
+                                    viewportW = viewportSize.width.toFloat(),
+                                    viewportH = viewportSize.height.toFloat(),
+                                    zoom = vm.referenceZoom,
+                                    rotation = vm.referenceRotation,
+                                    panX = vm.referencePanX,
+                                    panY = vm.referencePanY,
+                                    isFlipped = vm.referenceIsFlipped,
+                                    isGrayscale = vm.referenceIsGrayscale,
+                                    activeTab = vm.referenceActiveTab,
+                                    placedImages = placedImages,
+                                    totalSize = totalLayoutSize,
+                                    canvasBitmap = vm.displayBitmap
+                                )
+                                if (initialSampled != null) {
+                                    eyedropperCurrentColor = initialSampled
+                                    vm.brushColor = colorToHex(initialSampled)
+                                } else {
+                                    eyedropperCurrentColor = initColor
+                                }
+
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val pressed = event.changes.filter { it.pressed }
+                                    if (pressed.isEmpty()) {
+                                        val hex = colorToHex(eyedropperCurrentColor)
+                                        vm.updateBrushColor(hex)
+                                        vm.showActionToast(R.string.canvas_toast_color_picked, R.drawable.ic_picker)
+                                        break
+                                    }
+                                    val point = pressed.first()
+                                    point.consume()
+                                    curPos = point.position
+                                    samplePos = curPos + offset
+                                    eyedropperScreenPos = samplePos
+                                    val sampled = sampleReferenceColor(
+                                        touchPos = samplePos,
+                                        viewportW = viewportSize.width.toFloat(),
+                                        viewportH = viewportSize.height.toFloat(),
+                                        zoom = vm.referenceZoom,
+                                        rotation = vm.referenceRotation,
+                                        panX = vm.referencePanX,
+                                        panY = vm.referencePanY,
+                                        isFlipped = vm.referenceIsFlipped,
+                                        isGrayscale = vm.referenceIsGrayscale,
+                                        activeTab = vm.referenceActiveTab,
+                                        placedImages = placedImages,
+                                        totalSize = totalLayoutSize,
+                                        canvasBitmap = vm.displayBitmap
+                                    )
+                                    if (sampled != null) {
+                                        eyedropperCurrentColor = sampled
+                                        vm.brushColor = colorToHex(sampled)
+                                    }
+                                }
+                            } finally {
+                                isEyedropping = false
+                            }
+                            return@awaitEachGesture
+                        }
 
                         while (true) {
                             val event = awaitPointerEvent()
@@ -249,6 +388,8 @@ fun ReferenceWindow(
                 if (images.isNotEmpty()) {
                     ReferenceImagesView(
                         images = images,
+                        placedImages = placedImages,
+                        totalSize = totalLayoutSize,
                         zoom = vm.referenceZoom,
                         rotation = vm.referenceRotation,
                         panX = vm.referencePanX,
@@ -448,6 +589,16 @@ fun ReferenceWindow(
                     showAlbumPicker = false
                     vm.applyReferenceAlbumSelection(selectedUris)
                 }
+            )
+        }
+
+        // 8. Eyedropper Loupe Overlay
+        if (isEyedropping) {
+            ReferenceColorLoupe(
+                samplePos = eyedropperScreenPos,
+                viewportSize = viewportSize,
+                initialColor = eyedropperInitialColor,
+                currentColor = eyedropperCurrentColor
             )
         }
     }
@@ -792,6 +943,8 @@ private fun computeOptimalLayout(
 @Composable
 private fun ReferenceImagesView(
     images: List<Bitmap>,
+    placedImages: List<PlacedReferenceImage>,
+    totalSize: Size,
     zoom: Float,
     rotation: Float,
     panX: Float,
@@ -800,10 +953,6 @@ private fun ReferenceImagesView(
     isFlipped: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val (placedImages, totalSize) = remember(images) {
-        computeOptimalLayout(images)
-    }
-
     val imageBitmaps = remember(images) {
         images.map { it to it.asImageBitmap() }.toMap()
     }
@@ -1050,5 +1199,219 @@ private fun ReferenceSettingsPopup(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReferenceColorLoupe(
+    samplePos: Offset,
+    viewportSize: IntSize,
+    initialColor: Color,
+    currentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(
+        modifier = modifier
+            .fillMaxSize()
+            .zIndex(10f)
+    ) {
+        val outerRadius = 40.dp.toPx()
+        val innerRadius = 24.dp.toPx()
+        val ringThickness = outerRadius - innerRadius
+        val ringRadius = (outerRadius + innerRadius) / 2f
+
+        var loupeY = samplePos.y - 65.dp.toPx()
+        if (loupeY - outerRadius < 8.dp.toPx()) {
+            loupeY = samplePos.y + 65.dp.toPx()
+        }
+
+        val minX = outerRadius + 8.dp.toPx()
+        val maxX = (viewportSize.width - outerRadius - 8.dp.toPx()).coerceAtLeast(minX)
+        val minY = outerRadius + 8.dp.toPx()
+        val maxY = (viewportSize.height - outerRadius - 8.dp.toPx()).coerceAtLeast(minY)
+        val loupeCenter = Offset(samplePos.x.coerceIn(minX, maxX), loupeY.coerceIn(minY, maxY))
+
+        // Outer drop shadow
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.35f),
+            radius = outerRadius + 4.dp.toPx(),
+            center = loupeCenter
+        )
+
+        // Top half ring: Reference / Previous color
+        drawArc(
+            color = initialColor,
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(loupeCenter.x - ringRadius, loupeCenter.y - ringRadius),
+            size = Size(ringRadius * 2, ringRadius * 2),
+            style = Stroke(width = ringThickness)
+        )
+
+        // Bottom half ring: Current sampled color
+        drawArc(
+            color = currentColor,
+            startAngle = 0f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(loupeCenter.x - ringRadius, loupeCenter.y - ringRadius),
+            size = Size(ringRadius * 2, ringRadius * 2),
+            style = Stroke(width = ringThickness)
+        )
+
+        // Outer border line
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.5f),
+            radius = outerRadius,
+            center = loupeCenter,
+            style = Stroke(width = 1.5.dp.toPx())
+        )
+        // Inner border line
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.5f),
+            radius = innerRadius,
+            center = loupeCenter,
+            style = Stroke(width = 1.5.dp.toPx())
+        )
+
+        // Center crosshair inside the loupe
+        val crosshairInner = 6.dp.toPx()
+        drawLine(
+            color = Color.Black.copy(alpha = 0.7f),
+            start = Offset(loupeCenter.x - crosshairInner, loupeCenter.y),
+            end = Offset(loupeCenter.x + crosshairInner, loupeCenter.y),
+            strokeWidth = 1.5.dp.toPx()
+        )
+        drawLine(
+            color = Color.Black.copy(alpha = 0.7f),
+            start = Offset(loupeCenter.x, loupeCenter.y - crosshairInner),
+            end = Offset(loupeCenter.x, loupeCenter.y + crosshairInner),
+            strokeWidth = 1.5.dp.toPx()
+        )
+
+        // Crosshair at the target touch point
+        val crossLen = 12.dp.toPx()
+        drawLine(
+            color = Color.Black.copy(alpha = 0.5f),
+            start = Offset(samplePos.x - crossLen, samplePos.y),
+            end = Offset(samplePos.x + crossLen, samplePos.y),
+            strokeWidth = 3.dp.toPx()
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(samplePos.x - crossLen, samplePos.y),
+            end = Offset(samplePos.x + crossLen, samplePos.y),
+            strokeWidth = 1.5.dp.toPx()
+        )
+        drawLine(
+            color = Color.Black.copy(alpha = 0.5f),
+            start = Offset(samplePos.x, samplePos.y - crossLen),
+            end = Offset(samplePos.x, samplePos.y + crossLen),
+            strokeWidth = 3.dp.toPx()
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(samplePos.x, samplePos.y - crossLen),
+            end = Offset(samplePos.x, samplePos.y + crossLen),
+            strokeWidth = 1.5.dp.toPx()
+        )
+    }
+}
+
+internal fun colorToHex(color: Color): String {
+    val r = (color.red * 255f).roundToInt().coerceIn(0, 255)
+    val g = (color.green * 255f).roundToInt().coerceIn(0, 255)
+    val b = (color.blue * 255f).roundToInt().coerceIn(0, 255)
+    return String.format("#%02X%02X%02X", r, g, b)
+}
+
+internal fun toGrayscale(pixel: Int): Color {
+    val a = (pixel ushr 24 and 0xFF) / 255f
+    val r = (pixel ushr 16 and 0xFF) / 255f
+    val g = (pixel ushr 8 and 0xFF) / 255f
+    val b = (pixel and 0xFF) / 255f
+    val gray = (0.213f * r + 0.715f * g + 0.072f * b).coerceIn(0f, 1f)
+    return Color(gray, gray, gray, a)
+}
+
+private fun sampleReferenceColor(
+    touchPos: Offset,
+    viewportW: Float,
+    viewportH: Float,
+    zoom: Float,
+    rotation: Float,
+    panX: Float,
+    panY: Float,
+    isFlipped: Boolean,
+    isGrayscale: Boolean,
+    activeTab: Int,
+    placedImages: List<PlacedReferenceImage>,
+    totalSize: Size,
+    canvasBitmap: Bitmap?
+): Color? {
+    if (viewportW <= 0f || viewportH <= 0f) return null
+    val centerX = viewportW / 2f + panX
+    val centerY = viewportH / 2f + panY
+    val dx = touchPos.x - centerX
+    val dy = touchPos.y - centerY
+
+    val rad = Math.toRadians(-rotation.toDouble())
+    val cosR = kotlin.math.cos(rad).toFloat()
+    val sinR = kotlin.math.sin(rad).toFloat()
+    val rx = dx * cosR - dy * sinR
+    val ry = dx * sinR + dy * cosR
+
+    if (activeTab == 0) {
+        val totalW = totalSize.width
+        val totalH = totalSize.height
+        if (totalW <= 0f || totalH <= 0f || placedImages.isEmpty()) return null
+
+        val fitScale = min(viewportW / totalW, viewportH / totalH) * 0.92f
+        val finalScale = fitScale * zoom
+        if (finalScale <= 0f) return null
+
+        val sx = if (isFlipped) -finalScale else finalScale
+        val sy = finalScale
+        val worldX = rx / sx
+        val worldY = ry / sy
+
+        for (placed in placedImages) {
+            val b = placed.bounds
+            if (worldX >= b.left && worldX < b.right && worldY >= b.top && worldY < b.bottom) {
+                val bmp = placed.bitmap
+                if (bmp.isRecycled || bmp.width <= 0 || bmp.height <= 0) continue
+                val u = (worldX - b.left) / b.width
+                val v = (worldY - b.top) / b.height
+                val ix = (u * bmp.width).toInt().coerceIn(0, bmp.width - 1)
+                val iy = (v * bmp.height).toInt().coerceIn(0, bmp.height - 1)
+                val pixel = bmp.getPixel(ix, iy)
+                return if (isGrayscale) toGrayscale(pixel) else Color(pixel)
+            }
+        }
+        return null
+    } else {
+        val bmp = canvasBitmap ?: return null
+        if (bmp.isRecycled || bmp.width <= 0 || bmp.height <= 0) return null
+        val bw = bmp.width.toFloat()
+        val bh = bmp.height.toFloat()
+        if (bw <= 0f || bh <= 0f) return null
+
+        val fitScale = min(viewportW / bw, viewportH / bh) * 0.95f
+        val finalScale = fitScale * zoom
+        if (finalScale <= 0f) return null
+
+        val sx = if (isFlipped) -finalScale else finalScale
+        val sy = finalScale
+        val worldX = rx / sx + bw / 2f
+        val worldY = ry / sy + bh / 2f
+
+        val ix = worldX.toInt()
+        val iy = worldY.toInt()
+        if (ix in 0 until bmp.width && iy in 0 until bmp.height) {
+            val pixel = bmp.getPixel(ix, iy)
+            return if (isGrayscale) toGrayscale(pixel) else Color(pixel)
+        }
+        return null
     }
 }
