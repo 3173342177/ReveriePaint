@@ -213,26 +213,9 @@ internal fun LayerListView(
         }
     }
 
-    // Dynamic preview displayList: parts remaining rows to open a vacant slot
-    // at the drop target seam so other layers smoothly spring into position
-    val displayList = remember(displayRows, isDraggingActive, targetSlot, dragOver, activeDrag) {
-        val draggedIds = activeDrag?.draggedIds ?: emptySet()
-        val isMulti = draggingFrom in vm.selectedLayerIndices && vm.selectedLayerIndices.size > 1
-        val batchIndices = if (isMulti) vm.selectedLayerIndices else if (draggingFrom >= 0) setOf(draggingFrom) else emptySet()
-
-        if (!isDraggingActive || dragOver != null || targetSlot < 0 || displayRows.isEmpty() || (draggedIds.isEmpty() && batchIndices.isEmpty())) {
-            displayRows
-        } else {
-            val isDragged: (PaintViewModel.LayerUiState) -> Boolean = { it.id in draggedIds || it.index in batchIndices }
-            val draggedItems = displayRows.filter(isDragged)
-            val remaining = displayRows.filterNot(isDragged)
-            val insertAt = targetSlot.coerceIn(0, remaining.size)
-            val result = ArrayList<PaintViewModel.LayerUiState>(displayRows.size)
-            result.addAll(remaining)
-            result.addAll(insertAt, draggedItems)
-            result
-        }
-    }
+    // Keep stable displayList during drag; drop target is indicated by the floating
+    // card (LayerDragOverlay) and the animated insertion indicator line.
+    val displayList = displayRows
 
     val density = LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -245,8 +228,8 @@ internal fun LayerListView(
         vm.layerDragFingerX = fingerX
         vm.layerDragFingerY = fingerY
 
-        val isOutsidePanel = fingerX < listLeft - with(density) { 60.dp.toPx() } ||
-            fingerX > (listLeft + listWidth + with(density) { 60.dp.toPx() })
+        val isOutsidePanel = fingerX < listLeft - with(density) { 80.dp.toPx() } ||
+            fingerX > (listLeft + listWidth + with(density) { 80.dp.toPx() })
         if (isOutsidePanel) {
             dragOver = null
             dragTargetIdx = -1
@@ -455,25 +438,48 @@ internal fun LayerListView(
 
     LaunchedEffect(draggingFrom) {
         if (draggingFrom < 0) return@LaunchedEffect
-        val scrollZone = with(density) { 48.dp.toPx() }
-        val maxScrollStep = with(density) { 14.dp.toPx() }
-        val minDragDistanceToScroll = with(density) { 32.dp.toPx() }
+        val scrollZone = with(density) { 56.dp.toPx() }
+        val maxScrollStep = with(density) { 18.dp.toPx() }
+        val horizontalTolerance = with(density) { 80.dp.toPx() }
+        val maxOutsideDistance = with(density) { 180.dp.toPx() }
+        val touchSlop = with(density) { 8.dp.toPx() }
+
         while (isActive && draggingFrom >= 0) {
-            val inHorizontalRange = dragFingerX >= listLeft - with(density) { 40.dp.toPx() } &&
-                dragFingerX <= listLeft + listWidth + with(density) { 40.dp.toPx() }
+            val inHorizontalRange = dragFingerX >= listLeft - horizontalTolerance &&
+                dragFingerX <= listLeft + listWidth + horizontalTolerance
             val startY = if (dragStartY != 0f) dragStartY else (vm.activeLayerDrag?.startY ?: 0f)
-            val hasMovedFromStart = startY > 0f && abs(dragFingerY - startY) > minDragDistanceToScroll
+            val hasMovedFromStart = startY > 0f && (
+                kotlin.math.abs(dragFingerY - startY) > touchSlop ||
+                dragFingerY < listTop ||
+                dragFingerY > listTop + listHeight
+            )
+
             if (inHorizontalRange && hasMovedFromStart && dragFingerY > 0f) {
-                val topDist = dragFingerY - listTop
-                val bottomDist = (listTop + listHeight) - dragFingerY
                 var scrollDelta = 0f
-                if (topDist in 0f..scrollZone && listState.canScrollBackward) {
-                    val ratio = 1f - (topDist / scrollZone).coerceIn(0f, 1f)
-                    scrollDelta = -maxScrollStep * ratio
-                } else if (bottomDist in 0f..scrollZone && listState.canScrollForward) {
-                    val ratio = 1f - (bottomDist / scrollZone).coerceIn(0f, 1f)
-                    scrollDelta = maxScrollStep * ratio
+
+                // 向上自动滚动 (接近或拖出列表顶部)
+                if (dragFingerY <= listTop + scrollZone && dragFingerY >= listTop - maxOutsideDistance) {
+                    if (listState.canScrollBackward) {
+                        val ratio = if (dragFingerY <= listTop) {
+                            1.25f // 拖出顶部边缘时保持全速自动向上滚动
+                        } else {
+                            ((listTop + scrollZone - dragFingerY) / scrollZone).coerceIn(0.15f, 1f)
+                        }
+                        scrollDelta = -maxScrollStep * ratio
+                    }
                 }
+                // 向下自动滚动 (接近或拖出列表底部)
+                else if (dragFingerY >= listTop + listHeight - scrollZone && dragFingerY <= listTop + listHeight + maxOutsideDistance) {
+                    if (listState.canScrollForward) {
+                        val ratio = if (dragFingerY >= listTop + listHeight) {
+                            1.25f // 拖出底部边缘时保持全速自动向下滚动
+                        } else {
+                            ((dragFingerY - (listTop + listHeight - scrollZone)) / scrollZone).coerceIn(0.15f, 1f)
+                        }
+                        scrollDelta = maxScrollStep * ratio
+                    }
+                }
+
                 if (scrollDelta != 0f) {
                     listState.scrollBy(scrollDelta)
                     updateDragPos(dragFingerX, dragFingerY)
@@ -680,7 +686,7 @@ internal fun LayerListView(
                         listWidth = b.width
                         listHeight = b.height
                     }
-                    .pointerInput(displayList) {
+                    .pointerInput(displayList, draggingFrom) {
                         awaitPointerEventScope {
                             var pinchStartDist = 0f
                             var pinchRow1 = -1
@@ -690,6 +696,21 @@ internal fun LayerListView(
 
                             while (true) {
                                 val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                if (draggingFrom >= 0) {
+                                    val change = event.changes.firstOrNull()
+                                    if (change != null) {
+                                        if (change.changedToUpIgnoreConsumed()) {
+                                            endDrag()
+                                        } else {
+                                            change.consume()
+                                            val screenX = listLeft + change.position.x
+                                            val screenY = listTop + change.position.y
+                                            updateDragPos(screenX, screenY)
+                                        }
+                                    }
+                                    continue
+                                }
+
                                 val pressedChanges = event.changes.filter { it.pressed }
                                 val now = System.currentTimeMillis()
 
@@ -857,13 +878,21 @@ internal fun LayerListView(
             // Insertion indicator line with start dot and hierarchy indentation
             val showIndicator = draggingFrom >= 0 && dragOver == null && dragTargetIdx >= 0
             val targetInfo = if (showIndicator) listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == dragTargetIdx } else null
-            val rawLineY = if (targetInfo != null) {
-                targetInfo.offset.toFloat()
-            } else if (showIndicator) {
-                val lastInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == dragTargetIdx - 1 }
-                lastInfo?.let { (it.offset + it.size).toFloat() }
-            } else {
-                null
+            val rawLineY = when {
+                targetInfo != null -> targetInfo.offset.toFloat()
+                showIndicator -> {
+                    val firstVisible = listState.layoutInfo.visibleItemsInfo.firstOrNull()
+                    val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+                    when {
+                        firstVisible != null && dragTargetIdx <= firstVisible.index -> 0f
+                        lastVisible != null && dragTargetIdx > lastVisible.index -> (lastVisible.offset + lastVisible.size).toFloat()
+                        else -> {
+                            val lastInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == dragTargetIdx - 1 }
+                            lastInfo?.let { (it.offset + it.size).toFloat() }
+                        }
+                    }
+                }
+                else -> null
             }
 
             val isMultiDrag = (draggingFrom in vm.selectedLayerIndices) && vm.selectedLayerIndices.size > 1
