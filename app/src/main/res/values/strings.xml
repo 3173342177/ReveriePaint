@@ -837,6 +837,7 @@
     <string name="layer_op_flip_v">垂直翻转</string>
     <string name="layer_op_merge_down">向下合并图层</string>
     <string name="layer_op_select_from_layer">从图层创建选区</string>
+    <string name="layer_op_select_from_group">从图层组创建选区</string>
     <string name="layer_op_lock_layer">锁定图层</string>
     <string name="layer_op_alpha_lock">锁定透明度</string>
     <string name="layer_op_rasterize">栅格化为普通图层</string>
@@ -1864,6 +1865,8 @@
     <string name="selection_save_current">存储当前选区</string>
     <string name="selection_empty_history">暂无存储的选区</string>
     <string name="selection_empty_history_hint">点击右上角「+」可将当前选区存为槽位</string>
+    <string name="selection_combine_mode_desc">当前已有选区，请选择与现有选区的运算方式</string>
+    <string name="selection_mode_replace">替换选区</string>
     <string name="selection_op_replace">载入替换</string>
     <string name="selection_op_add">追加选区 (+)</string>
     <string name="selection_op_subtract">减去选区 (-)</string>

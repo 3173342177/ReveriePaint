@@ -866,9 +866,12 @@ internal fun PaintViewModel.cancelSoloIfSwitchingLayer() {
 }
 
 
-internal fun PaintViewModel.selectionFromLayer(i: Int) {
+internal fun PaintViewModel.selectionFromLayer(i: Int, mode: Int = 0) {
     if (recorder.recording) {
-        recorder.toolOp(com.reverie.paint.model.RecordingEvents.T_SELECT_ALL) { it.u16(i.coerceIn(0, 65535)) }
+        recorder.toolOp(com.reverie.paint.model.RecordingEvents.T_SELECT_ALL) {
+            it.u16(i.coerceIn(0, 65535))
+            it.u8(mode.coerceIn(0, 255))
+        }
     }
     var ov: android.graphics.Bitmap? = null
     var has = false
@@ -877,12 +880,18 @@ internal fun PaintViewModel.selectionFromLayer(i: Int) {
         hasSelection = has && ov != null
         notifyLayerChanged()
         if (hasSelection) {
-            showActionToast(R.string.toast_selection_from_layer_success, R.drawable.ic_select)
+            val msgRes = when (mode) {
+                1 -> R.string.selection_toast_added
+                2 -> R.string.selection_toast_subtracted
+                3 -> R.string.selection_toast_intersected
+                else -> R.string.toast_selection_from_layer_success
+            }
+            showActionToast(msgRes, R.drawable.ic_select)
         } else {
             showActionToast(R.string.toast_selection_layer_empty, R.drawable.ic_select)
         }
     }) {
-        val ok = ReverieCoreBridge.selectionFromLayer(i)
+        val ok = ReverieCoreBridge.selectionFromLayer(i, mode)
         has = ok && ReverieCoreBridge.hasSelection()
         if (has) {
             ov = buildSelectionOverlayLocked()

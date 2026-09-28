@@ -393,7 +393,7 @@ public:
 
     // Selection: build a pixel selection from the layer's alpha channel and
     // constrain painting to it (KisSelection, Krita mechanism)
-    bool selectionFromLayer(int index);
+    bool selectionFromLayer(int index, int mode = 0);
     bool hasSelection() const;
     void clearSelection();
     void selectAll();

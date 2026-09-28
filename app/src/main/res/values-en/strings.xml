@@ -837,6 +837,7 @@
     <string name="layer_op_flip_v">Flip Vertically</string>
     <string name="layer_op_merge_down">Merge Down</string>
     <string name="layer_op_select_from_layer">Selection from Layer</string>
+    <string name="layer_op_select_from_group">Selection from Group</string>
     <string name="layer_op_lock_layer">Lock Layer</string>
     <string name="layer_op_alpha_lock">Alpha Lock</string>
     <string name="layer_op_rasterize">Rasterize to Paint Layer</string>
@@ -1864,6 +1865,8 @@
     <string name="selection_save_current">Save Selection</string>
     <string name="selection_empty_history">No Saved Selections</string>
     <string name="selection_empty_history_hint">Tap \"+\" above to store the active selection as a slot</string>
+    <string name="selection_combine_mode_desc">Active selection exists, choose operation mode</string>
+    <string name="selection_mode_replace">Replace Selection</string>
     <string name="selection_op_replace">Load &amp; Replace</string>
     <string name="selection_op_add">Add to Selection (+)</string>
     <string name="selection_op_subtract">Subtract from Selection (-)</string>

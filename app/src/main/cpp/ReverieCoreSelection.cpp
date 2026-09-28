@@ -10,31 +10,61 @@
 #include "ReverieCoreInternal.h"
 #include <QUuid>
 
-bool ReverieCore::selectionFromLayer(int index)
+bool ReverieCore::selectionFromLayer(int index, int mode)
 {
-    if (index < 0 || index >= m_layers.size() || m_layers[index].isGroup) {
+    if (index < 0 || index >= m_layers.size()) {
         return false;
     }
     KisImageSP image = m_document;
     if (!image) {
         return false;
     }
-    KisPaintDeviceSP dev = layerPaintDeviceFor(m_layers[index]);
+
+    KisPaintDeviceSP dev;
+    if (m_layers[index].isGroup) {
+        int j = index + 1;
+        while (j < m_layers.size() && m_layers[j].depth > m_layers[index].depth) {
+            ++j;
+        }
+        KisPaintDeviceSP compDev(new KisPaintDevice(image->colorSpace()));
+        compDev->clear(QRect(0, 0, image->width(), image->height()));
+        compositeLayersRange(compDev, index + 1, j, QRect(0, 0, image->width(), image->height()));
+        dev = compDev;
+    } else {
+        dev = layerPaintDeviceFor(m_layers[index]);
+    }
     if (!dev) {
         return false;
     }
-    KisSelectionSP sel = new KisSelection(
-        new KisSelectionDefaultBounds(image->projection()),
-        toQShared(new KisImageResolutionProxy(image)));
-    // Krita mechanism: selectionFromAlphaChannel copies the layer alpha
+
+    const int iw = image->width();
+    const int ih = image->height();
     const KisSelectionSP oldSel = m_selection;
     const QVector<quint8> oldMask = readSelectionMaskBytes(image, oldSel);
-    KisLsUtils::selectionFromAlphaChannel(
-        dev, sel, QRect(0, 0, image->width(), image->height()));
-    setSelection(sel);
-    pushUndoCommand(new ReverieSelectionCommand(this, oldSel, oldMask,
-                                                image->width(), image->height(),
-                                                m_selection));
+
+    if (mode == SelReplace || !m_selection || !hasSelection()) {
+        KisSelectionSP sel = new KisSelection(
+            new KisSelectionDefaultBounds(image->projection()),
+            toQShared(new KisImageResolutionProxy(image)));
+        KisLsUtils::selectionFromAlphaChannel(
+            dev, sel, QRect(0, 0, iw, ih));
+        setSelection(sel);
+        pushUndoCommand(new ReverieSelectionCommand(this, oldSel, oldMask, iw, ih, m_selection));
+    } else {
+        KisSelectionSP layerSel = new KisSelection(
+            new KisSelectionDefaultBounds(image->projection()),
+            toQShared(new KisImageResolutionProxy(image)));
+        KisLsUtils::selectionFromAlphaChannel(
+            dev, layerSel, QRect(0, 0, iw, ih));
+
+        const QVector<quint8> existing = readSelectionMaskBytes(image, m_selection);
+        const QVector<quint8> added = readSelectionMaskBytes(image, layerSel);
+        const QVector<quint8> combined = combineSelectionMasks(existing, added, mode);
+        KisSelectionSP newSel = selectionFromMask(image, combined);
+        setSelection(newSel);
+        pushUndoCommand(new ReverieSelectionCommand(this, oldSel, oldMask, iw, ih, m_selection));
+    }
+    markDirty();
     return true;
 }
 
