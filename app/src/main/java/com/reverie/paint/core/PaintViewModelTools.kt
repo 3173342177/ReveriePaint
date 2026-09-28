@@ -919,7 +919,10 @@ internal fun PaintViewModel.contentBounds(): IntArray? {
         }
     }
     try {
-        latch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+        // B4: 主线程有界阻塞 500ms → 120ms。引擎侧这个调用实测是毫秒级, 那 500ms 只是"引擎线程
+        // 被长任务占住"时的兜底 —— 兜底过长会把一次偶发卡顿放大成"白等半秒"。
+        // 返回 null 与超时是同一个语义(调用方按"没有内容边界"处理), 所以收窄是安全的。
+        latch.await(120, java.util.concurrent.TimeUnit.MILLISECONDS)
     } catch (_: InterruptedException) {
         return null
     }
@@ -1201,13 +1204,21 @@ internal fun PaintViewModel.liquifyBegin() {
         recorder.toolOp(T_LIQUIFY_BEGIN)
     }
     val arr = if (multi) layers.toIntArray() else null
-    runCore(render = false) { ReverieCoreBridge.liquifyBegin(arr) }
+    // Phase 2B: 每次手势开始时定一次"预览由谁画"(GPU 覆盖层 / 引擎侧 CPU 叠加), 并显式写进
+    // 引擎 —— 这样 property 与 Kotlin 侧判定即使不一致, 也不会两边都不画。
+    val hostDrawMode = LiquifyGpuPreview.decideForGesture()
+    runCore(render = false) {
+        ReverieCoreBridge.setLiquifyPreviewHostDrawMode(hostDrawMode)
+        ReverieCoreBridge.liquifyBegin(arr)
+    }
 }
 
 internal fun PaintViewModel.liquifyEnd() {
     if (recorder.recording) {
         recorder.toolOp(T_LIQUIFY_END)
     }
+    // 先摘覆盖层: 抬笔后的精确结果由下面的 materialize + 立即渲染给出, 不能与旧预览同帧共存
+    LiquifyGpuPreview.clear()
     runCore(after = {
         scheduleRender(immediate = true)
         refreshLayerThumbs()
@@ -1216,12 +1227,215 @@ internal fun PaintViewModel.liquifyEnd() {
     }
 }
 
+/**
+ * Phase 5 · C3-2: 取"未形变的源像素"给 GPU 常驻位移场当源纹理(**引擎线程**)。
+ *
+ * 拖动期完全不调 [liquify] ⇒ 引擎侧零解算; 代价是覆盖层要自己找引擎要一次源像素
+ * (整篇文档, 每段手势只取一次)。返回 false 表示这条路走不通(超预算 / 非 8bit BGRA),
+ * 调用方必须回退经典路径 —— 绝不允许"场也不画、引擎也没动"。
+ */
+internal fun PaintViewModel.liquifyFieldSource(x: Int, y: Int, w: Int, h: Int): Boolean {
+    // This returns queue acceptance, not a local variable written later by runCore.
+    // A field image is one layer; multi-layer edits must use the shared native map.
+    if (renderHandler == null || editTargetLayers().size != 1) return false
+    val gesture = LiquifyGlesPreview.gestureId
+    runCore(render = false) {
+        invalidateLiquifySourceKey()
+        val ready = ReverieCoreBridge.liquifyFieldSource(x, y, w, h)
+        if (gesture == LiquifyGlesPreview.gestureId) {
+            if (ready) pollLiquifyGpuPreview() else LiquifyGlesPreview.clear()
+        }
+    }
+    return true
+}
+
+/**
+ * Phase 5 · C3-2: 抬笔一次性落盘 —— 把 GPU 已经算好的形变结果写回图层。
+ *
+ * 与 [liquifyEnd] 的差别只有"谁来算形变": 这里传的是覆盖层离屏渲染出来的像素
+ * (与屏幕上的预览同一支着色器)。选区 / Alpha 锁 / 脏区 / 撤销语义全部复用经典写回实现,
+ * 所以提交结果与经典路径同源。
+ *
+ * 覆盖层的清理放在**提交之后**: 拖动期屏幕上一直是预览, 直到真实像素就位才切回去
+ * (否则会出现"预览消失 → 旧像素 → 新像素"的闪一下)。
+ */
+/** Phase 5 · C3-2: 抬笔回读的最长等待(ms); 超时即改走"重放补点"的经典收口。 */
+private const val LIQUIFY_FIELD_COMMIT_TIMEOUT_MS = 250L
+
+/**
+ * Phase 7: 抬笔重放的批量缓冲(复用)。
+ *
+ * 只在引擎线程使用(与 `liquifyFieldEndFromOverlay` 同一线程), 因此不需要加锁。
+ */
+private var lqReplayPack = FloatArray(0)
+
+/**
+ * Phase 5 · C3-2: 抬笔收口(场通路) —— **整段都在引擎线程上跑, UI 线程零阻塞**。
+ *
+ * ① 请 GLES 渲染线程把场的结果渲染到离屏并回读(引擎线程此刻空闲, 阻塞在这里不影响触摸/绘制);
+ * ② 成功 ⇒ 这份像素一次性写回图层(选区/Alpha 锁/脏区/撤销语义由引擎复用经典实现);
+ * ③ 失败 ⇒ 把本地补点按序重放(与拖动期逐 dab 提交的数学完全一致 ⇒ 形变一点不丢);
+ * ④ 无论走哪条, 最后都 `liquifyEnd()` 提交这一次手势的事务。
+ *
+ * 覆盖层的清理放在 `after`(提交完成之后): 拖动期屏幕上一直是预览, 直到真实像素就位才切回去,
+ * 避免"预览消失 → 旧像素 → 新像素"闪一下。
+ */
+internal fun PaintViewModel.liquifyFieldEndFromOverlay(
+    rect: IntArray,
+    dabs: FloatArray,
+    dabCount: Int,
+    dabStride: Int,
+) {
+    if (recorder.recording) {
+        recorder.toolOp(T_LIQUIFY_END)
+    }
+    val gesture = LiquifyGlesPreview.gestureId
+    val replayDabs = dabs.copyOf(dabCount * dabStride)
+    val x = rect[0]
+    val y = rect[1]
+    val w = rect[2]
+    val h = rect[3]
+    runCore(after = {
+        if (gesture == LiquifyGlesPreview.gestureId) LiquifyGpuPreview.clear()
+        scheduleRender(immediate = true)
+        refreshLayerThumbs()
+    }) {
+        val pixels = LiquifyGlesPreview.readbackCommit(x, y, w, h, LIQUIFY_FIELD_COMMIT_TIMEOUT_MS, gesture)
+        try {
+            var ok = false
+            if (pixels != null) {
+                // 返回值 = 引擎是否**真的**接受了这次提交(尺寸闸/手势状态/像素长度任一不满足
+                // 都会返回 false) —— 返回 true 前不会丢形变, false 时下面立刻重放补点。
+                ok = ReverieCoreBridge.liquifyFieldCommit(x, y, w, h, pixels, true)
+            }
+            if (!ok && dabCount > 0) {
+                // Phase 7(性能): 重放改走**批量 JNI**(一次调用提交整段)。旧实现是"每补点一次
+                // 跨语言调用", 长手势下几百次调用本身就是一次可感知的卡顿。
+                if (lqReplayPack.size < dabCount * LiquifyPath.DAB_STRIDE) {
+                    lqReplayPack = FloatArray(dabCount * LiquifyPath.DAB_STRIDE)
+                }
+                var n = 0
+                for (i in 0 until dabCount) {
+                    val b = i * dabStride
+                    // 本地列表存的是 (…, mode, strength); JNI 布局是 (fx, fy, tx, ty, strength, mode)
+                    n = LiquifyPath.packDab(
+                        lqReplayPack,
+                        n,
+                        replayDabs[b],
+                        replayDabs[b + 1],
+                        replayDabs[b + 2],
+                        replayDabs[b + 3],
+                        replayDabs[b + 5],
+                        replayDabs[b + 4].toInt(),
+                    )
+                }
+                ReverieCoreBridge.liquifyDabs(lqReplayPack, n)
+            }
+        } finally {
+            // 收口**必须**执行: 若这里因异常跳过 liquifyEnd, 引擎的事务会一直挂着 ——
+            // 之后每一次 liquifyBegin 都会被"已有事务"挡掉, 表现就是"液化彻底失灵直到取消"。
+            try {
+                ReverieCoreBridge.liquifyEnd()
+            } catch (t: Throwable) {
+                android.util.Log.e("ReverieCore", "liquifyEnd failed, force cancel", t)
+                try {
+                    ReverieCoreBridge.liquifyCancel()
+                } catch (_: Throwable) {
+                    // 引擎不可达: 无能为力, 至少不再向上抛
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Phase 5 · C3-2: 场通路下也要把补点写进**录制流**。
+ *
+ * 拖动期引擎一个 dab 都没收到, 但回放(`PlaybackEngine`)走的是经典逐 dab 路径 ⇒ 录制流必须与
+ * 经典路径逐点一致, 否则"同一份录制, 回放出来的形变和当时不一样"。
+ */
+internal fun PaintViewModel.recordLiquifyDab(
+    fx: Float,
+    fy: Float,
+    tx: Float,
+    ty: Float,
+    mode: Int,
+    strength: Float,
+) {
+    if (!recorder.recording) return
+    recorder.toolOp(T_LIQUIFY) {
+        it.f32(fx)
+        it.f32(fy)
+        it.f32(tx)
+        it.f32(ty)
+        it.u8(mode)
+        it.f32(strength)
+    }
+}
+
 internal fun PaintViewModel.liquifyCancel() {
     if (recorder.recording) {
         recorder.toolOp(T_LIQUIFY_CANCEL)
     }
+    LiquifyGpuPreview.clear()
     runCore(after = { scheduleRender(immediate = true) }) {
         ReverieCoreBridge.liquifyCancel()
+    }
+}
+
+/**
+ * 液化补点的**批量提交**(经典路径): 把同一帧攒下的多个补点放进**一次** `runCore` 按序提交。
+ *
+ * 语义与逐点调用 [liquify] 完全一致 —— 同一个引擎线程内顺序执行同一批 JNI 调用, 顺序、强度、
+ * 模式都不变; 差别只在调度: 旧实现每个补点各 post 一个 Runnable 并各自触发一次渲染调度,
+ * 大笔刷高压拖动时引擎队列会被补点塞满(观感: 越拖越卡、抬笔后画面还在继续变形)。批量后
+ * 一帧只占一个任务槽、只调度一次渲染。
+ *
+ * 缓冲布局: 每补点 [LIQUIFY_DAB_STRIDE] 个 float。
+ * 缓冲由调用方(`CanvasTouchView`)复用持有, 本函数不保留引用。
+ */
+private const val LIQUIFY_DAB_STRIDE = 6
+
+/**
+ * Phase 6(稳定性 v2): 分帧物化的"空闲推进"(**引擎线程**)。
+ *
+ * 引擎把整块物化(真机峰值 126ms)拆成 64 行行带排队, 每次调用最多消费
+ * `debug.reverie.lqmatbudget`(默认 4ms) 的量。调用点见 `CanvasTouchView.flushLiquifyPending`:
+ * 拖动期与"停手后的追赶期"都由它驱动, 因此单次 `liquify()` 不再出现 >10ms 的尖峰。
+ * 队列空时 C++ 侧只做一次空检查, 开销可忽略。
+ */
+internal fun PaintViewModel.tickLiquifyMaterialize() {
+    runCore(render = false) {
+        liquifyMaterializePending = ReverieCoreBridge.liquifyMaterializeTick()
+    }
+}
+
+private val liquifyDabBuffers = LiquifyDabBuffers()
+
+internal fun PaintViewModel.liquifyBatch(buf: FloatArray, count: Int) {
+    if (count <= 0 || buf.size < count * LIQUIFY_DAB_STRIDE) return
+    if (recorder.recording) {
+        // 录制流与逐点路径逐字节一致(回放走经典逐点路径, 必须能复现同一段形变)
+        for (i in 0 until count) {
+            val b = i * LIQUIFY_DAB_STRIDE
+            recorder.toolOp(T_LIQUIFY) {
+                it.f32(buf[b])
+                it.f32(buf[b + 1])
+                it.f32(buf[b + 2])
+                it.f32(buf[b + 3])
+                it.u8(buf[b + 5].toInt())
+                it.f32(buf[b + 4])
+            }
+        }
+    }
+    if (renderHandler == null) return
+    val batch = liquifyDabBuffers.capture(buf, count)
+    runCore {
+        try {
+            ReverieCoreBridge.liquifyDabs(batch, count)
+        } finally {
+            liquifyDabBuffers.release(batch)
+        }
     }
 }
 
@@ -1244,11 +1458,11 @@ internal fun PaintViewModel.liquify(
         }
     }
     runCore {
-        ReverieCoreBridge.liquify(
-            fx.toInt(),
-            fy.toInt(),
-            tx.toInt(),
-            ty.toInt(),
+        ReverieCoreBridge.liquifyAt(
+            fx,
+            fy,
+            tx,
+            ty,
             strength,
             mode,
         )
