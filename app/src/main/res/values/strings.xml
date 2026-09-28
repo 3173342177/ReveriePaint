@@ -1835,6 +1835,13 @@
     <string name="create_no_saved_presets_desc">在自定义尺寸中配置好画幅后，点击保存预设即可在此随时调用</string>
     <string name="create_preset_stat_format">%1$d DPI · %2$d层</string>
     <string name="create_dpi_label">分辨率 (DPI)</string>
+    <string name="create_unit_px">像素 (PX)</string>
+    <string name="create_unit_mm">毫米 (mm)</string>
+    <string name="create_unit_cm">厘米 (cm)</string>
+    <string name="create_unit_inch">英寸 (in)</string>
+    <string name="create_print_size_format">打印尺寸 %s</string>
+    <string name="create_pixel_size_format">像素尺寸 %1$d × %2$d px</string>
+    <string name="create_layer_warning_low">（内存偏低，图层受限）</string>
 
     <!-- Brush UI Modernization & Fine Tuning -->
     <string name="brush_group_basic">核心基础</string>

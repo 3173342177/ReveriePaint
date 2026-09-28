@@ -70,6 +70,7 @@ class PaintViewModel : ViewModel() {
 
     var docWidth by mutableIntStateOf(1080)
     var docHeight by mutableIntStateOf(1920)
+    var docDpi by mutableIntStateOf(300)
     var docName by mutableStateOf("Untitled")
     var totalStrokes by mutableIntStateOf(0)
     var initialStrokeCount by mutableIntStateOf(0)

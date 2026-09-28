@@ -1835,6 +1835,13 @@
     <string name="create_no_saved_presets_desc">Configure your canvas size in Custom and save it as a preset to access anytime</string>
     <string name="create_preset_stat_format">%1$d DPI · %2$d Layers</string>
     <string name="create_dpi_label">Resolution (DPI)</string>
+    <string name="create_unit_px">Pixels (PX)</string>
+    <string name="create_unit_mm">Millimeters (mm)</string>
+    <string name="create_unit_cm">Centimeters (cm)</string>
+    <string name="create_unit_inch">Inches (in)</string>
+    <string name="create_print_size_format">Print size %s</string>
+    <string name="create_pixel_size_format">Pixel size %1$d × %2$d px</string>
+    <string name="create_layer_warning_low">(Low memory, layers limited)</string>
 
     <!-- Brush UI Modernization & Fine Tuning -->
     <string name="brush_group_basic">Basic Properties</string>

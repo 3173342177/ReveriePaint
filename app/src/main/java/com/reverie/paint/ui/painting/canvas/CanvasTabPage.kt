@@ -188,7 +188,7 @@ internal fun CanvasTabPage(
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             SettingInfoRow(stringResource(R.string.canvas_info_created_time), createdStr)
-            SettingInfoRow(stringResource(R.string.canvas_info_canvas_size), "${vm.docWidth}×${vm.docHeight} - 300ppi")
+            SettingInfoRow(stringResource(R.string.canvas_info_canvas_size), "${vm.docWidth}×${vm.docHeight} - ${vm.docDpi}ppi")
             SettingInfoRow(stringResource(R.string.canvas_info_total_drawn), stringResource(R.string.canvas_info_strokes_layers, vm.totalStrokes, vm.layerCount))
             SettingInfoRow(stringResource(R.string.canvas_info_drawing_time), durationStr)
             SettingInfoRow(stringResource(R.string.canvas_info_color_mode), vm.colorMode)

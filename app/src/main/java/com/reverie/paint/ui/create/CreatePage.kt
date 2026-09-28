@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -30,7 +31,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
+import java.util.Locale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -45,6 +48,52 @@ import com.reverie.paint.ui.components.ReTextButton
 import com.reverie.paint.ui.theme.Theme
 import kotlin.math.abs
 import kotlin.math.max
+
+enum class CanvasUnit(val symbol: String, val labelRes: Int) {
+    PX("PX", R.string.create_unit_px),
+    MM("mm", R.string.create_unit_mm),
+    CM("cm", R.string.create_unit_cm),
+    INCH("in", R.string.create_unit_inch)
+}
+
+fun pxToUnit(px: Double, unit: CanvasUnit, dpi: Int): Double {
+    val safeDpi = dpi.coerceIn(72, 1200)
+    return when (unit) {
+        CanvasUnit.PX -> px
+        CanvasUnit.INCH -> px / safeDpi
+        CanvasUnit.MM -> (px / safeDpi) * 25.4
+        CanvasUnit.CM -> (px / safeDpi) * 2.54
+    }
+}
+
+fun unitToPx(value: Double, unit: CanvasUnit, dpi: Int): Int {
+    val safeDpi = dpi.coerceIn(72, 1200)
+    val px = when (unit) {
+        CanvasUnit.PX -> value
+        CanvasUnit.INCH -> value * safeDpi
+        CanvasUnit.MM -> (value / 25.4) * safeDpi
+        CanvasUnit.CM -> (value / 2.54) * safeDpi
+    }
+    return kotlin.math.round(px).toInt()
+}
+
+fun formatUnitValue(value: Double, unit: CanvasUnit): String {
+    return when (unit) {
+        CanvasUnit.PX -> kotlin.math.round(value).toInt().toString()
+        CanvasUnit.MM -> {
+            val rounded = kotlin.math.round(value * 10) / 10.0
+            if (rounded % 1.0 == 0.0) rounded.toInt().toString() else String.format(Locale.US, "%.1f", rounded)
+        }
+        CanvasUnit.CM -> {
+            val rounded = kotlin.math.round(value * 100) / 100.0
+            if (rounded % 1.0 == 0.0) rounded.toInt().toString() else String.format(Locale.US, "%.2f", rounded)
+        }
+        CanvasUnit.INCH -> {
+            val rounded = kotlin.math.round(value * 100) / 100.0
+            if (rounded % 1.0 == 0.0) rounded.toInt().toString() else String.format(Locale.US, "%.2f", rounded)
+        }
+    }
+}
 
 data class CanvasPresetItem(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -327,15 +376,66 @@ fun CreatePage(vm: PaintViewModel) {
     val (deviceW, deviceH) = remember { getDeviceScreenResolution(context) }
 
     // Canvas States - default to device screen resolution
+    var selectedUnit by remember { mutableStateOf(CanvasUnit.PX) }
     var customW by remember { mutableStateOf(deviceW.toString()) }
     var customH by remember { mutableStateOf(deviceH.toString()) }
     var customPpi by remember { mutableStateOf("300") }
     // 动画画布: 勾选后新建的文档自带时间轴 (后端走 startPainting(animation = true))
     var animationCanvas by remember { mutableStateOf(false) }
 
-    val widthVal = customW.toIntOrNull() ?: deviceW
-    val heightVal = customH.toIntOrNull() ?: deviceH
-    val ppiVal = customPpi.toIntOrNull() ?: 300
+    val ppiVal = customPpi.toIntOrNull()?.coerceIn(72, 1200) ?: 300
+
+    val widthVal = remember(customW, selectedUnit, ppiVal) {
+        if (selectedUnit == CanvasUnit.PX) {
+            customW.toIntOrNull()?.coerceIn(64, 8192) ?: deviceW
+        } else {
+            val num = customW.toDoubleOrNull() ?: 0.0
+            unitToPx(num, selectedUnit, ppiVal).coerceIn(64, 8192)
+        }
+    }
+    val heightVal = remember(customH, selectedUnit, ppiVal) {
+        if (selectedUnit == CanvasUnit.PX) {
+            customH.toIntOrNull()?.coerceIn(64, 8192) ?: deviceH
+        } else {
+            val num = customH.toDoubleOrNull() ?: 0.0
+            unitToPx(num, selectedUnit, ppiVal).coerceIn(64, 8192)
+        }
+    }
+
+    val convertedHint = remember(selectedUnit, widthVal, heightVal, ppiVal) {
+        if (selectedUnit == CanvasUnit.PX) {
+            val mmW = pxToUnit(widthVal.toDouble(), CanvasUnit.MM, ppiVal)
+            val mmH = pxToUnit(heightVal.toDouble(), CanvasUnit.MM, ppiVal)
+            context.getString(R.string.create_print_size_format, "${formatUnitValue(mmW, CanvasUnit.MM)} × ${formatUnitValue(mmH, CanvasUnit.MM)} mm")
+        } else {
+            context.getString(R.string.create_pixel_size_format, widthVal, heightVal)
+        }
+    }
+
+    val applyPreset: (CanvasPresetItem) -> Unit = { item ->
+        customPpi = item.defaultPpi.toString()
+        if (selectedUnit == CanvasUnit.PX) {
+            customW = item.width.toString()
+            customH = item.height.toString()
+        } else {
+            val wInUnit = pxToUnit(item.width.toDouble(), selectedUnit, item.defaultPpi)
+            val hInUnit = pxToUnit(item.height.toDouble(), selectedUnit, item.defaultPpi)
+            customW = formatUnitValue(wInUnit, selectedUnit)
+            customH = formatUnitValue(hInUnit, selectedUnit)
+        }
+    }
+
+    val onUnitChange: (CanvasUnit) -> Unit = { newUnit ->
+        if (newUnit != selectedUnit) {
+            val curWInPx = widthVal.toDouble()
+            val curHInPx = heightVal.toDouble()
+            val newW = pxToUnit(curWInPx, newUnit, ppiVal)
+            val newH = pxToUnit(curHInPx, newUnit, ppiVal)
+            selectedUnit = newUnit
+            customW = formatUnitValue(newW, newUnit)
+            customH = formatUnitValue(newH, newUnit)
+        }
+    }
 
     // Tab state:
     // In Wide Landscape: presetTab (0 = 系统预设, 1 = 我的预设)
@@ -469,11 +569,12 @@ fun CreatePage(vm: PaintViewModel) {
     }
 
     val onStartPainting = {
-        val finalW = customW.toIntOrNull()?.coerceIn(64, 8192) ?: 2048
-        val finalH = customH.toIntOrNull()?.coerceIn(64, 8192) ?: 2048
+        val finalW = widthVal.coerceIn(64, 8192)
+        val finalH = heightVal.coerceIn(64, 8192)
         vm.startPainting(
             w = finalW,
             h = finalH,
+            dpi = ppiVal,
             animation = animationCanvas,
             animationFps = DEFAULT_ANIMATION_FPS,
         )
@@ -595,11 +696,7 @@ fun CreatePage(vm: PaintViewModel) {
                                     item = item,
                                     isSelected = isSelected,
                                     maxLayers = itemLayers,
-                                    onClick = {
-                                        customW = item.width.toString()
-                                        customH = item.height.toString()
-                                        customPpi = item.defaultPpi.toString()
-                                    }
+                                    onClick = { applyPreset(item) }
                                 )
                             }
                         }
@@ -624,11 +721,7 @@ fun CreatePage(vm: PaintViewModel) {
                                         item = item,
                                         isSelected = isSelected,
                                         maxLayers = itemLayers,
-                                        onClick = {
-                                            customW = item.width.toString()
-                                            customH = item.height.toString()
-                                            customPpi = item.defaultPpi.toString()
-                                        },
+                                        onClick = { applyPreset(item) },
                                         onDelete = {
                                             presetToDelete = item
                                         }
@@ -658,12 +751,15 @@ fun CreatePage(vm: PaintViewModel) {
                         )
 
                         CanvasDimensionsCard(
+                            unit = selectedUnit,
+                            onUnitChange = onUnitChange,
                             width = customW,
                             onWidthChange = { customW = it },
                             height = customH,
                             onHeightChange = { customH = it },
                             ppi = customPpi,
                             onPpiChange = { customPpi = it },
+                            convertedHint = convertedHint,
                             onSwap = onSwapDimensions
                         )
 
@@ -680,12 +776,22 @@ fun CreatePage(vm: PaintViewModel) {
                                 color = colors.subText,
                                 fontSize = 12.sp
                             )
-                            Text(
-                                text = stringResource(R.string.create_max_layers_desc, maxLayers),
-                                color = colors.accent,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(R.string.create_max_layers_desc, maxLayers),
+                                    color = if (maxLayers < 10) Color(0xFFD97757) else colors.accent,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (maxLayers < 10) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.create_layer_warning_low),
+                                        color = Color(0xFFD97757),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(Modifier.height(8.dp))
@@ -756,11 +862,7 @@ fun CreatePage(vm: PaintViewModel) {
                                         item = item,
                                         isSelected = isSelected,
                                         maxLayers = itemLayers,
-                                        onClick = {
-                                            customW = item.width.toString()
-                                            customH = item.height.toString()
-                                            customPpi = item.defaultPpi.toString()
-                                        }
+                                        onClick = { applyPreset(item) }
                                     )
                                 }
                             }
@@ -784,11 +886,7 @@ fun CreatePage(vm: PaintViewModel) {
                                             item = item,
                                             isSelected = isSelected,
                                             maxLayers = itemLayers,
-                                            onClick = {
-                                                customW = item.width.toString()
-                                                customH = item.height.toString()
-                                                customPpi = item.defaultPpi.toString()
-                                            },
+                                            onClick = { applyPreset(item) },
                                             onDelete = {
                                                 presetToDelete = item
                                             }
@@ -802,6 +900,7 @@ fun CreatePage(vm: PaintViewModel) {
                         PortraitPresetBottomBar(
                             widthVal = widthVal,
                             heightVal = heightVal,
+                            ppiVal = ppiVal,
                             maxLayers = maxLayers,
                             onSwap = onSwapDimensions,
                             onCustomize = { portraitTab = 1 },
@@ -831,12 +930,15 @@ fun CreatePage(vm: PaintViewModel) {
                             )
 
                             CanvasDimensionsCard(
+                                unit = selectedUnit,
+                                onUnitChange = onUnitChange,
                                 width = customW,
                                 onWidthChange = { customW = it },
                                 height = customH,
                                 onHeightChange = { customH = it },
                                 ppi = customPpi,
                                 onPpiChange = { customPpi = it },
+                                convertedHint = convertedHint,
                                 onSwap = onSwapDimensions
                             )
 
@@ -852,12 +954,22 @@ fun CreatePage(vm: PaintViewModel) {
                                     color = colors.subText,
                                     fontSize = 12.sp
                                 )
-                                Text(
-                                    text = stringResource(R.string.create_max_layers_desc, maxLayers),
-                                    color = colors.accent,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = stringResource(R.string.create_max_layers_desc, maxLayers),
+                                        color = if (maxLayers < 10) Color(0xFFD97757) else colors.accent,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (maxLayers < 10) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = stringResource(R.string.create_layer_warning_low),
+                                            color = Color(0xFFD97757),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
                             }
                             Spacer(Modifier.height(8.dp))
                         }
@@ -1090,12 +1202,15 @@ private fun OrientationToggle(
 
 @Composable
 private fun CanvasDimensionsCard(
+    unit: CanvasUnit,
+    onUnitChange: (CanvasUnit) -> Unit,
     width: String,
     onWidthChange: (String) -> Unit,
     height: String,
     onHeightChange: (String) -> Unit,
     ppi: String,
     onPpiChange: (String) -> Unit,
+    convertedHint: String,
     onSwap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1119,26 +1234,60 @@ private fun CanvasDimensionsCard(
                 fontWeight = FontWeight.Bold
             )
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.panelHi)
-                    .clickable { onSwap() }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_flip_horizontal),
-                    contentDescription = stringResource(R.string.create_swap_dimensions),
-                    tint = colors.accent,
-                    modifier = Modifier.size(12.dp)
-                )
-                Text(
-                    text = stringResource(R.string.create_swap_dimensions),
-                    color = colors.text,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                // Unit switcher segmented pills
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.panelHi)
+                        .padding(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    CanvasUnit.values().forEach { u ->
+                        val isSelected = unit == u
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSelected) colors.accent else Color.Transparent)
+                                .clickable { onUnitChange(u) }
+                                .padding(horizontal = 7.dp, vertical = 3.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = u.symbol,
+                                color = if (isSelected) colors.onAccent else colors.subText,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                // Swap dimensions button
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.panelHi)
+                        .clickable { onSwap() }
+                        .padding(horizontal = 7.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_flip_horizontal),
+                        contentDescription = stringResource(R.string.create_swap_dimensions),
+                        tint = colors.accent,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.create_swap_dimensions),
+                        color = colors.text,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
 
@@ -1150,45 +1299,100 @@ private fun CanvasDimensionsCard(
         ) {
             SizeInputField(
                 label = stringResource(R.string.create_width),
-                unit = "PX",
+                unit = unit.symbol,
                 value = width,
                 onValueChange = onWidthChange,
+                allowDecimal = (unit != CanvasUnit.PX),
                 modifier = Modifier.weight(1f)
             )
             SizeInputField(
                 label = stringResource(R.string.create_height),
-                unit = "PX",
+                unit = unit.symbol,
                 value = height,
                 onValueChange = onHeightChange,
+                allowDecimal = (unit != CanvasUnit.PX),
                 modifier = Modifier.weight(1f)
             )
         }
 
-        Spacer(Modifier.height(14.dp))
+        if (convertedHint.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = convertedHint,
+                color = colors.subText,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
 
+        Spacer(Modifier.height(12.dp))
+
+        // DPI Row: Label & Direct Number Input Field
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(stringResource(R.string.create_dpi_label), color = colors.subText, fontSize = 12.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(72, 150, 300, 350).forEach { ppiOption ->
-                    val isSelected = ppi == ppiOption.toString()
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) colors.accent else colors.panelHi)
-                            .clickable { onPpiChange(ppiOption.toString()) }
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Text(
-                            "$ppiOption",
-                            color = if (isSelected) colors.onAccent else colors.text,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.panelHi)
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                BasicTextField(
+                    value = ppi,
+                    onValueChange = { v ->
+                        val filtered = v.filter { it.isDigit() }.take(4)
+                        onPpiChange(filtered)
+                    },
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = colors.text,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.End
+                    ),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    cursorBrush = SolidColor(colors.accent),
+                    modifier = Modifier.width(46.dp)
+                )
+                Text(
+                    text = "DPI",
+                    color = colors.subText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // DPI Quick Preset Chips: 72, 150, 300, 350, 600
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            listOf(72, 150, 300, 350, 600).forEach { ppiOption ->
+                val isSelected = ppi == ppiOption.toString()
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) colors.accent else colors.panelHi)
+                        .clickable { onPpiChange(ppiOption.toString()) }
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "$ppiOption",
+                        color = if (isSelected) colors.onAccent else colors.text,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
                 }
             }
         }
@@ -1199,6 +1403,7 @@ private fun CanvasDimensionsCard(
 private fun PortraitPresetBottomBar(
     widthVal: Int,
     heightVal: Int,
+    ppiVal: Int,
     maxLayers: Int,
     onSwap: () -> Unit,
     onCustomize: () -> Unit,
@@ -1219,7 +1424,7 @@ private fun PortraitPresetBottomBar(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${widthVal} × ${heightVal} px",
+                text = "${widthVal} × ${heightVal} px · ${ppiVal} DPI",
                 color = colors.text,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
@@ -1670,6 +1875,7 @@ private fun SizeInputField(
     unit: String,
     value: String,
     onValueChange: (String) -> Unit,
+    allowDecimal: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val colors = Theme.current
@@ -1679,9 +1885,24 @@ private fun SizeInputField(
         TextField(
             value = value,
             onValueChange = { v ->
-                if (v.length <= 5) onValueChange(v.filter { it.isDigit() })
+                val filtered = if (allowDecimal) {
+                    var hasDot = false
+                    val sb = StringBuilder()
+                    for (ch in v) {
+                        if (ch.isDigit()) {
+                            sb.append(ch)
+                        } else if (ch == '.' && !hasDot) {
+                            hasDot = true
+                            sb.append(ch)
+                        }
+                    }
+                    sb.toString().take(7)
+                } else {
+                    v.filter { it.isDigit() }.take(5)
+                }
+                onValueChange(filtered)
             },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(keyboardType = if (allowDecimal) KeyboardType.Decimal else KeyboardType.Number),
             singleLine = true,
             trailingIcon = {
                 Text(unit, color = colors.subText, fontSize = 11.sp, modifier = Modifier.padding(end = 12.dp))

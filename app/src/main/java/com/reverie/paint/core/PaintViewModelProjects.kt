@@ -101,7 +101,8 @@ internal fun PaintViewModel.saveProject(
                 "elapsedSeconds": $elapsedSeconds,
                 "createdTime": $canvasCreatedTime,
                 "colorMode": "$colorMode",
-                "layerCount": ${layers.size}
+                "layerCount": ${layers.size},
+                "dpi": $docDpi
             }
             """.trimIndent()
         // Recording blob goes straight into the .revp via the C++ store
@@ -145,7 +146,8 @@ internal fun PaintViewModel.autoSaveProject() {
                 "layerCount": ${layers.size},
                 "isAutoSave": true,
                 "masterFilePath": "$masterPath",
-                "docName": "$name"
+                "docName": "$name",
+                "dpi": $docDpi
             }
             """.trimIndent()
         val recBlob = recorder.serialize()
@@ -209,6 +211,7 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
             isModified = isRecovered // 异常恢复的工程标记为未保存
             docWidth = if (coreW > 0) coreW else p.width
             docHeight = if (coreH > 0) coreH else p.height
+            docDpi = if (p.dpi > 0) p.dpi else 300
             docName = p.name
 
             val masterFile = File(projectDir(), "${p.name}.revp")
@@ -496,6 +499,7 @@ internal fun PaintViewModel.parseProjectFromFile(f: File): com.reverie.paint.mod
     var h = 1920
     var strokes = 0
     var elapsed = 0L
+    var dpi = 300
     var layerCount = 1
     var colorModeStr = "RGB 8位"
     var previewPath = ""
@@ -515,6 +519,7 @@ internal fun PaintViewModel.parseProjectFromFile(f: File): com.reverie.paint.mod
                     val json = JSONObject(text)
                     w = json.optInt("width", 1080)
                     h = json.optInt("height", 1920)
+                    dpi = json.optInt("dpi", 300)
                     strokes = json.optInt("strokeCount", 0)
                     elapsed = json.optLong("elapsedSeconds", 0L)
                     colorModeStr = json.optString("colorMode", "RGB 8位")
@@ -558,6 +563,7 @@ internal fun PaintViewModel.parseProjectFromFile(f: File): com.reverie.paint.mod
             name = displayName,
             width = w,
             height = h,
+            dpi = dpi,
             filePath = f.absolutePath,
             previewPath = previewPath,
             strokeCount = strokes,
@@ -967,6 +973,7 @@ internal fun PaintViewModel.generateNextProjectName(): String {
 internal fun PaintViewModel.startPainting(
     w: Int,
     h: Int,
+    dpi: Int = 300,
     name: String? = null,
     initialBitmap: android.graphics.Bitmap? = null,
     initialSnapshotFile: java.io.File? = null,
@@ -993,6 +1000,7 @@ internal fun PaintViewModel.startPainting(
             isModified = false
             docWidth = w
             docHeight = h
+            docDpi = dpi
             docName = actualName
             isBlockingLoading = false
             startPaintingTimer()

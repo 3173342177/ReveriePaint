@@ -91,6 +91,7 @@ data class Project(
     val name: String,
     val width: Int = 0,
     val height: Int = 0,
+    val dpi: Int = 300,
     val filePath: String = "",
     val previewPath: String = "",
     val strokeCount: Int = 0,

@@ -5,7 +5,11 @@
 package com.reverie.paint.model
 
 import com.reverie.paint.ui.create.CanvasPresetItem
+import com.reverie.paint.ui.create.CanvasUnit
+import com.reverie.paint.ui.create.formatUnitValue
 import com.reverie.paint.ui.create.getAspectRatioLabel
+import com.reverie.paint.ui.create.pxToUnit
+import com.reverie.paint.ui.create.unitToPx
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -58,5 +62,29 @@ class CreateCanvasLogicTest {
         assertEquals(true, customItem.isCustom)
         assertEquals(350, customItem.defaultPpi)
         assertEquals("自定义测试", customItem.description)
+    }
+
+    @Test
+    fun `unit conversion between PX and physical units at various DPI`() {
+        // A4 at 300 DPI: 210mm x 297mm -> ~2480 x 3508 px
+        assertEquals(2480, unitToPx(210.0, CanvasUnit.MM, 300))
+        assertEquals(3508, unitToPx(297.0, CanvasUnit.MM, 300))
+
+        // A4 at 600 DPI: 210mm x 297mm -> ~4961 x 7016 px
+        assertEquals(4961, unitToPx(210.0, CanvasUnit.MM, 600))
+        assertEquals(7016, unitToPx(297.0, CanvasUnit.MM, 600))
+
+        // Convert px back to mm at 300 DPI
+        val mmW = pxToUnit(2480.0, CanvasUnit.MM, 300)
+        assertEquals("210", formatUnitValue(mmW, CanvasUnit.MM))
+
+        // Convert px to cm at 300 DPI
+        val cmW = pxToUnit(2480.0, CanvasUnit.CM, 300)
+        assertEquals("21", formatUnitValue(cmW, CanvasUnit.CM))
+
+        // Inches: 10 x 8 inches @ 300 DPI -> 3000 x 2400 px
+        assertEquals(3000, unitToPx(10.0, CanvasUnit.INCH, 300))
+        assertEquals(2400, unitToPx(8.0, CanvasUnit.INCH, 300))
+        assertEquals(6000, unitToPx(10.0, CanvasUnit.INCH, 600))
     }
 }
