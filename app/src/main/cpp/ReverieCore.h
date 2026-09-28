@@ -653,6 +653,7 @@ public:
     QString brushPresetName(int index) const;
     QString brushPresetPath(int index) const;
     QString brushPresetPaintOpId(int index);
+    QString brushPresetCompositeOp(int index);
     QString currentBrushPaintOpId() const;
     QString brushPresetTipFilename(int index);
     QByteArray brushPresetThumbData(int index) const;
@@ -893,9 +894,11 @@ private:
         QVector<double> defaults;
         QString paintOpId;
         QString tipFilename;
+        QString compositeOp;
     };
     QMutex m_presetInfoMutex;
     QHash<int, CachedPresetInfo> m_presetInfoCache;
+    QSet<QString> m_loadedResourceNames;
     // 解析并缓存预设只读元数据; 失败返回 false (out 不保证有效)
     bool ensurePresetInfo(int index, CachedPresetInfo &out);
     // 当前 m_brushPreset 的笔尖是否被 setBrushTipAsset(非空) 覆盖过。

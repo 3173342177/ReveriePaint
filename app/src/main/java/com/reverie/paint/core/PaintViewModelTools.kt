@@ -696,7 +696,12 @@ internal fun PaintViewModel.applyTool(toolId: String) {
                 val isCurEraser = isEraserTool || (curPreset?.group == "橡皮擦" || curPreset?.name?.startsWith("a)") == true || curPreset?.name?.contains("Eraser", ignoreCase = true) == true)
                 val saved = brushParams[curPreset?.name]
                 val savedOp = saved?.compositeOp
-                val effectiveOp = if (isCurEraser) "erase" else if (savedOp.isNullOrBlank() || savedOp == "erase") "normal" else savedOp
+                val nativeOp = if (state.presetIndex >= 0) ReverieCoreBridge.brushPresetCompositeOp(state.presetIndex) else "normal"
+                val effectiveOp = if (isCurEraser) {
+                    "erase"
+                } else {
+                    if (saved?.isCustomized == true && !savedOp.isNullOrBlank() && savedOp != "erase") savedOp else nativeOp
+                }
                 brushCompositeOp = effectiveOp
                 if (saved != null) {
                     brushSize = saved.size

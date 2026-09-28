@@ -487,6 +487,7 @@ object ReverieCoreBridge {
     external fun brushPresetName(index: Int): String
 
     external fun brushPresetPaintOpId(index: Int): String
+    external fun brushPresetCompositeOp(index: Int): String
 
     external fun currentBrushPaintOpId(): String
 

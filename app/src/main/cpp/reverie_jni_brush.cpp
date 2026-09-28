@@ -108,6 +108,13 @@ Java_com_reverie_paint_core_ReverieCoreBridge_brushPresetPaintOpId(JNIEnv *env, 
 }
 
 JNIEXPORT jstring JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_brushPresetCompositeOp(JNIEnv *env, jobject, jint index)
+{
+    const QString op = core()->brushPresetCompositeOp(index);
+    return env->NewStringUTF(op.toUtf8().constData());
+}
+
+JNIEXPORT jstring JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_currentBrushPaintOpId(JNIEnv *env, jobject)
 {
     const QString id = core()->currentBrushPaintOpId();

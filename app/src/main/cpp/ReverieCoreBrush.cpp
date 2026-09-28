@@ -150,7 +150,8 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
     const QString cleanName = QUrl::fromPercentEncoding(baseName.toUtf8());
     const QString bareName = QFileInfo(cleanName).fileName();
 
-    if (m_loadedBrushes.contains(baseName) || m_loadedBrushes.contains(cleanName) || m_loadedBrushes.contains(bareName)) {
+    if (m_loadedBrushes.contains(baseName) || m_loadedBrushes.contains(cleanName) || m_loadedBrushes.contains(bareName) ||
+        m_loadedResourceNames.contains(baseName) || m_loadedResourceNames.contains(cleanName) || m_loadedResourceNames.contains(bareName)) {
         return true;
     }
 
@@ -228,7 +229,12 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
     }
 
     KoResource *res = nullptr;
-    if (bareName.endsWith(QLatin1String(".gbr"), Qt::CaseInsensitive)) {
+    const bool isPattern = (!m_patternDir.isEmpty() && fullPath.startsWith(m_patternDir)) ||
+                           bareName.endsWith(QLatin1String(".pat"), Qt::CaseInsensitive);
+
+    if (isPattern) {
+        res = new KoPattern(fullPath);
+    } else if (bareName.endsWith(QLatin1String(".gbr"), Qt::CaseInsensitive)) {
         res = new KisGbrBrush(bareName);
     } else if (bareName.endsWith(QLatin1String(".gih"), Qt::CaseInsensitive)) {
         res = new KisImagePipeBrush(bareName);
@@ -236,8 +242,6 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
         res = new KisPngBrush(bareName);
     } else if (bareName.endsWith(QLatin1String(".svg"), Qt::CaseInsensitive)) {
         res = new KisSvgBrush(bareName);
-    } else if (bareName.endsWith(QLatin1String(".pat"), Qt::CaseInsensitive)) {
-        res = new KoPattern(fullPath);
     } else if (bareName.endsWith(QLatin1String(".jpg"), Qt::CaseInsensitive) ||
                bareName.endsWith(QLatin1String(".jpeg"), Qt::CaseInsensitive)) {
         QImage img(fullPath);
@@ -251,6 +255,7 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
                 res = new KisPngBrush(bareName);
                 if (res->loadFromDevice(&buf, m_brushResources)) {
                     res->setFilename(bareName);
+                    res->setName(bareName);
                     KisBrush *brushRaw = dynamic_cast<KisBrush *>(res);
                     if (brushRaw) {
                         KisBrushSP brushSp(brushRaw);
@@ -264,10 +269,16 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
                         if (!cleanName.isEmpty() && cleanName != bareName && cleanName != baseName) {
                             m_loadedBrushes.insert(cleanName, brushSp);
                         }
+                        m_loadedResourceNames.insert(bareName);
+                        m_loadedResourceNames.insert(baseName);
+                        if (!cleanName.isEmpty()) m_loadedResourceNames.insert(cleanName);
                         return true;
                     } else if (lr) {
                         KoResourceSP resSp(res);
                         lr->addResource(resSp);
+                        m_loadedResourceNames.insert(bareName);
+                        m_loadedResourceNames.insert(baseName);
+                        if (!cleanName.isEmpty()) m_loadedResourceNames.insert(cleanName);
                         return true;
                     }
                 }
@@ -284,6 +295,7 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
         f.seek(0);
         if (res->loadFromDevice(&f, m_brushResources)) {
             res->setFilename(bareName);
+            res->setName(bareName);
             const QString md5Hex = QString::fromLatin1(QCryptographicHash::hash(fileBytes, QCryptographicHash::Md5).toHex());
             res->setMD5Sum(md5Hex);
             KisBrush *brushRaw = dynamic_cast<KisBrush *>(res);
@@ -295,6 +307,7 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
                         KisBrushSP altSp(brushSp->clone().dynamicCast<KisBrush>());
                         if (altSp) {
                             altSp->setFilename(baseName);
+                            altSp->setName(baseName);
                             altSp->setMD5Sum(md5Hex);
                             lr->addResource(altSp.staticCast<KoResource>());
                         }
@@ -303,6 +316,7 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
                         KisBrushSP lowerSp(brushSp->clone().dynamicCast<KisBrush>());
                         if (lowerSp) {
                             lowerSp->setFilename(bareName.toLower());
+                            lowerSp->setName(bareName.toLower());
                             lowerSp->setMD5Sum(md5Hex);
                             lr->addResource(lowerSp.staticCast<KoResource>());
                         }
@@ -315,6 +329,9 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
                 if (!cleanName.isEmpty() && cleanName != bareName && cleanName != baseName) {
                     m_loadedBrushes.insert(cleanName, brushSp);
                 }
+                m_loadedResourceNames.insert(bareName);
+                m_loadedResourceNames.insert(baseName);
+                if (!cleanName.isEmpty()) m_loadedResourceNames.insert(cleanName);
                 f.close();
                 return true;
             } else {
@@ -325,20 +342,57 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
                         KoResourceSP altSp(resSp->clone());
                         if (altSp) {
                             altSp->setFilename(baseName);
+                            altSp->setName(baseName);
                             altSp->setMD5Sum(md5Hex);
                             lr->addResource(altSp);
+                        }
+                    }
+                    if (!cleanName.isEmpty() && cleanName != bareName && cleanName != baseName) {
+                        KoResourceSP cleanSp(resSp->clone());
+                        if (cleanSp) {
+                            cleanSp->setFilename(cleanName);
+                            cleanSp->setName(cleanName);
+                            cleanSp->setMD5Sum(md5Hex);
+                            lr->addResource(cleanSp);
                         }
                     }
                     if (bareName.toLower() != bareName) {
                         KoResourceSP lowerSp(resSp->clone());
                         if (lowerSp) {
                             lowerSp->setFilename(bareName.toLower());
+                            lowerSp->setName(bareName.toLower());
                             lowerSp->setMD5Sum(md5Hex);
                             lr->addResource(lowerSp);
                         }
                     }
+                    if (bareName.endsWith(QLatin1String(".pat"), Qt::CaseInsensitive)) {
+                        const QString noPat = bareName.left(bareName.length() - 4);
+                        if (!noPat.isEmpty()) {
+                            KoResourceSP noPatSp(resSp->clone());
+                            if (noPatSp) {
+                                noPatSp->setFilename(noPat);
+                                noPatSp->setName(noPat);
+                                noPatSp->setMD5Sum(md5Hex);
+                                lr->addResource(noPatSp);
+                            }
+                        }
+                    } else {
+                        const QString withPat = bareName + QLatin1String(".pat");
+                        KoResourceSP withPatSp(resSp->clone());
+                        if (withPatSp) {
+                            withPatSp->setFilename(withPat);
+                            withPatSp->setName(withPat);
+                            withPatSp->setMD5Sum(md5Hex);
+                            lr->addResource(withPatSp);
+                        }
+                    }
                 }
+                m_loadedResourceNames.insert(bareName);
+                m_loadedResourceNames.insert(baseName);
+                if (!cleanName.isEmpty()) m_loadedResourceNames.insert(cleanName);
                 f.close();
+                RPC_LOG("RPC loadSingleBrushResource Pattern loaded: %s (name=%s, md5=%s)",
+                        fullPath.toUtf8().constData(), res->name().toUtf8().constData(), md5Hex.toUtf8().constData());
                 return true;
             }
         }
@@ -391,6 +445,21 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
                 }
 
                 if (!xmlStr.isEmpty()) {
+                    auto decodeBase64Safe = [](const QString &b64Str) -> QByteArray {
+                        QByteArray bytes = QByteArray::fromBase64(b64Str.toLatin1());
+                        if (bytes.size() >= 8 && memcmp(bytes.constData(), "\x89PNG\r\n\x1a\n", 8) != 0 && memcmp(bytes.constData(), "GPAT", 4) != 0) {
+                            QByteArray second = QByteArray::fromBase64(bytes);
+                            if (!second.isEmpty() && (memcmp(second.constData(), "\x89PNG\r\n\x1a\n", 8) == 0 ||
+                                                      memcmp(second.constData(), "GPAT", 4) == 0 ||
+                                                      second.startsWith("\xff\xd8\xff") ||
+                                                      second.startsWith("GIF") ||
+                                                      second.startsWith("RIFF"))) {
+                                return second;
+                            }
+                        }
+                        return bytes;
+                    };
+
                     // 1. Embedded base64 resources in Krita 5.0+ presets (<resources><resource ...>BASE64</resource></resources>)
                     static const QRegularExpression embResRe(
                         QStringLiteral("<resource\\b([^>]*?)>(.*?)</resource>"),
@@ -409,7 +478,7 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
                         const QString fn = getAttr(QStringLiteral("filename"));
                         const QString type = getAttr(QStringLiteral("type"));
                         if (!fn.isEmpty()) {
-                            const QByteArray bytes = QByteArray::fromBase64(b64.toLatin1());
+                            const QByteArray bytes = decodeBase64Safe(b64);
                             if (!bytes.isEmpty()) {
                                 const QString dir = (type == QLatin1String("kis_patterns")) ? m_patternDir : m_brushDir;
                                 if (!dir.isEmpty()) {
@@ -432,7 +501,7 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
                     auto mrPat = patDataRe.match(xmlStr);
                     if (mrPat.hasMatch()) {
                         const QString b64 = mrPat.captured(1).trimmed();
-                        const QByteArray patBytes = QByteArray::fromBase64(b64.toLatin1());
+                        const QByteArray patBytes = decodeBase64Safe(b64);
                         if (!patBytes.isEmpty()) {
                             static const QRegularExpression patNameRe(
                                 QStringLiteral("<param\\b[^>]*?name=[\"']Texture/Pattern/Name[\"'][^>]*>(?:<!\\[CDATA\\[)?([^\\]<]+)(?:\\]\\]>)?</param>"),
@@ -453,6 +522,14 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
                                 if (outF.open(QIODevice::WriteOnly)) {
                                     outF.write(patBytes);
                                     outF.close();
+                                }
+                                if (!patFileName.isEmpty() && patFileName != patName) {
+                                    const QString outPath2 = QDir(m_patternDir).filePath(patFileName);
+                                    QFile outF2(outPath2);
+                                    if (outF2.open(QIODevice::WriteOnly)) {
+                                        outF2.write(patBytes);
+                                        outF2.close();
+                                    }
                                 }
                             }
                             loadSingleBrushResource(patName);
@@ -516,25 +593,43 @@ int ReverieCore::loadPatternResources(const QString &dirPath)
         KoPattern *pat = new KoPattern(fullPath);
         if (pat->loadFromDevice(&f, m_brushResources)) {
             pat->setFilename(base);
+            pat->setName(base);
             const QString md5Hex = QString::fromLatin1(QCryptographicHash::hash(fileBytes, QCryptographicHash::Md5).toHex());
             pat->setMD5Sum(md5Hex);
-            lr->addResource(KoResourceSP(pat));
+            KoResourceSP patSp(pat);
+            lr->addResource(patSp);
             if (base.toLower() != base) {
-                KoPattern *altPat = new KoPattern(fullPath);
-                QFile fAlt(fullPath);
-                if (fAlt.open(QIODevice::ReadOnly)) {
-                    if (altPat->loadFromDevice(&fAlt, m_brushResources)) {
-                        altPat->setFilename(base.toLower());
-                        altPat->setMD5Sum(md5Hex);
-                        lr->addResource(KoResourceSP(altPat));
-                    } else {
-                        delete altPat;
-                    }
-                    fAlt.close();
-                } else {
-                    delete altPat;
+                KoResourceSP lowerSp(patSp->clone());
+                if (lowerSp) {
+                    lowerSp->setFilename(base.toLower());
+                    lowerSp->setName(base.toLower());
+                    lowerSp->setMD5Sum(md5Hex);
+                    lr->addResource(lowerSp);
                 }
             }
+            if (base.endsWith(QLatin1String(".pat"), Qt::CaseInsensitive)) {
+                const QString noPat = base.left(base.length() - 4);
+                if (!noPat.isEmpty()) {
+                    KoResourceSP noPatSp(patSp->clone());
+                    if (noPatSp) {
+                        noPatSp->setFilename(noPat);
+                        noPatSp->setName(noPat);
+                        noPatSp->setMD5Sum(md5Hex);
+                        lr->addResource(noPatSp);
+                    }
+                }
+            } else {
+                const QString withPat = base + QLatin1String(".pat");
+                KoResourceSP withPatSp(patSp->clone());
+                if (withPatSp) {
+                    withPatSp->setFilename(withPat);
+                    withPatSp->setName(withPat);
+                    withPatSp->setMD5Sum(md5Hex);
+                    lr->addResource(withPatSp);
+                }
+            }
+            m_loadedResourceNames.insert(base);
+            m_loadedResourceNames.insert(base.toLower());
             ++loaded;
         } else {
             delete pat;
@@ -806,6 +901,8 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
         }
     }
 
+    info.compositeOp = s->effectivePaintOpCompositeOp();
+
     info.valid = true;
     m_presetInfoCache.insert(index, info);
     out = info;
@@ -835,6 +932,15 @@ QString ReverieCore::brushPresetPaintOpId(int index)
         return QStringLiteral("paintbrush");
     }
     return info.paintOpId;
+}
+
+QString ReverieCore::brushPresetCompositeOp(int index)
+{
+    CachedPresetInfo info;
+    if (!ensurePresetInfo(index, info) || info.compositeOp.isEmpty()) {
+        return QStringLiteral("normal");
+    }
+    return info.compositeOp;
 }
 
 QString ReverieCore::currentBrushPaintOpId() const

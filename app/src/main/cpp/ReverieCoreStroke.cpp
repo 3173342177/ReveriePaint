@@ -549,6 +549,9 @@ bool ReverieCore::flushStrokeBatch()
                     m_strokeOp = new KisBrushOp(m_brushPreset->settings(), m_strokePainter,
                                                 KisNodeSP(m_layers[layerIndex].node), image);
                 }
+                RPC_LOG("RPC strokeOp created: presetId=%s, actualOp=%s",
+                        m_brushPreset->paintOp().id().toUtf8().constData(),
+                        m_strokeOp ? typeid(*m_strokeOp).name() : "null");
                 delete m_strokeDistance;
                 m_strokeDistance = new KisDistanceInformation(start, 0.0);
             }
@@ -582,7 +585,7 @@ bool ReverieCore::flushStrokeBatch()
             qBound<qreal>(0.0, first.pressure, 1.0);
         QRect strokeDirty;
         if (m_maskedStrokePainter) {
-            KisPaintInformation info(p, pressure, first.tiltX, first.tiltY, first.rotation, 0.0, 0.0, first.time, 0.0);
+            KisPaintInformation info(p, pressure, first.tiltX, first.tiltY, first.rotation, 0.0, 1.0, first.time, 0.0);
             if (m_randomSource) info.setRandomSource(m_randomSource);
             if (m_perStrokeRandomSource) info.setPerStrokeRandomSource(m_perStrokeRandomSource);
             m_maskedStrokePainter->paintAt(info);
@@ -606,7 +609,7 @@ bool ReverieCore::flushStrokeBatch()
             }
         } else if (m_brushPreset && m_strokeOp) {
             // Krita dab for a genuine tap (paintAt = single dab at pos)
-            KisPaintInformation info(p, pressure, first.tiltX, first.tiltY, first.rotation, 0.0, 0.0, first.time, 0.0);
+            KisPaintInformation info(p, pressure, first.tiltX, first.tiltY, first.rotation, 0.0, 1.0, first.time, 0.0);
             if (m_randomSource) info.setRandomSource(m_randomSource);
             if (m_perStrokeRandomSource) info.setPerStrokeRandomSource(m_perStrokeRandomSource);
             m_strokeOp->paintAt(info, m_strokeDistance);
@@ -649,8 +652,8 @@ bool ReverieCore::flushStrokeBatch()
             const qreal dt = qMax<qreal>(1e-4, b.time - a.time);
             // Speed in px/ms to align with Krita's sensor scale
             const qreal speed = dist / (dt * 1000.0);
-            KisPaintInformation infoA(a.imgPos, a.pressure, a.tiltX, a.tiltY, a.rotation, 0.0, 0.0, a.time, speed);
-            KisPaintInformation infoB(b.imgPos, b.pressure, b.tiltX, b.tiltY, b.rotation, 0.0, 0.0, b.time, speed);
+            KisPaintInformation infoA(a.imgPos, a.pressure, a.tiltX, a.tiltY, a.rotation, 0.0, 1.0, a.time, speed);
+            KisPaintInformation infoB(b.imgPos, b.pressure, b.tiltX, b.tiltY, b.rotation, 0.0, 1.0, b.time, speed);
             if (m_randomSource) {
                 infoA.setRandomSource(m_randomSource);
                 infoB.setRandomSource(m_randomSource);
@@ -721,8 +724,8 @@ bool ReverieCore::flushStrokeBatch()
             const qreal dt = qMax<qreal>(1e-4, b.time - a.time);
             // Speed in px/ms to align with Krita's sensor scale
             const qreal speed = dist / (dt * 1000.0);
-            KisPaintInformation infoA(a.imgPos, a.pressure, a.tiltX, a.tiltY, a.rotation, 0.0, 0.0, a.time, speed);
-            KisPaintInformation infoB(b.imgPos, b.pressure, b.tiltX, b.tiltY, b.rotation, 0.0, 0.0, b.time, speed);
+            KisPaintInformation infoA(a.imgPos, a.pressure, a.tiltX, a.tiltY, a.rotation, 0.0, 1.0, a.time, speed);
+            KisPaintInformation infoB(b.imgPos, b.pressure, b.tiltX, b.tiltY, b.rotation, 0.0, 1.0, b.time, speed);
             if (m_randomSource) {
                 infoA.setRandomSource(m_randomSource);
                 infoB.setRandomSource(m_randomSource);
@@ -1115,7 +1118,7 @@ bool ReverieCore::strokeAirbrushTick()
     const qreal tiltX = lastSample ? lastSample->tiltX : m_lastTiltX;
     const qreal tiltY = lastSample ? lastSample->tiltY : m_lastTiltY;
     const qreal rotation = lastSample ? lastSample->rotation : m_lastRotation;
-    KisPaintInformation info(p, pressure, tiltX, tiltY, rotation, 0.0, 0.0, m_strokeTimer.elapsed() / 1000.0, 0.0);
+    KisPaintInformation info(p, pressure, tiltX, tiltY, rotation, 0.0, 1.0, m_strokeTimer.elapsed() / 1000.0, 0.0);
     if (m_randomSource) info.setRandomSource(m_randomSource);
     if (m_perStrokeRandomSource) info.setPerStrokeRandomSource(m_perStrokeRandomSource);
 

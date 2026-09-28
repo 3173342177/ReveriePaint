@@ -1070,11 +1070,12 @@ import kotlinx.coroutines.withContext
 
         val saved = if (preset != null) brushParams[preset.name] else null
         val isCustomized = saved?.isCustomized == true
+        val nativeCompOp = if (index >= 0) ReverieCoreBridge.brushPresetCompositeOp(index) else "normal"
         val effectiveCompOp = if (isEraserPreset || currentToolId == "eraser") {
             "erase"
         } else {
             val savedOp = saved?.compositeOp
-            if (savedOp.isNullOrBlank() || savedOp == "erase") "normal" else savedOp
+            if (isCustomized && !savedOp.isNullOrBlank() && savedOp != "erase") savedOp else nativeCompOp
         }
         runCore(after = {
             if (saved != null && isCustomized) {
