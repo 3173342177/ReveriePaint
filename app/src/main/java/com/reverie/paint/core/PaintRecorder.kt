@@ -20,6 +20,7 @@ import com.reverie.paint.model.RecordingEvents.TOOL_OP
 import com.reverie.paint.model.RecordingEvents.VERSION
 import com.reverie.paint.model.RecordingReader
 import java.io.File
+import java.io.FileInputStream
 
 /** Parsed recording blob (events + optional initial-document snapshot). */
 class ParsedRecording(
@@ -39,7 +40,7 @@ class ParsedRecording(
  *
  * Memory: events append straight into a growable byte array (no per-event
  * objects); a typical full painting session stays well under a few MB. The
- * snapshot is kept as a file on disk, never in RAM.
+ * snapshot is stored on disk and cached after serialization until memory pressure or session end.
  */
 class PaintRecorder {
     private var buffer: RecordingBuffer? = null
@@ -73,6 +74,13 @@ class PaintRecorder {
         private set
     var eventCount = 0
         private set
+
+    // 快照字节缓存: 一个会话内快照文件内容不变, 而自动保存每隔几分钟就要
+    // serialize 一次 —— 每次都 readBytes() 等于反复把几十 MB 从磁盘读进一个
+    // 新数组 (每次保存都白付一次 IO + 一次大分配)。会话使用唯一且不可变的文件路径,
+    // 命中即复用; 内存压力时由 PaintViewModel 调 [dropSnapshotCache] 释放。
+    private var snapCachePath: String? = null
+    private var snapCacheBytes: ByteArray? = null
 
     // Context diff state (sentinel values = unknown / not yet captured)
     private var lastToolMode = -2
@@ -137,7 +145,7 @@ class PaintRecorder {
                             snap[1] == 'P'.code.toByte() &&
                             snap[2] == 'N'.code.toByte() &&
                             snap[3] == 'G'.code.toByte()
-                    val target = File(snapshotTempDir, if (isPng) "initial.png" else "initial.revp")
+                    val target = File.createTempFile("initial-", if (isPng) ".png" else ".revp", snapshotTempDir)
                     target.writeBytes(snap)
                     snapshotFile = target
                 } catch (e: Exception) {
@@ -149,7 +157,7 @@ class PaintRecorder {
             try {
                 snapshotTempDir.mkdirs()
                 val ext = snapshotSource.extension
-                val target = File(snapshotTempDir, "initial" + if (ext.isEmpty()) "" else ".$ext")
+                val target = File.createTempFile("initial-", if (ext.isEmpty()) null else ".$ext", snapshotTempDir)
                 snapshotSource.inputStream().use { i ->
                     target.outputStream().use { o -> i.copyTo(o, 64 * 1024) }
                 }
@@ -163,16 +171,30 @@ class PaintRecorder {
 
     /** Stop and discard the current session (temp snapshot file removed). */
     fun endSession() {
-        synchronized(ioLock) {
+        val obsolete = synchronized(ioLock) {
             recording = false
             buffer = null
             eventCount = 0
             priorEvents = null
             priorEventCount = 0
             priorTotalMs = 0L
+            val file = snapshotFile
+            snapshotFile = null
+            snapCachePath = null
+            snapCacheBytes = null
+            file
         }
-        snapshotFile?.delete()
-        snapshotFile = null
+        // serialize has already opened its own descriptor before releasing ioLock.
+        // Android keeps that descriptor readable after unlink; a new session uses a unique path.
+        obsolete?.delete()
+    }
+
+    /** Release cached bytes without invalidating a serialization already in progress. */
+    fun dropSnapshotCache() {
+        synchronized(ioLock) {
+            snapCachePath = null
+            snapCacheBytes = null
+        }
     }
 
     /** Serialize the session into the "recording" blob; null if empty.
@@ -181,17 +203,20 @@ class PaintRecorder {
      *  Thread-safety: emit() writes the buffer on the main thread while this
      *  runs on the render thread (autosave); ioLock guards the shared state
      *  snapshot so a concurrent stroke can't tear the serialized stream.
-     *  The ioLock critical section only copies memory - the snapshot file
-     *  read happens OUTSIDE the lock so main-thread stroke emission never
-     *  waits on disk IO. */
+     *  The ioLock critical section copies metadata/events and opens the snapshot
+     *  descriptor. Bulk snapshot reads happen OUTSIDE the lock so stroke emission
+     *  does not wait for the whole file to be read. */
     fun serialize(): ByteArray? {
-        val b: RecordingBuffer
         val count: Int
         val durationMs: Int
         var priorRaw: ByteArray? = null
         var priorCount = 0
         var priorMs = 0L
-        var snapFile: java.io.File? = null
+        var snapFile: File? = null
+        var snapStream: FileInputStream? = null
+        var cachedSnapshot: ByteArray? = null
+        val width: Int
+        val height: Int
         var usedRaw: ByteArray? = null
         synchronized(ioLock) {
             val buf = buffer ?: run {
@@ -206,57 +231,79 @@ class PaintRecorder {
                 android.util.Log.d("ReverieRec", "serialize: zero events")
                 return null
             }
-            b = buf
+            width = sessionW
+            height = sessionH
             // Snapshot exactly the used region: emit() may append concurrently.
             usedRaw = ByteArray(buf.size)
             System.arraycopy(buf.data, 0, usedRaw, 0, buf.size)
             durationMs =
                 ((lastEventMs - sessionStartMs).coerceAtLeast(0L)).toInt().coerceAtMost(Int.MAX_VALUE)
             snapFile = snapshotFile
+            val file = snapFile
+            if (file != null) {
+                cachedSnapshot = snapCacheBytes.takeIf { snapCachePath == file.absolutePath }
+                if (cachedSnapshot == null) {
+                    // Acquire ownership before endSession can unlink the file. Bulk reads stay outside ioLock.
+                    try {
+                        snapStream = file.inputStream()
+                    } catch (e: Exception) {
+                        android.util.Log.e("ReveriePaint", "recording snapshot open failed", e)
+                        return null // Never serialize events against a missing initial document.
+                    }
+                }
+            }
         }
         val used = usedRaw ?: return null
         val prior = priorRaw
-        // 快照磁盘读在锁外 (原实现在 ioLock 下 readBytes, 快照可能是几 MB 的
-        // .revp —— autoSave 触发时主线程 emit 的笔画事件全部堵在锁上等磁盘,
-        // 表现为"落墨延迟")。并发 endSession 删除文件: Android(Linux) 上已
-        // 打开的 fd 仍可读完, 读前被删则抛异常捕获为 null —— 仅丢本次
-        // autoSave 的录像快照 (goHome 与 autoSave 撞点的罕见瞬间), 不崩溃。
-        val snapBytes =
-            try {
-                snapFile?.takeIf { it.exists() }?.readBytes()
-            } catch (e: Exception) {
-                android.util.Log.e("ReveriePaint", "recording snapshot read failed", e)
-                null
+        val snapBytes = try {
+            cachedSnapshot ?: snapStream?.use { it.readBytes() }
+        } catch (e: Exception) {
+            android.util.Log.e("ReveriePaint", "recording snapshot read failed", e)
+            return null
+        }
+        if (snapFile != null && snapBytes != null) {
+            synchronized(ioLock) {
+                if (snapshotFile == snapFile) {
+                    snapCachePath = snapFile!!.absolutePath
+                    snapCacheBytes = snapBytes
+                }
             }
+        }
         // Merge: prior event stream first, session events appended. dt is a
         // relative increment per event, so plain stream concatenation keeps
         // the timeline monotonic (the first session event carries the pause
         // since this session started).
-        // 直接顺序写入输出缓冲, 不再构造 merged 中转数组 (省一份全量分配+两次拷贝)
-        val priorSize = prior?.size ?: 0
-        val totalCount = (if (prior != null) priorCount else 0) + count
-        val totalMs =
-            ((if (prior != null) priorMs else 0L) + durationMs)
-                .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        val mergedSize = priorSize + used.size
-        val out = RecordingBuffer(64 + mergedSize + (snapBytes?.size ?: 0) + 16)
-        out.writeBytes(MAGIC.toByteArray(Charsets.US_ASCII))
+        //
+        // 一次性分配最终 blob 并顺序写入。旧实现是 used -> merged -> out ->
+        // copyOf 四份全量拷贝 (长时绘画的录制流可达几十 MB, 保存时白给 3 次
+        // 全量复制和 2 个大缓冲的 GC 峰值)。锁内那份 used 快照仍必须保留 ——
+        // emit() 可能正在往 buffer 追加。
+        val p = prior
+        val priorSize = if (p != null) p.size else 0
+        val totalCount = priorCount + count
+        val totalMs = (priorMs + durationMs).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val snapSize = snapBytes?.size ?: 0
+        val magic = MAGIC.toByteArray(Charsets.US_ASCII)
+        // 容量按实际需要算, 这样 RecordingBuffer 不会扩容, 最后可以直接把
+        // 内部数组交出去 (零拷贝); 多算 1 字节浪费都没有
+        val need = magic.size + 2 + 2 + 2 + 1 + 4 + 4 + 4 + (if (snapBytes != null) 8 else 0) +
+            priorSize + used.size + snapSize
+        val out = RecordingBuffer(need)
+        out.writeBytes(magic)
         out.u16(VERSION)
-        out.u16(sessionW)
-        out.u16(sessionH)
+        out.u16(width)
+        out.u16(height)
         out.u8(if (snapBytes != null) 1 else 0)
         out.u32(totalCount)
         out.u32(totalMs)
-        out.u32(mergedSize)
-        if (prior != null) {
-            out.writeBytes(prior, 0, prior.size)
-        }
+        out.u32(priorSize + used.size)
+        if (priorSize > 0) out.writeBytes(p!!, 0, priorSize)
         out.writeBytes(used, 0, used.size)
         if (snapBytes != null) {
-            out.u64(snapBytes.size.toLong())
-            out.writeBytes(snapBytes)
+            out.u64(snapSize.toLong())
+            out.writeBytes(snapBytes, 0, snapSize)
         }
-        return out.data.copyOf(out.size)
+        return if (out.size == out.data.size) out.data else out.data.copyOf(out.size)
     }
 
     // ---- Event emission (main thread; ignored while not recording) ----

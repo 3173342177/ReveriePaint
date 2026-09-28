@@ -13,6 +13,20 @@
 
 #include <future>
 #include <QSet>
+#include <QThread>
+#include <QThreadPool>
+
+QThreadPool *reverieBackgroundPool()
+{
+    // 进程级单例: 刻意不析构 (静态析构顺序不可控, 退出期回收线程池没有意义)
+    static QThreadPool *pool = [] {
+        QThreadPool *p = new QThreadPool();
+        p->setMaxThreadCount(qBound(2, QThread::idealThreadCount(), 4));
+        p->setExpiryTimeout(30000);
+        return p;
+    }();
+    return pool;
+}
 
 ReverieCore::ReverieCore()
 {
@@ -140,6 +154,9 @@ bool ReverieCore::newDocument(int width, int height, bool infiniteCanvas)
 // without creating a replacement document.
 void ReverieCore::closeDocument()
 {
+    // Liquify owns transactions, tile snapshots and raw layer pointers. Release
+    // them while their document is still alive, including an interrupted gesture.
+    liquifyCancel();
     if (!m_document && !m_undoStore && m_layers.isEmpty()) {
         return; // already closed (idempotent, safe to call repeatedly)
     }
