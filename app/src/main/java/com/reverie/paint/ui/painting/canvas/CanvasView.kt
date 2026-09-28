@@ -255,14 +255,16 @@ fun CanvasView(
                 }.background(Morandi.canvasBg),
     ) {
         // 原生硬件级触控与画布直出层 (完全隔离 onHover 与 onTouch，驱动 144Hz 画布位图渲染与手势)
+        var touchViewRef by remember { mutableStateOf<CanvasTouchView?>(null) }
         val layerRev = vm.layerRevision
         val displayRev = vm.displayRevision
         androidx.compose.ui.viewinterop.AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
-                CanvasTouchView(ctx)
+                CanvasTouchView(ctx).also { touchViewRef = it }
             },
             update = { touchView ->
+                touchViewRef = touchView
                 @Suppress("UNUSED_VARIABLE")
                 val _lr = layerRev
                 @Suppress("UNUSED_VARIABLE")
@@ -342,7 +344,14 @@ fun CanvasView(
         if (tool == Tool.LIQUIFY && LiquifyGlesOverlay.enabledFor(vm.liquifyHostDraw, vm.liquifyField)) {
             androidx.compose.ui.viewinterop.AndroidView(
                 modifier = Modifier.fillMaxSize(),
-                factory = { ctx -> LiquifyGlesOverlay(ctx) },
+                factory = { ctx ->
+                    LiquifyGlesOverlay(ctx).apply {
+                        targetTouchView = touchViewRef
+                    }
+                },
+                update = { overlay ->
+                    overlay.targetTouchView = touchViewRef
+                },
             )
         }
 

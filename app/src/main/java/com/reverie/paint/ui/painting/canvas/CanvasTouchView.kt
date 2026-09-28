@@ -1851,7 +1851,7 @@ class CanvasTouchView(context: Context) : View(context) {
         }
     }
 
-    override fun dispatchHoverEvent(event: MotionEvent): Boolean {
+    public override fun dispatchHoverEvent(event: MotionEvent): Boolean {
         if (isInteracting || isTransformActive) {
             localCursorPos = Offset(event.x, event.y)
             invalidate()
