@@ -264,8 +264,7 @@ class HuaweiStylusAdapter : StylusBrandAdapter {
     override fun detect(context: Context, vm: PaintViewModel): StylusDeviceDetected? {
         val manufacturer = Build.MANUFACTURER.lowercase()
         val brandName = Build.BRAND.lowercase()
-        val isHuaweiOrHonor = manufacturer.contains("huawei") || brandName.contains("huawei") ||
-                manufacturer.contains("honor") || brandName.contains("honor")
+        val isHuawei = manufacturer.contains("huawei") || brandName.contains("huawei")
 
         var stylusConnected = false
         try {
@@ -280,7 +279,7 @@ class HuaweiStylusAdapter : StylusBrandAdapter {
 
                     if (hasStylusSource || name.contains("pen") || name.contains("stylus")) {
                         if (name.contains("m-pencil") || name.contains("mpencil") ||
-                            name.contains("m-pen") || name.contains("huawei") || name.contains("honor")
+                            name.contains("m-pen") || name.contains("huawei")
                         ) {
                             stylusConnected = true
                             break
@@ -293,9 +292,9 @@ class HuaweiStylusAdapter : StylusBrandAdapter {
         val detectedModel = detectModel(context)
         return StylusDeviceDetected(
             brand = StylusBrand.HUAWEI_MPENCIL,
-            isCurrentDeviceSupported = isHuaweiOrHonor,
-            isConnected = stylusConnected || isHuaweiOrHonor,
-            deviceName = if (isHuaweiOrHonor) {
+            isCurrentDeviceSupported = isHuawei,
+            isConnected = stylusConnected || isHuawei,
+            deviceName = if (isHuawei) {
                 "HUAWEI M-Pencil (${detectedModel.editionName} · ${Build.MODEL})"
             } else {
                 "HUAWEI M-Pencil"

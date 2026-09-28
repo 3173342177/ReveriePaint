@@ -16,7 +16,7 @@
 
 基于 Krita 核心引擎打造的 Android 原生现代数字绘画应用
 
-融合 Jetpack Compose 现代化界面与 Krita C++ 原生图像处理内核, 专为平板与触控设备优化的专业创作工作流
+融合 Jetpack Compose 现代化界面与 Krita C++ 原生图像处理内核, 专为平板与触控设备优化的专业绘画创作软件
 
 </div>
 
@@ -31,7 +31,7 @@
 - **硬件压感适配**: 深度适配 Android 压感手写笔, 具备抖动修正、子帧平滑插值与悬浮光标预览
 
 ### 专业图层与合成管理
-- **无限图层与分组树**: 动态稀疏瓦片内存管理, 支持无限图层创建、图层组嵌套与层级折叠
+- **多图层类型**:  支持滤镜图层、描边图层等高级图层样式还有图层组嵌套与层级折叠
 - **丰富混合模式**: 支持正常、正片叠底、滤色、叠加、柔光、强光、颜色减淡等 25 种混合模式
 - **图层操作全功能**: 剪贴蒙版、Alpha 锁定、图层锁定、独立隐藏/显示、快速合并、向下合并与色彩标签
 - **直观交互**: 图层面板支持长按拖拽排序、向左滑动快捷呼出操作菜单与批量图层管理
@@ -67,7 +67,7 @@
 - **推荐设备**: 支持主动式压感手写笔的 Android 平板或大屏移动设备
 
 ### 安装说明
-1. 前往 [Mirror酱 高速下载](https://mirrorchyan.com/zh/projects?rid=ReveriePaint&os=android) (国内免梯推荐) 或 [GitHub Releases 发布页面](https://github.com/LanRhyme/ReveriePaint/releases) 下载最新版本的 APK 安装包
+1. 前往 [Mirror酱](https://mirrorchyan.com/zh/projects?rid=ReveriePaint&os=android) (第三方付费高速下载源) 或 [GitHub Releases 发布页面](https://github.com/LanRhyme/ReveriePaint/releases) 下载最新版本的 APK 安装包
 2. 在设备上点击 APK 文件并允许安装来自此来源的应用
 3. 授予存储与手写笔相关权限后即可开启创作
 

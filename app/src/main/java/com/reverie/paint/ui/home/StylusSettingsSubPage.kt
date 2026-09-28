@@ -42,6 +42,7 @@ import com.reverie.paint.R
 import com.reverie.paint.core.PaintViewModel
 import com.reverie.paint.core.stylus.StylusBrand
 import com.reverie.paint.ui.home.stylus.CompactPressureCurveCard
+import com.reverie.paint.ui.home.stylus.HonorStylusConfigDialog
 import com.reverie.paint.ui.home.stylus.HuaweiStylusConfigDialog
 import com.reverie.paint.ui.home.stylus.OppoStylusConfigDialog
 import com.reverie.paint.ui.home.stylus.PressureCurveDetailDialog
@@ -257,6 +258,16 @@ internal fun StylusSettingsSubPage(
                                 onClick = { activeConfigBrand = StylusBrand.HUAWEI_MPENCIL },
                             )
                         }
+                        StylusBrand.HONOR_MAGIC_PENCIL -> {
+                            SettingStylusDeviceRow(
+                                title = device.deviceName,
+                                summary = stringResource(R.string.stylus_honor_features),
+                                isCurrentDevice = device.isCurrentDeviceSupported,
+                                isConnected = device.isConnected,
+                                shape = shape,
+                                onClick = { activeConfigBrand = StylusBrand.HONOR_MAGIC_PENCIL },
+                            )
+                        }
                         StylusBrand.SAMSUNG_SPEN -> {
                             SettingStylusDeviceRow(
                                 title = device.deviceName,
@@ -307,6 +318,9 @@ internal fun StylusSettingsSubPage(
         }
         StylusBrand.HUAWEI_MPENCIL -> {
             HuaweiStylusConfigDialog(vm = vm, onDismiss = { activeConfigBrand = null })
+        }
+        StylusBrand.HONOR_MAGIC_PENCIL -> {
+            HonorStylusConfigDialog(vm = vm, onDismiss = { activeConfigBrand = null })
         }
         StylusBrand.SAMSUNG_SPEN -> {
             SamsungStylusConfigDialog(vm = vm, onDismiss = { activeConfigBrand = null })

@@ -1110,7 +1110,8 @@ internal fun CanvasOverlay(
                     (tool == Tool.LASSO && vm.lassoMultiPoints.isNotEmpty()) ||
                     (tool == Tool.SELECT_POLYGON && polyPoints.isNotEmpty())
                 val isTransformOrMove = (tool == Tool.TRANSFORM || tool == Tool.MOVE)
-                val selBmp = if (!isTransformOrMove && !isSelecting) vm.selectionOverlayBitmap?.asImageBitmap() else null
+                val shouldShowSelBmp = !isTransformOrMove && (!isSelecting || vm.selectionMode != 0)
+                val selBmp = if (shouldShowSelBmp) vm.selectionOverlayBitmap?.asImageBitmap() else null
                 if (selBmp != null) {
                     drawImage(
                         image = selBmp,
@@ -1127,10 +1128,15 @@ internal fun CanvasOverlay(
                     val blackStrokeW = 1.2.dp.toPx() / currentScale
                     val dashInterval = 3.5.dp.toPx() / currentScale
 
-                    // 1. 半透明填充指示选区覆盖区域
+                    // 1. 半透明填充指示选区覆盖区域（减去选区时显示减去提示色）
+                    val liveFillColor = when (vm.selectionMode) {
+                        2 -> Color(0xFFFF5252).copy(alpha = 0.28f)
+                        3 -> Color(0xFF4CAF50).copy(alpha = 0.25f)
+                        else -> Morandi.accent.copy(alpha = 0.25f)
+                    }
                     drawPath(
                         path = livePath,
-                        color = Morandi.accent.copy(alpha = 0.25f),
+                        color = liveFillColor,
                         style = androidx.compose.ui.graphics.drawscope.Fill
                     )
 
@@ -1183,10 +1189,15 @@ internal fun CanvasOverlay(
                             addPath(path)
                             close()
                         }
-                        // 1. 半透明填充高亮
+                        // 1. 半透明填充高亮（模式感知）
+                        val multiFillColor = when (vm.selectionMode) {
+                            2 -> Color(0xFFFF5252).copy(alpha = 0.24f)
+                            3 -> Color(0xFF4CAF50).copy(alpha = 0.22f)
+                            else -> Morandi.accent.copy(alpha = 0.20f)
+                        }
                         drawPath(
                             path = closedPath,
-                            color = Morandi.accent.copy(alpha = 0.20f),
+                            color = multiFillColor,
                             style = androidx.compose.ui.graphics.drawscope.Fill,
                         )
                         // 2. 双色闭合蚂蚁线
@@ -1284,7 +1295,7 @@ internal fun CanvasOverlay(
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.8.dp.toPx() / currentScale)
                     )
                     drawCircle(
-                        color = Morandi.accent,
+                        color = if (vm.selectionMode == 2) Color(0xFFFF5252) else Morandi.accent,
                         radius = 8.dp.toPx() / currentScale,
                         center = startCenter,
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx() / currentScale)

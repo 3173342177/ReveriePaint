@@ -1202,7 +1202,7 @@ object ReverieCoreBridge {
     external fun cancelFilter(index: Int)
     external fun cancelFilterMulti(indices: IntArray)
 
-    external fun selectionFromLayer(index: Int): Boolean
+    external fun selectionFromLayer(index: Int, mode: Int = 0): Boolean
 
     external fun hasSelection(): Boolean
 

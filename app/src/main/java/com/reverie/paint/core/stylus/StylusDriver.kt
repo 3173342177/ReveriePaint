@@ -24,6 +24,7 @@ class StylusDriver(
     val adapters: List<StylusBrandAdapter> = listOf(
         OppoStylusAdapter(),
         HuaweiStylusAdapter(),
+        HonorStylusAdapter(),
         SamsungStylusAdapter(),
         GenericStylusAdapter(),
     )
@@ -87,6 +88,10 @@ class StylusDriver(
 
     fun detectHuaweiPencilModel(): HuaweiPencilModel {
         return getAdapter<HuaweiStylusAdapter>()?.detectModel(context) ?: HuaweiPencilModel.GEN2
+    }
+
+    fun detectHonorPencilModel(): HonorPencilModel {
+        return getAdapter<HonorStylusAdapter>()?.detectModel(context) ?: HonorPencilModel.MAGIC_PENCIL_3
     }
 
     /**
@@ -155,8 +160,9 @@ class StylusDriver(
         val detected = detectDevices().firstOrNull()
         val eraseAllowed = when (detected?.brand) {
             StylusBrand.HUAWEI_MPENCIL -> vm.huaweiSideButtonErase
+            StylusBrand.HONOR_MAGIC_PENCIL -> vm.honorSideButtonErase
             StylusBrand.SAMSUNG_SPEN -> vm.samsungSideButtonErase
-            else -> vm.huaweiSideButtonErase || vm.samsungSideButtonErase
+            else -> vm.huaweiSideButtonErase || vm.honorSideButtonErase || vm.samsungSideButtonErase
         }
         if (!eraseAllowed) return false
         val btn = event.buttonState

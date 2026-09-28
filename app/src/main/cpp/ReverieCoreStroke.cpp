@@ -44,6 +44,9 @@ void ReverieCore::touchStrokeStart(qreal x, qreal y, qreal pressure, qreal tiltX
     m_strokeColor = m_brushColor;
     m_strokeOpacity = m_brushOpacity;
     m_idleKickPainted = false;
+    m_strokeTimer.restart();
+    m_randomSource = new KisRandomSource();
+    m_perStrokeRandomSource = new KisPerStrokeRandomSource();
     // The stroke paints straight onto the layer device with per-dab opacity
     // (Krita-native); no temporary buffer is used.
     m_strokeStartImg = QPointF(x, y);
@@ -61,6 +64,7 @@ void ReverieCore::touchStrokeStart(qreal x, qreal y, qreal pressure, qreal tiltX
     s.tiltX = tiltX;
     s.tiltY = tiltY;
     s.rotation = rotation;
+    s.time = 0.0;
     m_strokeSamples.append(s);
 }
 
@@ -311,6 +315,7 @@ bool ReverieCore::appendStrokeSample(const QPointF &imgPos, qreal pressure, qrea
     s.tiltX = tiltX;
     s.tiltY = tiltY;
     s.rotation = rotation;
+    s.time = m_strokeTimer.elapsed() / 1000.0;
     m_strokeSamples.append(s);
     // 144Hz / 120Hz 高刷新率自适应刷新门槛：4ms / 32 样本即可刷新，避免 8ms 跨帧导致 144Hz 跳帧
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -425,8 +430,10 @@ bool ReverieCore::flushStrokeBatch()
         if (!needsIndirect && m_snapshotPending && !m_strokeTxnActive && m_undoCaptureEnabled) {
             delete m_strokeTxn;
             KisInterstrokeDataFactory *interstrokeDataFactory = nullptr;
+            const bool isColorSmudge = (m_toolMode == ToolSmudge) ||
+                (m_brushPreset && m_brushPreset->paintOp().id() == QStringLiteral("colorsmudge"));
             if (m_brushPreset) {
-                if (m_toolMode == ToolSmudge) {
+                if (isColorSmudge) {
                     KisPaintOpFactory *f = KisPaintOpRegistry::instance()->value(QStringLiteral("colorsmudge"));
                     if (f) {
                         interstrokeDataFactory = f->createInterstrokeDataFactory(m_brushPreset->settings(), m_brushPreset->resourcesInterface());
@@ -449,7 +456,7 @@ bool ReverieCore::flushStrokeBatch()
         m_strokePainter->setFillStyle(KisPainter::FillStyleForegroundColor);
         m_strokePainter->setStrokeStyle(KisPainter::StrokeStyleBrush);
         m_strokePainter->setCompositeOpId(painterCompOp);
-        m_strokePainter->setOpacityF(needsIndirect ? 1.0 : qBound<qreal>(0.0, m_strokeOpacity, 1.0));
+        m_strokePainter->setOpacityF(needsIndirect ? 1.0 : (m_brushPreset ? 1.0 : qBound<qreal>(0.0, m_strokeOpacity, 1.0)));
         m_strokePainter->setPaintColor(koColor);
         m_strokePainter->setBackgroundColor(koBgColor);
 
@@ -462,8 +469,10 @@ bool ReverieCore::flushStrokeBatch()
         // and drive its async dab pipeline synchronously (the fake executor
         // runs the rendering jobs inline, exactly like Krita's own tests).
         if (m_brushPreset && m_strokePainter) {
+            const bool isColorSmudge = (m_toolMode == ToolSmudge) ||
+                (m_brushPreset->paintOp().id() == QStringLiteral("colorsmudge"));
             KisPaintOpFactory *smudgeFactory =
-                (m_toolMode == ToolSmudge) ? KisPaintOpRegistry::instance()->value(QStringLiteral("colorsmudge")) : nullptr;
+                isColorSmudge ? KisPaintOpRegistry::instance()->value(QStringLiteral("colorsmudge")) : nullptr;
 
             std::unique_ptr<KisInterstrokeDataFactory> factory;
             if (smudgeFactory) {
@@ -507,7 +516,7 @@ bool ReverieCore::flushStrokeBatch()
     // Re-sync the composite op on every flush so mid-stroke parameter
     // changes (blend-mode dropdown, eraser preset switch) take effect.
     m_strokePainter->setCompositeOpId(painterCompOp);
-    m_strokePainter->setOpacityF(needsIndirect ? 1.0 : qBound<qreal>(0.0, m_strokeOpacity, 1.0));
+    m_strokePainter->setOpacityF(needsIndirect ? 1.0 : (m_brushPreset ? 1.0 : qBound<qreal>(0.0, m_strokeOpacity, 1.0)));
     m_strokePainter->setPaintColor(koColor);
     m_strokePainter->setBackgroundColor(koBgColor);
     if (m_selection) {
@@ -534,7 +543,10 @@ bool ReverieCore::flushStrokeBatch()
             qBound<qreal>(0.0, first.pressure, 1.0);
         if (m_brushPreset && m_strokeOp) {
             // Krita dab for a genuine tap (paintAt = single dab at pos)
-            m_strokeOp->paintAt(KisPaintInformation(p, pressure, first.tiltX, first.tiltY, first.rotation), m_strokeDistance);
+            KisPaintInformation info(p, pressure, first.tiltX, first.tiltY, first.rotation, 0.0, 0.0, first.time, 0.0);
+            if (m_randomSource) info.setRandomSource(m_randomSource);
+            if (m_perStrokeRandomSource) info.setPerStrokeRandomSource(m_perStrokeRandomSource);
+            m_strokeOp->paintAt(info, m_strokeDistance);
             while (true) {
                 QVector<KisRunnableStrokeJobData *> jobs;
                 auto result = m_strokeOp->doAsynchronousUpdate(jobs);
@@ -624,9 +636,20 @@ bool ReverieCore::flushStrokeBatch()
         for (int i = firstNewSegment; i < m_strokeSamples.size(); ++i) {
             const StrokeSample &a = m_strokeSamples[i - 1];
             const StrokeSample &b = m_strokeSamples[i];
-            m_strokeOp->paintLine(KisPaintInformation(a.imgPos, a.pressure, a.tiltX, a.tiltY, a.rotation),
-                                  KisPaintInformation(b.imgPos, b.pressure, b.tiltX, b.tiltY, b.rotation),
-                                  m_strokeDistance);
+            const qreal dist = QLineF(a.imgPos, b.imgPos).length();
+            const qreal dt = qMax<qreal>(1e-4, b.time - a.time);
+            const qreal speed = dist / dt;
+            KisPaintInformation infoA(a.imgPos, a.pressure, a.tiltX, a.tiltY, a.rotation, 0.0, 0.0, a.time, speed);
+            KisPaintInformation infoB(b.imgPos, b.pressure, b.tiltX, b.tiltY, b.rotation, 0.0, 0.0, b.time, speed);
+            if (m_randomSource) {
+                infoA.setRandomSource(m_randomSource);
+                infoB.setRandomSource(m_randomSource);
+            }
+            if (m_perStrokeRandomSource) {
+                infoA.setPerStrokeRandomSource(m_perStrokeRandomSource);
+                infoB.setPerStrokeRandomSource(m_perStrokeRandomSource);
+            }
+            m_strokeOp->paintLine(infoA, infoB, m_strokeDistance);
         }
         while (true) {
             QVector<KisRunnableStrokeJobData *> jobs;
@@ -779,6 +802,8 @@ void ReverieCore::endStrokeBatch()
     m_strokeOp = nullptr;
     delete m_strokeDistance;
     m_strokeDistance = nullptr;
+    m_randomSource.clear();
+    m_perStrokeRandomSource.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -1003,7 +1028,10 @@ bool ReverieCore::strokeAirbrushTick()
     const qreal tiltX = lastSample ? lastSample->tiltX : m_lastTiltX;
     const qreal tiltY = lastSample ? lastSample->tiltY : m_lastTiltY;
     const qreal rotation = lastSample ? lastSample->rotation : m_lastRotation;
-    m_strokeOp->paintAt(KisPaintInformation(p, pressure, tiltX, tiltY, rotation), m_strokeDistance);
+    KisPaintInformation info(p, pressure, tiltX, tiltY, rotation, 0.0, 0.0, m_strokeTimer.elapsed() / 1000.0, 0.0);
+    if (m_randomSource) info.setRandomSource(m_randomSource);
+    if (m_perStrokeRandomSource) info.setPerStrokeRandomSource(m_perStrokeRandomSource);
+    m_strokeOp->paintAt(info, m_strokeDistance);
     while (true) {
         QVector<KisRunnableStrokeJobData *> jobs;
         auto result = m_strokeOp->doAsynchronousUpdate(jobs);

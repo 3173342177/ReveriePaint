@@ -324,16 +324,23 @@ internal fun PaintViewModel.touchMove(
     lastStrokeX = x
     lastStrokeY = y
 
-    val stabFactor = maxOf(strokeStabilizer.toDouble(), brushStreamline).coerceIn(0.0, 0.98)
+    val stabFactor = maxOf(strokeStabilizer.toDouble(), brushStreamline).coerceIn(0.0, 1.0)
     var effX = x
     var effY = y
     var effP = effPressure
     if (stabFactor > 0.0) {
-        // Krita weighted stabilizer: adaptive distance & exponential smoothing
-        val alpha = (1.0 - stabFactor * 0.88).coerceIn(0.04, 1.0).toFloat()
+        // High-precision non-linear stabilizer curve:
+        // Exponential response with adaptive distance boost provides rock-solid jitter removal
+        // when drawing slow/fine lines while remaining responsive during rapid sweeps.
+        val baseAlpha = kotlin.math.exp(-stabFactor * 5.2) * 0.994 + 0.006
+        val distToTarget = Math.hypot((x - smoothedStrokeX).toDouble(), (y - smoothedStrokeY).toDouble())
+        val adaptiveBoost = (distToTarget / 150.0).coerceIn(0.0, 1.0) * 0.015
+        val alpha = (baseAlpha + adaptiveBoost).toFloat().coerceIn(0.006f, 1.0f)
+
         smoothedStrokeX += (x - smoothedStrokeX) * alpha
         smoothedStrokeY += (y - smoothedStrokeY) * alpha
-        smoothedStrokePressure += (effPressure - smoothedStrokePressure) * alpha.toDouble()
+        val pressureAlpha = maxOf(alpha * 2.5f, 0.06f).coerceAtMost(1.0f)
+        smoothedStrokePressure += (effPressure - smoothedStrokePressure) * pressureAlpha.toDouble()
         effX = smoothedStrokeX
         effY = smoothedStrokeY
         effP = smoothedStrokePressure
@@ -355,13 +362,41 @@ internal fun PaintViewModel.touchEnd(render: Boolean = true) {
     isModified = true
     totalStrokes++
     onPaintingActivity()
-    val stabFactor = maxOf(strokeStabilizer.toDouble(), brushStreamline).coerceIn(0.0, 0.98)
+    val stabFactor = maxOf(strokeStabilizer.toDouble(), brushStreamline).coerceIn(0.0, 1.0)
     if (stabFactor > 0.0) {
-        // Tail finish compensation
-        if (recorder.recording) {
-            recorder.strokeMove(smoothedStrokeX, smoothedStrokeY, smoothedStrokePressure.toFloat())
+        val dx = lastStrokeX - smoothedStrokeX
+        val dy = lastStrokeY - smoothedStrokeY
+        val remainingDist = Math.hypot(dx.toDouble(), dy.toDouble())
+        if (remainingDist > 0.5) {
+            val steps = when {
+                remainingDist > 40.0 -> 8
+                remainingDist > 20.0 -> 6
+                remainingDist > 8.0 -> 4
+                remainingDist > 2.0 -> 2
+                else -> 1
+            }
+            val startX = smoothedStrokeX
+            val startY = smoothedStrokeY
+            val startP = smoothedStrokePressure
+            for (step in 1..steps) {
+                val t = step.toFloat() / steps
+                val ease = 1f - (1f - t) * (1f - t) * (1f - t)
+                val curX = startX + dx * ease
+                val curY = startY + dy * ease
+                val curP = startP
+                if (recorder.recording) {
+                    recorder.strokeMove(curX, curY, curP.toFloat())
+                }
+                queueStrokeMove(curX, curY, curP)
+            }
+            smoothedStrokeX = lastStrokeX
+            smoothedStrokeY = lastStrokeY
+        } else {
+            if (recorder.recording) {
+                recorder.strokeMove(smoothedStrokeX, smoothedStrokeY, smoothedStrokePressure.toFloat())
+            }
+            queueStrokeMove(smoothedStrokeX, smoothedStrokeY, smoothedStrokePressure)
         }
-        queueStrokeMove(smoothedStrokeX, smoothedStrokeY, smoothedStrokePressure)
     }
 
     // Brush Taper (stroke tail taper finish)

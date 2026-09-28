@@ -930,6 +930,18 @@ internal fun LayerDetailPage(
 
         var showGroupPicker by remember { mutableStateOf(false) }
         var showRasterizeConfirm by remember { mutableStateOf(false) }
+        var showSelectionModeDialog by remember { mutableStateOf(false) }
+        val triggerSelectFromLayer = {
+            if (vm.hasSelection) {
+                showSelectionModeDialog = true
+            } else {
+                vm.selectionFromLayer(index, 0)
+                onBack()
+                if (!vm.isLayerPanelPinned) {
+                    vm.layerPanelOpen = false
+                }
+            }
+        }
         val availableGroups =
             remember(vm.layers) {
                 vm.layers.filter { it.isGroup && it.index != index }
@@ -1049,6 +1061,94 @@ internal fun LayerDetailPage(
             }
         }
 
+        if (showSelectionModeDialog) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showSelectionModeDialog = false }) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(0.9f)
+                            .shadow(16.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.4f))
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Morandi.panel)
+                            .glassBorder(RoundedCornerShape(14.dp))
+                            .padding(18.dp),
+                ) {
+                    Column {
+                        Text(
+                            stringResource(if (layer?.isGroup == true) R.string.layer_op_select_from_group else R.string.layer_op_select_from_layer),
+                            color = Morandi.text,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            stringResource(R.string.selection_combine_mode_desc),
+                            color = Morandi.subText,
+                            fontSize = 13.sp,
+                        )
+                        Spacer(Modifier.height(14.dp))
+
+                        val modes = listOf(
+                            Triple(0, R.drawable.ic_sel_mode_new, R.string.selection_mode_replace),
+                            Triple(1, R.drawable.ic_sel_mode_add, R.string.selection_op_add),
+                            Triple(2, R.drawable.ic_sel_mode_sub, R.string.selection_op_subtract),
+                            Triple(3, R.drawable.ic_sel_mode_intersect, R.string.selection_op_intersect),
+                        )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            modes.forEach { (mode, icon, textRes) ->
+                                Row(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Morandi.panelHi)
+                                            .clickable {
+                                                showSelectionModeDialog = false
+                                                vm.selectionFromLayer(index, mode)
+                                                onBack()
+                                                if (!vm.isLayerPanelPinned) {
+                                                    vm.layerPanelOpen = false
+                                                }
+                                            }
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(icon),
+                                        contentDescription = null,
+                                        tint = Morandi.text,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        stringResource(textRes),
+                                        color = Morandi.text,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Morandi.panelHi)
+                                        .clickable { showSelectionModeDialog = false }
+                                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                            ) {
+                                Text(stringResource(R.string.common_cancel), color = Morandi.text, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (layer?.isGroup == true) {
             // Group-specific page
             Column {
@@ -1060,6 +1160,9 @@ internal fun LayerDetailPage(
                 OpItem(R.drawable.ic_merge_down, stringResource(R.string.layer_op_merge_group), enabled = !isBg) {
                     vm.flattenGroup(index)
                     onBack()
+                }
+                OpItem(R.drawable.ic_select, stringResource(R.string.layer_op_select_from_group)) {
+                    triggerSelectFromLayer()
                 }
                 OpToggle(R.drawable.ic_lock, stringResource(R.string.layer_op_lock_group), layer?.locked == true || isBg, enabled = !isBg) {
                     vm.setLayerLocked(index, !(layer?.locked == true))
@@ -1092,7 +1195,9 @@ internal fun LayerDetailPage(
                     vm.mergeDown(index)
                     onBack()
                 }
-                OpItem(R.drawable.ic_select, stringResource(R.string.layer_op_select_from_layer), enabled = !isFilterLayer) { vm.selectionFromLayer(index) }
+                OpItem(R.drawable.ic_select, stringResource(R.string.layer_op_select_from_layer), enabled = !isFilterLayer) {
+                    triggerSelectFromLayer()
+                }
                 OpToggle(R.drawable.ic_lock, stringResource(R.string.layer_op_lock_layer), layer?.locked == true || isBg, enabled = !isBg) {
                     vm.setLayerLocked(index, !(layer?.locked == true))
                 }

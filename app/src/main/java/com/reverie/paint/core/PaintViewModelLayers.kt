@@ -5,6 +5,7 @@
 package com.reverie.paint.core
 
 import android.graphics.Bitmap
+import com.reverie.paint.R
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
@@ -902,17 +903,43 @@ internal fun PaintViewModel.cancelSoloIfSwitchingLayer() {
 }
 
 
-internal fun PaintViewModel.selectionFromLayer(i: Int) {
+internal fun PaintViewModel.selectionFromLayer(i: Int, mode: Int = 0) {
     if (recorder.recording) {
-        recorder.toolOp(com.reverie.paint.model.RecordingEvents.T_SELECT_ALL) { it.u16(i.coerceIn(0, 65535)) }
+        recorder.toolOp(com.reverie.paint.model.RecordingEvents.T_SELECT_ALL) {
+            it.u16(i.coerceIn(0, 65535))
+            it.u8(mode.coerceIn(0, 255))
+        }
     }
-    runCore(after = ::notifyLayerChanged) {
-        ReverieCoreBridge.selectionFromLayer(i)
+    var ov: android.graphics.Bitmap? = null
+    var has = false
+    runCore(render = false, after = {
+        selectionOverlayBitmap = ov
+        hasSelection = has && ov != null
+        notifyLayerChanged()
+        if (hasSelection) {
+            val msgRes = when (mode) {
+                1 -> R.string.selection_toast_added
+                2 -> R.string.selection_toast_subtracted
+                3 -> R.string.selection_toast_intersected
+                else -> R.string.toast_selection_from_layer_success
+            }
+            showActionToast(msgRes, R.drawable.ic_select)
+        } else {
+            showActionToast(R.string.toast_selection_layer_empty, R.drawable.ic_select)
+        }
+    }) {
+        val ok = ReverieCoreBridge.selectionFromLayer(i, mode)
+        has = ok && ReverieCoreBridge.hasSelection()
+        if (has) {
+            ov = buildSelectionOverlayLocked()
+        }
     }
 }
 
 internal fun PaintViewModel.clearSelection() {
-    runCore(after = ::notifyLayerChanged) {
+    hasSelection = false
+    selectionOverlayBitmap = null
+    runCore(render = false, after = ::notifyLayerChanged) {
         ReverieCoreBridge.clearSelection()
     }
 }

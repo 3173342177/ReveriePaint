@@ -261,7 +261,9 @@ internal fun LayerRow(
                                 change.consume()
                                 onDragPosition(rowLeft + change.position.x, rowTop + change.position.y)
                             }
-                            onDragEnd()
+                            if (lastChange.changedToUpIgnoreConsumed()) {
+                                onDragEnd()
+                            }
                         } else if (isSwipe) {
                             if (!isDrawerOpen) {
                                 scope.launch { rowInteraction.emit(androidx.compose.foundation.interaction.PressInteraction.Cancel(press)) }
@@ -388,7 +390,7 @@ internal fun LayerRow(
                     .background(selectionBg, shape = RoundedCornerShape(8.dp))
                     .offset { IntOffset(revealAnim.value.roundToInt(), 0) }
                     .graphicsLayer {
-                        alpha = if (isDragging) 0f else 1f
+                        alpha = if (isDragging) 0.35f else 1f
                         scaleX = groupScale
                         scaleY = groupScale
                     },

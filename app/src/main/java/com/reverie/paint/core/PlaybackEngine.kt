@@ -1026,7 +1026,8 @@ private fun PaintViewModel.dispatchToolOpLocked(
 
         T_SELECT_ALL -> {
             val layer = r.u16()
-            ReverieCoreBridge.selectionFromLayer(layer)
+            val mode = if (r.remaining() > 0) r.u8() else 0
+            ReverieCoreBridge.selectionFromLayer(layer, mode)
         }
 
         T_SELECT_ALL_CANVAS -> {

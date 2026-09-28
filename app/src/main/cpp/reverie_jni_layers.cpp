@@ -420,9 +420,21 @@ Java_com_reverie_paint_core_ReverieCoreBridge_addLayerWithType(JNIEnv *env, jobj
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_reverie_paint_core_ReverieCoreBridge_selectionFromLayer(JNIEnv *, jobject, jint index)
+Java_com_reverie_paint_core_ReverieCoreBridge_selectionFromLayer(JNIEnv *, jobject, jint index, jint mode)
 {
-    return core()->selectionFromLayer(index);
+    return core()->selectionFromLayer(index, mode);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_selectionFromLayer__II(JNIEnv *, jobject, jint index, jint mode)
+{
+    return core()->selectionFromLayer(index, mode);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_selectionFromLayer__I(JNIEnv *, jobject, jint index)
+{
+    return core()->selectionFromLayer(index, 0);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

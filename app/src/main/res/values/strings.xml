@@ -397,6 +397,8 @@
     <string name="toast_redo">恢复</string>
     <string name="toast_selection_required">请先创建选区</string>
     <string name="toast_selection_empty_pixels">选区范围内无像素</string>
+    <string name="toast_selection_from_layer_success">已根据图层内容创建选区</string>
+    <string name="toast_selection_layer_empty">当前图层无有效像素内容</string>
     <string name="toast_selection_points_min">选区至少需要3个点</string>
     <string name="toast_text_created">文字已生成</string>
     <string name="toast_shape_created">形状已生成</string>
@@ -835,6 +837,7 @@
     <string name="layer_op_flip_v">垂直翻转</string>
     <string name="layer_op_merge_down">向下合并图层</string>
     <string name="layer_op_select_from_layer">从图层创建选区</string>
+    <string name="layer_op_select_from_group">从图层组创建选区</string>
     <string name="layer_op_lock_layer">锁定图层</string>
     <string name="layer_op_alpha_lock">锁定透明度</string>
     <string name="layer_op_rasterize">栅格化为普通图层</string>
@@ -1368,6 +1371,7 @@
     <string name="stylus_brand_devices">已适配的手写笔品牌与设备</string>
     <string name="stylus_oppo_features">笔身手势、触控滑动与原笔迹微震专属配置</string>
     <string name="stylus_huawei_features">笔身双击、侧键动作映射与星闪/蓝牙压感适配</string>
+    <string name="stylus_honor_features">笔身双击、折叠屏侧键与触感微震专属配置</string>
     <string name="stylus_samsung_features">侧键动作映射与触觉微震专属配置</string>
     <string name="stylus_generic_features">标准 Android 压感与倾角触控协议</string>
     <string name="stylus_cursor_mode_none">不显示</string>
@@ -1453,6 +1457,26 @@
     <string name="stylus_huawei_haptics_title">手势触发微震反馈</string>
     <string name="stylus_huawei_haptics_desc">双击或按键触发快捷功能时提供瞬态微触反馈</string>
     <string name="stylus_huawei_hint">提示：若笔身双击无响应，请在系统设置 -> 辅助功能 -> 手写笔 -> 双击中开启双击手势支持</string>
+
+    <!-- HONOR Magic-Pencil -->
+    <string name="stylus_honor_title">荣耀 Magic-Pencil 专属设置</string>
+    <string name="stylus_honor_model">手写笔硬件型号</string>
+    <string name="stylus_honor_auto_model">自动匹配 (%s)</string>
+    <string name="stylus_honor_model_gen3">HONOR Magic-Pencil 第三代</string>
+    <string name="stylus_honor_model_gen2">HONOR Magic-Pencil 第二代 / 第一代</string>
+    <string name="stylus_honor_model_pen">HONOR Magic-Pen (折叠屏专属)</string>
+    <string name="stylus_honor_press_4k">4096级标准压感</string>
+    <string name="stylus_honor_double_tap">笔身双击手势</string>
+    <string name="stylus_honor_double_tap_action">双击响应动作</string>
+    <string name="stylus_honor_side_key">物理侧键行为</string>
+    <string name="stylus_honor_hold_eraser">按住侧键临时变橡皮</string>
+    <string name="stylus_honor_hold_eraser_desc">按住侧键下笔即为橡皮擦，松开侧键自动切回原工具</string>
+    <string name="stylus_honor_key_mapping">侧键动作映射</string>
+    <string name="stylus_honor_click_action">侧键单击动作</string>
+    <string name="stylus_honor_haptics">触觉反馈</string>
+    <string name="stylus_honor_haptics_title">手势触发微震反馈</string>
+    <string name="stylus_honor_haptics_desc">双击或按键触发快捷功能时提供瞬态微触反馈</string>
+    <string name="stylus_honor_hint">提示：若笔身双击无响应，请在系统设置 -> 辅助功能 -> 手写笔 -> 双击切换中开启双击手势支持</string>
     <string name="stylus_action_switch_brush_eraser">切换画笔与橡皮</string>
     <string name="stylus_action_follow_system">跟随系统设置</string>
     <string name="stylus_action_undo">撤销</string>
@@ -1835,6 +1859,13 @@
     <string name="create_no_saved_presets_desc">在自定义尺寸中配置好画幅后，点击保存预设即可在此随时调用</string>
     <string name="create_preset_stat_format">%1$d DPI · %2$d层</string>
     <string name="create_dpi_label">分辨率 (DPI)</string>
+    <string name="create_unit_px">像素 (PX)</string>
+    <string name="create_unit_mm">毫米 (mm)</string>
+    <string name="create_unit_cm">厘米 (cm)</string>
+    <string name="create_unit_inch">英寸 (in)</string>
+    <string name="create_print_size_format">打印尺寸 %s</string>
+    <string name="create_pixel_size_format">像素尺寸 %1$d × %2$d px</string>
+    <string name="create_layer_warning_low">（内存偏低，图层受限）</string>
 
     <!-- Brush UI Modernization & Fine Tuning -->
     <string name="brush_group_basic">核心基础</string>
@@ -1855,6 +1886,8 @@
     <string name="selection_save_current">存储当前选区</string>
     <string name="selection_empty_history">暂无存储的选区</string>
     <string name="selection_empty_history_hint">点击右上角「+」可将当前选区存为槽位</string>
+    <string name="selection_combine_mode_desc">当前已有选区，请选择与现有选区的运算方式</string>
+    <string name="selection_mode_replace">替换选区</string>
     <string name="selection_op_replace">载入替换</string>
     <string name="selection_op_add">追加选区 (+)</string>
     <string name="selection_op_subtract">减去选区 (-)</string>

@@ -101,7 +101,10 @@ internal fun PaintViewModel.saveProject(
                 "elapsedSeconds": $elapsedSeconds,
                 "createdTime": $canvasCreatedTime,
                 "colorMode": "$colorMode",
-                "layerCount": ${layers.size}
+                "layerCount": ${layers.size},
+                "dpi": $docDpi,
+                "selectedLayerIndex": $currentLayerIndex,
+                "activeLayerIndex": $currentLayerIndex
             }
             """.trimIndent()
         // Recording blob goes straight into the .revp via the C++ store
@@ -145,7 +148,10 @@ internal fun PaintViewModel.autoSaveProject() {
                 "layerCount": ${layers.size},
                 "isAutoSave": true,
                 "masterFilePath": "$masterPath",
-                "docName": "$name"
+                "docName": "$name",
+                "dpi": $docDpi,
+                "selectedLayerIndex": $currentLayerIndex,
+                "activeLayerIndex": $currentLayerIndex
             }
             """.trimIndent()
         val recBlob = recorder.serialize()
@@ -209,6 +215,7 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
             isModified = isRecovered // 异常恢复的工程标记为未保存
             docWidth = if (coreW > 0) coreW else p.width
             docHeight = if (coreH > 0) coreH else p.height
+            docDpi = if (p.dpi > 0) p.dpi else 300
             docName = p.name
 
             val masterFile = File(projectDir(), "${p.name}.revp")
@@ -224,12 +231,16 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
             canvasCreatedTime = if (p.lastModified > 0) p.lastModified else System.currentTimeMillis()
             colorMode = p.colorMode
             syncLayersFromNative()
+            val targetLayer = p.selectedLayerIndex
+            if (targetLayer in 0 until layers.size && currentLayerIndex != targetLayer) {
+                currentLayerIndex = targetLayer
+            }
             isBlockingLoading = false
             startPaintingTimer()
             if (isRecovered) {
                 showActionToast(R.string.toast_project_restored_autosave, R.drawable.ic_save)
             }
-            android.util.Log.d("RP_IO", "loadProject AFTER: docW=$docWidth, docH=$docHeight, currentProjectFile=$currentProjectFile, isModified=$isModified, layers=${layers.size}")
+            android.util.Log.d("RP_IO", "loadProject AFTER: docW=$docWidth, docH=$docHeight, currentProjectFile=$currentProjectFile, isModified=$isModified, layers=${layers.size}, currentLayer=$currentLayerIndex")
         },
     ) {
         val file = java.io.File(p.filePath)
@@ -253,6 +264,28 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
                 ReverieCoreBridge.setUndoLimit(maxUndoSteps)
                 ReverieCoreBridge.setBrushColor(brushColor)
                 refreshSavedSelections()
+
+                // 恢复退出时选中的图层
+                val nLayers = ReverieCoreBridge.layerCount()
+                var targetLayer = p.selectedLayerIndex
+                if (targetLayer !in 0 until nLayers && file.extension.equals("revp", ignoreCase = true)) {
+                    try {
+                        ZipFile(file).use { zip ->
+                            val metaEntry = zip.getEntry("meta.json")
+                            if (metaEntry != null) {
+                                val text = zip.getInputStream(metaEntry).bufferedReader().use { it.readText() }
+                                val json = JSONObject(text)
+                                val idx = json.optInt("selectedLayerIndex", json.optInt("activeLayerIndex", json.optInt("currentLayerIndex", -1)))
+                                if (idx in 0 until nLayers) {
+                                    targetLayer = idx
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+                if (targetLayer in 0 until nLayers) {
+                    ReverieCoreBridge.setCurrentLayer(targetLayer)
+                }
                 // Chain the project's own recording so new strokes extend the
                 // existing history instead of replaying on top of a baked
                 // static image (snapshot = the recording's initial document).
@@ -496,7 +529,9 @@ internal fun PaintViewModel.parseProjectFromFile(f: File): com.reverie.paint.mod
     var h = 1920
     var strokes = 0
     var elapsed = 0L
+    var dpi = 300
     var layerCount = 1
+    var selectedLayerIndex = -1
     var colorModeStr = "RGB 8位"
     var previewPath = ""
     var hasRec = false
@@ -515,10 +550,12 @@ internal fun PaintViewModel.parseProjectFromFile(f: File): com.reverie.paint.mod
                     val json = JSONObject(text)
                     w = json.optInt("width", 1080)
                     h = json.optInt("height", 1920)
+                    dpi = json.optInt("dpi", 300)
                     strokes = json.optInt("strokeCount", 0)
                     elapsed = json.optLong("elapsedSeconds", 0L)
                     colorModeStr = json.optString("colorMode", "RGB 8位")
                     layerCount = json.optJSONArray("layers")?.length() ?: 1
+                    selectedLayerIndex = json.optInt("selectedLayerIndex", json.optInt("activeLayerIndex", json.optInt("currentLayerIndex", -1)))
                     masterPath = json.optString("masterFilePath", "")
                     // 动画项目: 任一图层带关键帧通道 (meta.layers[].animated)
                     isAnimation = json.optJSONArray("layers")?.let { arr ->
@@ -558,12 +595,14 @@ internal fun PaintViewModel.parseProjectFromFile(f: File): com.reverie.paint.mod
             name = displayName,
             width = w,
             height = h,
+            dpi = dpi,
             filePath = f.absolutePath,
             previewPath = previewPath,
             strokeCount = strokes,
             elapsedSeconds = elapsed,
             lastModified = f.lastModified(),
             layerCount = layerCount,
+            selectedLayerIndex = selectedLayerIndex,
             colorMode = colorModeStr,
             fileSize = f.length(),
             isFolder = false,
@@ -785,7 +824,9 @@ internal fun PaintViewModel.exportDocument(
                             "elapsedSeconds": $elapsedSeconds,
                             "createdTime": $canvasCreatedTime,
                             "colorMode": "$colorMode",
-                            "layerCount": ${layers.size}
+                            "layerCount": ${layers.size},
+                            "selectedLayerIndex": $currentLayerIndex,
+                            "activeLayerIndex": $currentLayerIndex
                             $authorSnippet
                         }
                         """.trimIndent()
@@ -984,6 +1025,7 @@ internal fun PaintViewModel.generateNextProjectName(): String {
 internal fun PaintViewModel.startPainting(
     w: Int,
     h: Int,
+    dpi: Int = 300,
     name: String? = null,
     initialBitmap: android.graphics.Bitmap? = null,
     initialSnapshotFile: java.io.File? = null,
@@ -1010,6 +1052,7 @@ internal fun PaintViewModel.startPainting(
             isModified = false
             docWidth = w
             docHeight = h
+            docDpi = dpi
             docName = actualName
             isBlockingLoading = false
             startPaintingTimer()
