@@ -20,8 +20,11 @@
 #include <QHash>
 #include <QMutex>
 #include <QSet>
+#include <QElapsedTimer>
 
 #include <kis_types.h>
+#include <kis_random_source.h>
+#include <brushengine/KisPerStrokeRandomSource.h>
 #include <brushengine/kis_paintop.h>
 #include <KisResourcesInterface.h>
 #include <KisFakeRunnableStrokeJobsExecutor.h>
@@ -759,6 +762,7 @@ private:
         qreal tiltX = 0.0;
         qreal tiltY = 0.0;
         qreal rotation = 0.0;
+        qreal time = 0.0;
     };
 
 
@@ -902,6 +906,9 @@ private:
     // In-progress stroke op + distance accumulator (lives across flushes)
     KisPaintOpSP m_strokeOp;
     KisDistanceInformation *m_strokeDistance = nullptr;
+    KisRandomSourceSP m_randomSource;
+    KisPerStrokeRandomSourceSP m_perStrokeRandomSource;
+    QElapsedTimer m_strokeTimer;
     // Synchronous executor for the async dab-rendering pipeline (Krita uses
     // this in its own tests; on-device it keeps dab rendering deterministic)
     KisFakeRunnableStrokeJobsExecutor m_fakeExecutor;

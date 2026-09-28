@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <QtEndian>
 #include <zlib.h>
+#include <QCryptographicHash>
 
 #include <kis_abr_brush_collection.h>
 #include <kis_abr_brush.h>
@@ -279,13 +280,33 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
 
     QFile f(fullPath);
     if (f.open(QIODevice::ReadOnly)) {
+        const QByteArray fileBytes = f.readAll();
+        f.seek(0);
         if (res->loadFromDevice(&f, m_brushResources)) {
             res->setFilename(bareName);
+            const QString md5Hex = QString::fromLatin1(QCryptographicHash::hash(fileBytes, QCryptographicHash::Md5).toHex());
+            res->setMD5Sum(md5Hex);
             KisBrush *brushRaw = dynamic_cast<KisBrush *>(res);
             if (brushRaw) {
                 KisBrushSP brushSp(brushRaw);
                 if (lr) {
                     lr->addResource(brushSp.staticCast<KoResource>());
+                    if (baseName != bareName) {
+                        KisBrushSP altSp(brushSp->clone().dynamicCast<KisBrush>());
+                        if (altSp) {
+                            altSp->setFilename(baseName);
+                            altSp->setMD5Sum(md5Hex);
+                            lr->addResource(altSp.staticCast<KoResource>());
+                        }
+                    }
+                    if (bareName.toLower() != bareName) {
+                        KisBrushSP lowerSp(brushSp->clone().dynamicCast<KisBrush>());
+                        if (lowerSp) {
+                            lowerSp->setFilename(bareName.toLower());
+                            lowerSp->setMD5Sum(md5Hex);
+                            lr->addResource(lowerSp.staticCast<KoResource>());
+                        }
+                    }
                 }
                 m_loadedBrushes.insert(bareName, brushSp);
                 if (baseName != bareName) {
@@ -345,7 +366,41 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
                     decomp.resize(destLen);
                     const QString xmlStr = QString::fromUtf8(decomp);
 
-                    // 1. Explicit filename="..." and pattern="..." XML attributes
+                    // 1. Embedded base64 resources in Krita 5.0+ presets (<resources><resource ...>BASE64</resource></resources>)
+                    static const QRegularExpression embResRe(
+                        QStringLiteral("<resource\\b([^>]*?)>(.*?)</resource>"),
+                        QRegularExpression::DotMatchesEverythingOption);
+                    auto itEmb = embResRe.globalMatch(xmlStr);
+                    while (itEmb.hasNext()) {
+                        const auto m = itEmb.next();
+                        const QString attrs = m.captured(1);
+                        const QString b64 = m.captured(2).trimmed();
+                        if (b64.isEmpty()) continue;
+                        auto getAttr = [&attrs](const QString &attr) -> QString {
+                            QRegularExpression r(QStringLiteral("%1\\s*=\\s*\"([^\"]+)\"").arg(attr), QRegularExpression::CaseInsensitiveOption);
+                            auto mr = r.match(attrs);
+                            return mr.hasMatch() ? mr.captured(1).trimmed() : QString();
+                        };
+                        const QString fn = getAttr(QStringLiteral("filename"));
+                        const QString type = getAttr(QStringLiteral("type"));
+                        if (!fn.isEmpty()) {
+                            const QByteArray bytes = QByteArray::fromBase64(b64.toLatin1());
+                            if (!bytes.isEmpty()) {
+                                const QString dir = (type == QLatin1String("kis_patterns")) ? m_patternDir : m_brushDir;
+                                if (!dir.isEmpty()) {
+                                    const QString outPath = QDir(dir).filePath(QFileInfo(fn).fileName());
+                                    QFile outF(outPath);
+                                    if (outF.open(QIODevice::WriteOnly)) {
+                                        outF.write(bytes);
+                                        outF.close();
+                                    }
+                                }
+                                loadSingleBrushResource(fn);
+                            }
+                        }
+                    }
+
+                    // 2. Explicit filename="..." and pattern="..." XML attributes
                     static const QRegularExpression attrRe(
                         QStringLiteral("(?:filename|pattern)\\s*=\\s*\"([^\"]+)\""),
                         QRegularExpression::CaseInsensitiveOption);
@@ -394,13 +449,35 @@ int ReverieCore::loadPatternResources(const QString &dirPath)
         const QString fullPath = dir.filePath(base);
         QFile f(fullPath);
         if (!f.open(QIODevice::ReadOnly)) continue;
+        const QByteArray fileBytes = f.readAll();
+        f.seek(0);
         KoPattern *pat = new KoPattern(fullPath);
         if (pat->loadFromDevice(&f, m_brushResources)) {
+            pat->setFilename(base);
+            const QString md5Hex = QString::fromLatin1(QCryptographicHash::hash(fileBytes, QCryptographicHash::Md5).toHex());
+            pat->setMD5Sum(md5Hex);
             lr->addResource(KoResourceSP(pat));
+            if (base.toLower() != base) {
+                KoPattern *altPat = new KoPattern(fullPath);
+                QFile fAlt(fullPath);
+                if (fAlt.open(QIODevice::ReadOnly)) {
+                    if (altPat->loadFromDevice(&fAlt, m_brushResources)) {
+                        altPat->setFilename(base.toLower());
+                        altPat->setMD5Sum(md5Hex);
+                        lr->addResource(KoResourceSP(altPat));
+                    } else {
+                        delete altPat;
+                    }
+                    fAlt.close();
+                } else {
+                    delete altPat;
+                }
+            }
             ++loaded;
         } else {
             delete pat;
         }
+        f.close();
     }
     RPC_LOG("RPC loadPatternResources dir=%s loaded=%d", dirPath.toUtf8().constData(), loaded);
     return loaded;
@@ -450,8 +527,27 @@ bool ReverieCore::loadBrushPreset(int index)
         return false;
     }
     KisPaintOpPresetSP preset(new KisPaintOpPreset(m_presets[index].first));
-    const bool ok = preset->loadFromDevice(&f, m_brushResources);
+    bool ok = preset->loadFromDevice(&f, m_brushResources);
     f.close();
+    if (ok) {
+        KisLocalStrokeResources *lr = dynamic_cast<KisLocalStrokeResources *>(m_brushResources.data());
+        const auto sideloaded = preset->sideLoadedResources(m_brushResources);
+        bool addedSideloaded = false;
+        for (const auto &loadRes : sideloaded) {
+            KoResourceSP r = loadRes.resource();
+            if (r && lr) {
+                lr->addResource(r);
+                addedSideloaded = true;
+            }
+        }
+        if (addedSideloaded) {
+            QFile fReopen(path);
+            if (fReopen.open(QIODevice::ReadOnly)) {
+                preset->loadFromDevice(&fReopen, m_brushResources);
+                fReopen.close();
+            }
+        }
+    }
     RPC_LOG("RPC loadBrushPreset idx=%d path=%s ok=%d", index, path.toUtf8().constData(), ok);
     if (!ok) {
         return false;
@@ -543,8 +639,27 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
         return false;
     }
     KisPaintOpPresetSP preset(new KisPaintOpPreset(m_presets[index].first));
-    const bool ok = preset->loadFromDevice(&f, m_brushResources);
+    bool ok = preset->loadFromDevice(&f, m_brushResources);
     f.close();
+    if (ok) {
+        KisLocalStrokeResources *lr = dynamic_cast<KisLocalStrokeResources *>(m_brushResources.data());
+        const auto sideloaded = preset->sideLoadedResources(m_brushResources);
+        bool addedSideloaded = false;
+        for (const auto &loadRes : sideloaded) {
+            KoResourceSP r = loadRes.resource();
+            if (r && lr) {
+                lr->addResource(r);
+                addedSideloaded = true;
+            }
+        }
+        if (addedSideloaded) {
+            QFile fReopen(path);
+            if (fReopen.open(QIODevice::ReadOnly)) {
+                preset->loadFromDevice(&fReopen, m_brushResources);
+                fReopen.close();
+            }
+        }
+    }
     if (!ok || !preset->settings()) {
         return false;
     }

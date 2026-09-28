@@ -214,7 +214,6 @@ fun BrushStudioPage(
     var shapeInvert by remember { mutableStateOf(false) }
     var shapeColorInvert by remember { mutableStateOf(false) }
     var shapeRgbAffectsAlpha by remember { mutableStateOf(true) }
-    var roundnessDirection by remember { mutableStateOf(1) } // 0: 水平, 1: 垂直
 
     // Load full list of Krita bundled and custom brush tips
     val allTipItems = remember(context, vm.brushTipAsset) {
@@ -577,8 +576,6 @@ fun BrushStudioPage(
                                         onShapeColorInvert = { shapeColorInvert = it },
                                         shapeRgbAffectsAlpha = shapeRgbAffectsAlpha,
                                         onShapeRgbAffectsAlpha = { shapeRgbAffectsAlpha = it },
-                                        roundnessDirection = roundnessDirection,
-                                        onRoundnessDirection = { roundnessDirection = it },
                                         onOpenTipPicker = { showTipPickerModal = true },
                                         onImportCustomTip = { importTipLauncher.launch(arrayOf("*/*")) },
                                         cardBg = cardBg,
@@ -590,8 +587,6 @@ fun BrushStudioPage(
                                     StudioTab.COLOR -> ColorTabContent(vm = vm, cardBg = cardBg, borderCol = borderCol, textMain = textMain, textSub = textSub)
                                     StudioTab.GEOMETRY -> GeometryTabContent(
                                         vm = vm,
-                                        roundnessDirection = roundnessDirection,
-                                        onRoundnessDirection = { roundnessDirection = it },
                                         cardBg = cardBg,
                                         borderCol = borderCol,
                                         textMain = textMain,
@@ -721,8 +716,6 @@ private fun TipTabContent(
     onShapeColorInvert: (Boolean) -> Unit,
     shapeRgbAffectsAlpha: Boolean,
     onShapeRgbAffectsAlpha: (Boolean) -> Unit,
-    roundnessDirection: Int,
-    onRoundnessDirection: (Int) -> Unit,
     onOpenTipPicker: () -> Unit,
     onImportCustomTip: () -> Unit,
     cardBg: Color,
@@ -1011,9 +1004,7 @@ private fun StrokeTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color
     StudioSectionHeader(stringResource(R.string.brush_studio_dynamics_spacing_scatter), textSub)
     StudioSliderItem(stringResource(R.string.brush_studio_dynamics_spacing), vm.brushSpacing, 0.01, 2.5, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSpacing(it) }
     StudioSliderItem(stringResource(R.string.brush_studio_dynamics_scatter), vm.brushScatter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushScatter(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_dynamics_streamline), vm.brushStreamline, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushStreamline(it) }
     StudioSliderItem(stringResource(R.string.brush_studio_dynamics_fade), vm.brushFade, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushFade(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_dynamics_taper), vm.brushTaper, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushTaper(it) }
 
     StudioSectionHeader(stringResource(R.string.brush_studio_dynamics_airbrush_mode), textSub)
     StudioSwitchItem(stringResource(R.string.brush_studio_dynamics_airbrush_enable), vm.brushAirbrush, textMain = textMain) { vm.updateBrushAirbrush(it) }
@@ -1027,6 +1018,8 @@ private fun StrokeTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color
 // ==========================================
 @Composable
 private fun ColorTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color, textMain: Color, textSub: Color) {
+    val isSmudgeEngine = vm.brushPaintOpId == "colorsmudge" || vm.brushSmudgeRate > 0.0 || vm.brushSmudgeLength > 0.0
+
     StudioSectionHeader(stringResource(R.string.brush_studio_color_jitter_title), textSub)
     StudioSliderItem(stringResource(R.string.brush_studio_color_hue_jitter), vm.brushHueJitter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushHueJitter(it) }
     StudioSliderItem(stringResource(R.string.brush_studio_color_sat_jitter), vm.brushSatJitter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSatJitter(it) }
@@ -1034,9 +1027,11 @@ private fun ColorTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color,
     StudioSliderItem(stringResource(R.string.brush_studio_color_secondary_mix), vm.brushSecondaryMix, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSecondaryMix(it) }
     StudioSwitchItem(stringResource(R.string.brush_studio_color_pressure_mix), vm.brushPressureColorMix, textMain = textMain) { vm.updateBrushPressureColorMix(it) }
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_color_smudge_title), textSub)
-    StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_rate), vm.brushSmudgeRate, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeRate(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_length), vm.brushSmudgeLength, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeLength(it) }
+    if (isSmudgeEngine) {
+        StudioSectionHeader(stringResource(R.string.brush_studio_color_smudge_title), textSub)
+        StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_rate), vm.brushSmudgeRate, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeRate(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_length), vm.brushSmudgeLength, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeLength(it) }
+    }
 }
 
 // ==========================================
@@ -1045,37 +1040,23 @@ private fun ColorTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color,
 @Composable
 private fun GeometryTabContent(
     vm: PaintViewModel,
-    roundnessDirection: Int,
-    onRoundnessDirection: (Int) -> Unit,
     cardBg: Color,
     borderCol: Color,
     textMain: Color,
     textSub: Color,
 ) {
     StudioSectionHeader(stringResource(R.string.brush_studio_geo_title), textSub)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(cardBg),
-        ) {
-            StudioRadioRow(stringResource(R.string.brush_studio_geo_h_compress), selected = roundnessDirection == 0, textMain = textMain, textSub = textSub) { onRoundnessDirection(0) }
-            Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.15f)))
-            StudioRadioRow(stringResource(R.string.brush_studio_geo_v_compress), selected = roundnessDirection == 1, textMain = textMain, textSub = textSub) { onRoundnessDirection(1) }
-        }
-
         StudioAngleDial(
             angle = vm.brushAngle.toFloat(),
             ratio = vm.brushRatio.toFloat(),
             onAngleChange = { vm.updateBrushAngle(it.toDouble()) },
             cardBg = cardBg,
             borderCol = borderCol,
-            modifier = Modifier.size(86.dp),
+            modifier = Modifier.size(96.dp),
         )
     }
 
