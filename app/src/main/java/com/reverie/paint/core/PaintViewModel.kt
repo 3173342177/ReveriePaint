@@ -416,21 +416,7 @@ class PaintViewModel : ViewModel() {
     var toolBrushStates: Map<String, ToolBrushState> = emptyMap()
         internal set
 
-    var pinnedTools by mutableStateOf<List<com.reverie.paint.model.Tool>>(
-        listOf(
-            com.reverie.paint.model.Tool.BRUSH,
-            com.reverie.paint.model.Tool.ERASER,
-            com.reverie.paint.model.Tool.SMUDGE,
-            com.reverie.paint.model.Tool.FILL,
-            com.reverie.paint.model.Tool.GRADIENT,
-            com.reverie.paint.model.Tool.LASSO,
-            com.reverie.paint.model.Tool.TRANSFORM,
-            com.reverie.paint.model.Tool.PICKER,
-            com.reverie.paint.model.Tool.SYMMETRY,
-            com.reverie.paint.model.Tool.PERSPECTIVE,
-            com.reverie.paint.model.Tool.REFERENCE,
-        )
-    )
+    var pinnedTools by mutableStateOf<List<com.reverie.paint.model.Tool>>(DEFAULT_PINNED_TOOLS)
         internal set
 
     var currentToolId by mutableStateOf("brush")
@@ -2879,6 +2865,13 @@ class PaintViewModel : ViewModel() {
     // lost pressure detail. Buffers are allocated once: zero allocation on
     // the hot path (架构铁律 §4).
     companion object {
+        val DEFAULT_PINNED_TOOLS = listOf(
+            com.reverie.paint.model.Tool.BRUSH,
+            com.reverie.paint.model.Tool.ERASER,
+            com.reverie.paint.model.Tool.SMUDGE,
+            com.reverie.paint.model.Tool.FILL,
+            com.reverie.paint.model.Tool.LASSO,
+        )
         const val STROKE_BATCH_CAPACITY = 256
         const val STROKE_SAMPLE_STRIDE = 6
     }
