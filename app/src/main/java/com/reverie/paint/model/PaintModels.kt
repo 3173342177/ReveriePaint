@@ -98,6 +98,7 @@ data class Project(
     val elapsedSeconds: Long = 0L,
     val lastModified: Long = 0L,
     val layerCount: Int = 1,
+    val selectedLayerIndex: Int = -1,
     val colorMode: String = "RGB 8-bit",
     val fileSize: Long = 0L,
     val isFolder: Boolean = false,

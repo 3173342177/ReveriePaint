@@ -419,6 +419,10 @@ bool ReverieCore::saveRevp(const QString &path, const QString &extraMetaJson, co
         meta["author"] = authorObj;
     }
 
+    if (!meta.contains("selectedLayerIndex")) {
+        meta["selectedLayerIndex"] = m_currentLayer;
+    }
+
     // Layer metadata array
     QJsonArray layersArray;
     for (int i = 0; i < m_layers.size(); ++i) {
@@ -641,6 +645,10 @@ bool ReverieCore::saveRevpAsync(const QString &path, const QString &extraMetaJso
         authorObj["website"] = m_authorProfile.website;
         authorObj["copyright"] = m_authorProfile.copyright;
         meta["author"] = authorObj;
+    }
+
+    if (!meta.contains("selectedLayerIndex")) {
+        meta["selectedLayerIndex"] = m_currentLayer;
     }
 
     QJsonArray layersArray;
@@ -1549,7 +1557,15 @@ bool ReverieCore::loadRevp(const QString &path)
 
     recompositeProjection();
     m_redoCount = 0;
-    m_currentLayer = qBound(0, 1, m_layers.size() - 1);
+    int targetLayer = 1;
+    if (meta.contains("selectedLayerIndex")) {
+        targetLayer = meta["selectedLayerIndex"].toInt(1);
+    } else if (meta.contains("currentLayerIndex")) {
+        targetLayer = meta["currentLayerIndex"].toInt(1);
+    } else if (meta.contains("activeLayerIndex")) {
+        targetLayer = meta["activeLayerIndex"].toInt(1);
+    }
+    m_currentLayer = qBound(0, targetLayer, m_layers.size() - 1);
     markDirty();
     return true;
 }

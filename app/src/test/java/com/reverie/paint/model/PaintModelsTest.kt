@@ -115,4 +115,14 @@ class PaintModelsTest {
         val isSwipe2 = kotlin.math.abs(dx2) > touchSlop && kotlin.math.abs(dx2) > kotlin.math.abs(dy2) * 1.25f
         assertTrue(isSwipe2)
     }
+
+    @Test
+    fun `project preserves selected layer index metadata`() {
+        val defaultProj = Project(name = "测试工程")
+        assertEquals(-1, defaultProj.selectedLayerIndex)
+
+        val customProj = Project(name = "多图层工程", layerCount = 5, selectedLayerIndex = 3)
+        assertEquals(3, customProj.selectedLayerIndex)
+    }
 }
+
