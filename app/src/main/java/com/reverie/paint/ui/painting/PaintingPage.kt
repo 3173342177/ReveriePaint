@@ -118,9 +118,9 @@ import com.reverie.paint.ui.painting.layers.FilterSession
 import com.reverie.paint.ui.painting.layers.FilterSessionController
 import com.reverie.paint.ui.painting.layers.FilterTopPillHUD
 import com.reverie.paint.ui.painting.layers.FilterBottomDock
-import com.reverie.paint.ui.painting.panels.AllToolsPanel
-import com.reverie.paint.ui.painting.panels.ColorPanel
-import com.reverie.paint.ui.painting.panels.CropPanel
+import com.reverie.paint.model.CanvasAdjustMode
+import com.reverie.paint.ui.painting.canvas.CanvasAdjustOverlay
+import com.reverie.paint.ui.painting.panels.CanvasAdjustPanel
 import com.reverie.paint.ui.painting.panels.FillPanel
 import com.reverie.paint.ui.painting.panels.GradientPanel
 import com.reverie.paint.ui.painting.panels.LiquifyPanel
@@ -310,7 +310,6 @@ fun PaintingPage(
         )
 
     val tfState = remember { TransformState() }
-    var cropRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var gradientType by remember { mutableStateOf(0) }
     var liquifyStrength by remember { mutableStateOf(0.9f) }
     var liquifyMode by remember { mutableStateOf(0) }
@@ -565,7 +564,15 @@ fun PaintingPage(
             tfState.active = false
             vm.isImportTransformPending = false
         }
-        if (tool != Tool.CROP) cropRect = null
+        if (tool == Tool.CROP) {
+            if (!vm.isCanvasAdjustActive) {
+                vm.enterCanvasAdjustMode(CanvasAdjustMode.CROP_EXPAND)
+            }
+        } else {
+            if (vm.isCanvasAdjustActive && vm.canvasAdjustState.mode == CanvasAdjustMode.CROP_EXPAND) {
+                vm.exitCanvasAdjustMode()
+            }
+        }
         if (tool != Tool.POLYGON && tool != Tool.POLYLINE && tool != Tool.PATH && tool != Tool.SELECT_POLYGON) {
             polyPoints = emptyList()
         }
@@ -644,8 +651,6 @@ fun PaintingPage(
                 tfState = tfState,
                 polyPoints = polyPoints,
                 onPolyPoint = { polyPoints = polyPoints + it },
-                cropRect = cropRect,
-                onCropRect = { cropRect = it },
                 fillTolerance = vm.fillTolerance,
                 gradientType = gradientType,
                 liquifyStrength = liquifyStrength,
@@ -723,6 +728,18 @@ fun PaintingPage(
                     }
                 }
             }
+
+            // Canvas Adjust Overlay (Interactive handles + 9-grid guidelines + dimension badge)
+            if (vm.isCanvasAdjustActive) {
+                CanvasAdjustOverlay(
+                    vm = vm,
+                    zoom = zoomState,
+                    rotation = rotationState,
+                    panX = panXState,
+                    panY = panYState,
+                    fitScale = fitScale,
+                )
+            }
         }
 
         var showExitSaveDialog by remember { mutableStateOf(false) }
@@ -777,6 +794,13 @@ fun PaintingPage(
             )
         }
 
+        if (vm.showToolbarSqueezedDialog) {
+            ToolbarSqueezedDialog(
+                vm = vm,
+                onDismiss = { vm.showToolbarSqueezedDialog = false },
+            )
+        }
+
         com.reverie.paint.ui.components.DragHoverOverlay(
             visible = vm.isDraggingExternal,
             hint = stringResource(R.string.drag_drop_import_hint),
@@ -785,8 +809,11 @@ fun PaintingPage(
         // BackHandler for Android system back button/gesture: close active panels first, then request exit
         androidx.activity.compose.BackHandler {
             when {
+                vm.isCanvasAdjustActive -> vm.exitCanvasAdjustMode()
                 filterController != null -> filterController.cancel()
                 vm.pendingExternalImageUri != null -> vm.pendingExternalImageUri = null
+                vm.pendingExternalBrushUris != null -> vm.pendingExternalBrushUris = null
+                vm.showToolbarSqueezedDialog -> vm.showToolbarSqueezedDialog = false
                 showDiscardConfirmDialog -> showDiscardConfirmDialog = false
                 showExitSaveDialog -> showExitSaveDialog = false
                 brushPanelOpen && !(vm.panelPinningEnabled && vm.isBrushPanelPinned) -> {
@@ -835,7 +862,7 @@ fun PaintingPage(
         androidx.compose.runtime.CompositionLocalProvider(
             androidx.compose.ui.platform.LocalDensity provides scaledDensity
         ) {
-            if (filterController == null) {
+            if (filterController == null && !vm.isCanvasAdjustActive) {
                 // ---- Top bar ----
                 TopBar(
                     modifier = Modifier.align(if (vm.leftHandMode) Alignment.TopStart else Alignment.TopEnd).zIndex(50f),
@@ -1155,9 +1182,9 @@ fun PaintingPage(
             )
         }
 
-        // ---- Crop tool options panel ----
+        // ---- Canvas Adjust options panel (裁切与扩展 / 图像缩放) ----
         androidx.compose.animation.AnimatedVisibility(
-            visible = filterController == null && tool == Tool.CROP && cropRect != null,
+            visible = filterController == null && vm.isCanvasAdjustActive,
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -1170,23 +1197,10 @@ fun PaintingPage(
                         .tween(200),
                 ),
         ) {
-            cropRect?.let { cr ->
-                CropPanel(
-                    rect = cr,
-                    vm = vm,
-                    hazeState = hazeState,
-                    onApply = {
-                        vm.cropCanvas(
-                            cr.left.toInt(),
-                            cr.top.toInt(),
-                            maxOf(1, cr.width.toInt()),
-                            maxOf(1, cr.height.toInt()),
-                        )
-                        cropRect = null
-                    },
-                    onCancel = { cropRect = null },
-                )
-            }
+            CanvasAdjustPanel(
+                vm = vm,
+                hazeState = hazeState,
+            )
         }
 
         // ---- Gradient / Fill / Liquify tool options ----

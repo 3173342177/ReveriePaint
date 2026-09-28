@@ -8,6 +8,7 @@
  * ReverieCoreInternal.h, public API in ReverieCore.h)
  * ============================================================ */
 #include "ReverieCoreInternal.h"
+#include "ReverieCoreColorSpaceHook.h"
 
 void ReverieCore::selectShape(int kind, int x1, int y1, int x2, int y2)
 {
@@ -99,6 +100,7 @@ void ReverieCore::selectPolygon(const QVector<QPoint> &points)
 
 void ReverieCore::selectContiguousAt(int x, int y, int tolerance, bool sampleMerged, int expand, int feather, int closeGap)
 {
+    ensureRgbU8DifferenceHook();
     KisImageSP image = m_document;
     if (!image) {
         return;

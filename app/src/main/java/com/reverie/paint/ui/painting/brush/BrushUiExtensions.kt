@@ -37,3 +37,8 @@ fun brushCategoryDisplayName(category: String): String {
     val res = brushCategoryResOf(category)
     return if (res != null) stringResource(res) else category
 }
+
+fun brushCategoryDisplayName(context: android.content.Context, category: String): String {
+    val res = brushCategoryResOf(category)
+    return if (res != null) context.getString(res) else category
+}

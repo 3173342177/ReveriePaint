@@ -38,7 +38,7 @@ class KisPaintLayer;
 class KisPainter;
 class KisDistanceInformation;
 
-class KisSurrogateUndoStore;
+class ReverieUndoStore;
 class KisTransaction;
 class KUndo2Command;
 class KoStore;
@@ -51,6 +51,10 @@ public:
 
     // Document
     bool newDocument(int width, int height, bool infiniteCanvas = false);
+    // 释放当前文档及引用其节点/tile 的全部状态 (undo 栈/渲染管线/洋葱皮与缩略图
+    // 缓存/预览事务)。幂等。g_core 是进程级单例, 回主页时必须调用, 否则旧
+    // KisImage 一直驻留内存且下次打开时新旧文档共存推高峰值。
+    void closeDocument();
     bool isInfiniteCanvas() const { return m_infiniteCanvas; }
     void setInfiniteCanvas(bool infinite) { m_infiniteCanvas = infinite; }
     void fillBackground(const QString &colorName);
@@ -536,6 +540,7 @@ public:
     // band). Empty (w<=0) when the target layer is empty.
     QRect contentBounds(const QVector<int> &layers = QVector<int>());
     void cropCanvas(int x, int y, int w, int h);
+    void scaleImage(int w, int h, int filterStrategyType = 0);
     
     // Transform preview mechanism (extracts target pixels and hides them in C++)
     bool startTransformPreview(const QVector<int> &layers, QImage* outImage, bool copyOnly = false);
@@ -713,7 +718,7 @@ public:
     // Application-level undo/redo via per-stroke layer snapshots.
     // Krita's command stack needs the full KisTransaction pipeline; for the
     // MVP we snapshot the current layer before each stroke and restore on
-    // undo/redo. (KisSurrogateUndoStore still backs image-level commands.)
+    // undo/redo. (ReverieUndoStore still backs image-level commands.)
     bool canUndo() const;
     bool canRedo() const { return m_redoCount > 0; }
     void undo();
@@ -726,6 +731,10 @@ public:
     // is untouched by both.
     void setUndoCaptureEnabled(bool on) { m_undoCaptureEnabled = on; }
     void clearUndoHistory();
+    // Cap the undo history (number of retained commands). 0 = unlimited.
+    // Excess commands are freed from the bottom of the stack on the next
+    // push; applies to the live store and to every document created later.
+    void setUndoLimit(int limit);
     // Returns true when this call flushed a batch and painted new ink (used
     // by the Kotlin transport to render only after real paint work).
     bool touchStrokeMove(qreal x, qreal y, qreal pressure, qreal tiltX = 0.0, qreal tiltY = 0.0, qreal rotation = 0.0);
@@ -758,6 +767,9 @@ public:
     QVector<double> brushPresetDefaults(int index);
     QString brushPresetName(int index) const;
     QString brushPresetPath(int index) const;
+    QString brushPresetPaintOpId(int index);
+    QString currentBrushPaintOpId() const;
+    QString brushPresetTipFilename(int index);
     QByteArray brushPresetThumbData(int index) const;
     void setBrushFlow(qreal v);
     void setBrushSmudgeRate(qreal v);
@@ -1022,6 +1034,27 @@ private:
     QVector<QPair<QString, QString>> m_presets;  // name -> path
     int m_brushPresetIndex = -1;
     int m_presetIsEraserOverride = -1; // -1 unknown (use name heuristic), 0 false, 1 true
+    // 预设只读元数据缓存: 一次 .kpp 解析同时提取 defaults/paintOpId/tipFilename。
+    // 选择预设时 Kotlin 会在 after{} (主线程) 连查这三个值, 每次都完整解析
+    // .kpp (读文件 + PNG zTXt 解压 + XML loadFromDevice) 是"换笔卡顿"主因。
+    // 校验 mtime+size: 用户自定义参数会经 KppHelper.updateKppFile 改写 .kpp,
+    // 文件一变即自动失效重解析。互斥锁保护 (主线程查询/渲染线程切换并发)。
+    struct CachedPresetInfo {
+        bool valid = false;
+        qint64 mtimeMs = 0;
+        qint64 fileSize = 0;
+        QVector<double> defaults;
+        QString paintOpId;
+        QString tipFilename;
+    };
+    QMutex m_presetInfoMutex;
+    QHash<int, CachedPresetInfo> m_presetInfoCache;
+    // 解析并缓存预设只读元数据; 失败返回 false (out 不保证有效)
+    bool ensurePresetInfo(int index, CachedPresetInfo &out);
+    // 当前 m_brushPreset 的笔尖是否被 setBrushTipAsset(非空) 覆盖过。
+    // loadBrushPreset 每次都重新解析预设文件, 出厂笔尖天然在场,
+    // 覆盖未发生时 setBrushTipAsset("") 无需再解析原文件。
+    bool m_tipOverridden = false;
     // Size 压感曲线缓存（预设切换时失效；光标环每帧查询用）
     mutable QMutex m_sizeCurveMutex;
     const void *m_sizeCurveOwner = nullptr;   // settings 指针，变更即重解析
@@ -1186,14 +1219,18 @@ private:
     // touch-down, so a pure tap or an instantly-cancelled stroke never pays
     // the full-document read cost.
     bool m_snapshotPending = false;
-    // Krita-native undo/redo: KisSurrogateUndoStore + KisTransaction +
+    // Krita-native undo/redo: ReverieUndoStore (KisSurrogateUndoStore 等价实现
+    // + 撤销历史上限, 见 ReverieCoreUndoStore.h) + KisTransaction +
     // libs/image/commands node commands. The store is installed on the
     // KisImage via setUndoStore; every modifying operation is wrapped in a
     // KisTransaction or a node command pushed through the image's undo
     // adapter, so undo/redo restores Krita's own tile-level snapshots
     // (memory-efficient) and covers strokes, fills, shapes, layer
     // add/remove/move and layer attributes - not just brush strokes.
-    KisSurrogateUndoStore *m_undoStore = nullptr;
+    ReverieUndoStore *m_undoStore = nullptr;
+    // 撤销历史上限 (命令条数, 0 = 无上限)。默认 50 与 Kotlin 侧
+    // maxUndoSteps 的 prefs 默认值一致; 无 Kotlin 接线时也生效。
+    int m_undoLimit = 50;
     int m_redoCount = 0;   // redo depth tracked locally (store hides it)
     int m_macroDepth = 0;  // nested macro transaction depth
     bool m_undoCaptureEnabled = true; // false during replay (no history growth)

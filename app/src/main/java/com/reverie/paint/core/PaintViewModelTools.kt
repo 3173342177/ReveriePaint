@@ -820,10 +820,16 @@ internal fun PaintViewModel.cropCanvas(
         }
     }
     runCore(after = {
-        // The document size changed in C++ - keep coreW/coreH in sync or
+        // The document size changed in C++ - keep coreW/coreH and docWidth/docHeight in sync or
         // the viewport render reads stale dimensions (crop crash)
-        coreW = ReverieCoreBridge.docWidth()
-        coreH = ReverieCoreBridge.docHeight()
+        val nw = ReverieCoreBridge.docWidth()
+        val nh = ReverieCoreBridge.docHeight()
+        coreW = nw
+        coreH = nh
+        if (nw > 0 && nh > 0 && (nw != docWidth || nh != docHeight)) {
+            docWidth = nw
+            docHeight = nh
+        }
         // Force a viewport resize: renderW/renderH were computed for the
         // old document size, so recompute + full redraw
         renderW = -1
@@ -832,6 +838,29 @@ internal fun PaintViewModel.cropCanvas(
         notifyLayerChanged(pixelChanged = true)
     }) {
         ReverieCoreBridge.cropCanvas(x, y, w, h)
+    }
+}
+
+internal fun PaintViewModel.scaleImage(
+    w: Int,
+    h: Int,
+    filterType: Int = 0,
+) {
+    runCore(after = {
+        val nw = ReverieCoreBridge.docWidth()
+        val nh = ReverieCoreBridge.docHeight()
+        coreW = nw
+        coreH = nh
+        if (nw > 0 && nh > 0 && (nw != docWidth || nh != docHeight)) {
+            docWidth = nw
+            docHeight = nh
+        }
+        renderW = -1
+        renderH = -1
+        syncLayersFromNative()
+        notifyLayerChanged(pixelChanged = true)
+    }) {
+        ReverieCoreBridge.scaleImage(w, h, filterType)
     }
 }
 
@@ -1045,6 +1074,16 @@ internal fun PaintViewModel.undo() {
     clearPendingStrokeSamples()
     showActionToast(R.string.toast_undo, R.drawable.ic_undo)
     runCore(after = {
+        val nw = ReverieCoreBridge.docWidth()
+        val nh = ReverieCoreBridge.docHeight()
+        coreW = nw
+        coreH = nh
+        if (nw > 0 && nh > 0 && (nw != docWidth || nh != docHeight)) {
+            docWidth = nw
+            docHeight = nh
+            renderW = -1
+            renderH = -1
+        }
         notifyLayerChanged(forceThumbs = false, immediateRender = true, pixelChanged = true)
         refreshSelection()
         if (anim.enabled) {
@@ -1066,6 +1105,16 @@ internal fun PaintViewModel.redo() {
     clearPendingStrokeSamples()
     showActionToast(R.string.toast_redo, R.drawable.ic_redo)
     runCore(after = {
+        val nw = ReverieCoreBridge.docWidth()
+        val nh = ReverieCoreBridge.docHeight()
+        coreW = nw
+        coreH = nh
+        if (nw > 0 && nh > 0 && (nw != docWidth || nh != docHeight)) {
+            docWidth = nw
+            docHeight = nh
+            renderW = -1
+            renderH = -1
+        }
         notifyLayerChanged(forceThumbs = false, immediateRender = true, pixelChanged = true)
         refreshSelection()
         if (anim.enabled) {

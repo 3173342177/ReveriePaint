@@ -136,7 +136,7 @@
     <string name="gallery_action_delete_artwork">删除作品</string>
     <string name="gallery_batch_share">分享 (%d)</string>
     <string name="gallery_batch_move">移动 (%d)</string>
-    <string name="gallery_drop_hint">释放以导入作品到画廊</string>
+    <string name="gallery_drop_hint">释放以导入作品或笔刷</string>
     <string name="gallery_toast_stack_created">已创建画集: %s</string>
     <string name="gallery_toast_stack_deleted">画集已删除</string>
     <string name="gallery_toast_artwork_deleted">作品已删除</string>
@@ -359,6 +359,7 @@
     <string name="project_creating_canvas">正在创建画布...</string>
     <string name="project_preparing_replay">正在准备回放...</string>
     <string name="project_importing_progress">正在导入作品...</string>
+    <string name="project_loading_progress">正在加载作品...</string>
 
     <string name="layer_default_background">背景</string>
     <string name="layer_default_paint_layer">颜料图层 %d</string>
@@ -978,8 +979,24 @@
     <string name="brush_action_new">新建笔刷</string>
     <string name="brush_action_import">导入</string>
     <string name="brush_action_new_group">新建组</string>
-    <string name="brush_delete_group_title">删除自定义分组</string>
-    <string name="brush_delete_group_msg">确定要删除分类「%s」吗？组内的笔刷将保留并移至默认分类</string>
+    <string name="brush_delete_group_title">删除笔刷组</string>
+    <string name="brush_delete_group_msg">确定要删除笔刷组「%s」吗？</string>
+    <string name="brush_delete_group_with_presets">同时删除组内所有自定义笔刷 (共 %d 个)</string>
+    <string name="brush_delete_group_builtin_note">注：组内包含 %d 个内置笔刷，内置笔刷将保留并移至「全部」</string>
+    <string name="brush_batch_manage">批量管理</string>
+    <string name="brush_batch_select_all">全选</string>
+    <string name="brush_batch_deselect_all">取消全选</string>
+    <string name="brush_batch_done">完成</string>
+    <string name="brush_batch_selected_count">已选 %d 个</string>
+    <string name="brush_batch_delete">批量删除</string>
+    <string name="brush_batch_delete_dialog_title">批量删除笔刷</string>
+    <string name="brush_batch_delete_dialog_msg">确定要彻底删除选中的 %d 个自定义笔刷吗？此操作无法撤销</string>
+    <string name="brush_batch_delete_builtin_skipped">已自动跳过 %d 个内置只读笔刷</string>
+    <string name="brush_batch_move">批量移动</string>
+    <string name="brush_batch_move_dialog_title">批量移动笔刷至分组</string>
+    <string name="brush_batch_delete_success">已删除 %d 个笔刷</string>
+    <string name="brush_batch_move_success">已将 %1$d 个笔刷移动至「%2$s」</string>
+    <string name="brush_group_more_options">分组操作</string>
     <string name="brush_in_use_hint">使用中 · 点按调属性</string>
     <string name="brush_fav_add">加入常用</string>
     <string name="brush_fav_remove">取消常用</string>
@@ -1337,6 +1354,14 @@
     <string name="stylus_sound_paper_desc">落笔与运笔时模拟真实笔尖在纸张上的微摩擦发声，随笔速变化，营造沉浸式触感体验</string>
     <string name="stylus_sound_volume">音效音量</string>
     <string name="stylus_sound_volume_desc">纸张微摩擦声播放音量</string>
+    <string name="stylus_sound_type">音效质感</string>
+    <string name="stylus_sound_type_desc">选择手写笔书写与绘画时的声音风格</string>
+    <string name="stylus_audio_type_pencil">真实铅笔 (细腻磨砂)</string>
+    <string name="stylus_audio_type_pencil_desc">基于高质量铅笔摩擦实录采样与动态压感共振调制</string>
+    <string name="stylus_audio_type_ink">钢笔划纸 (清脆微响)</string>
+    <string name="stylus_audio_type_ink_desc">模拟硬质金属笔尖划过纸面的清脆划擦质感</string>
+    <string name="stylus_audio_type_tick">系统微触音 (极简轻触)</string>
+    <string name="stylus_audio_type_tick_desc">落笔时触发极简的柔和物理点触微声</string>
     <string name="stylus_curve_title">全局压力曲线</string>
     <string name="stylus_curve_mapping">压力曲线映射</string>
     <string name="stylus_curve_mapping_desc">手感偏硬时可选用「轻压灵敏」预设或微调控制点</string>
@@ -1522,7 +1547,7 @@
     <string name="toast_undo_vertex">撤销顶点</string>
     <string name="toast_undo_lasso_point">撤销套索点</string>
     <string name="toast_project_saved">工程已保存</string>
-    <string name="drag_drop_import_hint">释放以导入图层或参考图</string>
+    <string name="drag_drop_import_hint">释放以导入图层、参考图或笔刷</string>
     <string name="selection_select_layer">选中图层</string>
     <string name="selection_clear">清除选区</string>
     <string name="selection_active_hint">选区生效中</string>
@@ -1855,6 +1880,51 @@
     <string name="theme_selection_mask_opacity_title">选区蒙版不透明度</string>
     <string name="theme_selection_mask_opacity_desc">调整活动选区遮罩层的透明度深度</string>
     <string name="theme_selection_custom_color_title">自定义选区蒙版颜色</string>
+
+    <!-- External Brush Import -->
+    <string name="brush_import_dialog_title_single">导入笔刷</string>
+    <string name="brush_import_dialog_title_multiple">批量导入笔刷 (%d)</string>
+    <string name="brush_import_dialog_desc_single">将笔刷预设或笔刷包导入至应用笔刷库</string>
+    <string name="brush_import_dialog_desc_multiple">检测到 %d 个笔刷文件，选择归属分组后导入</string>
+    <string name="brush_import_dialog_target_group">目标分组</string>
+    <string name="brush_import_dialog_new_group">+ 新建分组</string>
+    <string name="brush_import_dialog_new_group_hint">输入新分组名称</string>
+    <string name="brush_import_dialog_btn_import">导入</string>
+    <string name="brush_import_dialog_default_group">导入</string>
+    <string name="toast_brush_import_success_single">已成功导入笔刷：%s</string>
+    <string name="toast_brush_import_success_multiple">已成功导入 %d 个笔刷文件</string>
+
+    <!-- Shortcut Conflict & Toolbar Squeeze Warning -->
+    <string name="shortcut_conflict_unbound">快捷键冲突：%1$s 占用的 %2$s 已自动解绑</string>
+    <string name="toolbar_squeezed_title">工具栏显示空间不足</string>
+    <string name="toolbar_squeezed_desc">当前屏幕高度不足以完整显示工具按钮。建议缩小界面缩放或缩短快捷滑块长度，以恢复工具栏显示</string>
+    <string name="toolbar_squeezed_slider_length">快捷滑块长度</string>
+    <string name="toolbar_squeezed_ui_scale">界面缩放</string>
+    <string name="toolbar_squeezed_dismiss_forever">不再提示</string>
+
+    <!-- Canvas Adjustment / Crop & Scale -->
+    <string name="canvas_adjust_title">调整画布与尺寸</string>
+    <string name="canvas_adjust_mode_crop">裁切与扩展</string>
+    <string name="canvas_adjust_mode_scale">图像缩放</string>
+    <string name="canvas_adjust_anchor_title">锚点定位</string>
+    <string name="canvas_adjust_lock_ratio">锁定比例</string>
+    <string name="canvas_adjust_unlock_ratio">解锁比例</string>
+    <string name="canvas_adjust_reset">重置</string>
+    <string name="canvas_adjust_apply">应用</string>
+    <string name="canvas_ratio_free">自由</string>
+    <string name="canvas_ratio_original">原始</string>
+    <string name="canvas_resample_bicubic">双三次平滑 (推荐)</string>
+    <string name="canvas_resample_nearest">邻近点 (像素画)</string>
+    <string name="canvas_resample_bilinear">双线性</string>
+    <string name="canvas_adjust_group_mode">模式</string>
+    <string name="canvas_adjust_group_size">尺寸</string>
+    <string name="canvas_adjust_group_position">位置</string>
+    <string name="canvas_adjust_group_ratio">比例</string>
+    <string name="canvas_adjust_group_scale">缩放</string>
+    <string name="canvas_adjust_group_interpolation">插值</string>
+    <string name="canvas_adjust_collapse">折叠面板</string>
+    <string name="canvas_adjust_expand">展开面板</string>
+    <string name="canvas_toast_scale_success">已将图像缩放至 %1$d × %2$d</string>
 </resources>
 
 

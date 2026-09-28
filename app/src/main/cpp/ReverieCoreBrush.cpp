@@ -11,9 +11,13 @@
 
 #include <QRegularExpression>
 #include <QBuffer>
+#include <QUrl>
 #include <algorithm>
 #include <QtEndian>
 #include <zlib.h>
+
+#include <kis_abr_brush_collection.h>
+#include <kis_abr_brush.h>
 
 float ReverieCore::brushPressureFraction(float pressure)
 {
@@ -129,6 +133,11 @@ int ReverieCore::loadBrushPresetsFromDir(const QString &dirPath)
         name.chop(4);  // strip ".kpp"
         m_presets.append(qMakePair(name, dir.filePath(f)));
     }
+    // 预设列表重建后索引全部位移, 元数据缓存按 index 键存, 必须整体失效
+    {
+        QMutexLocker lock(&m_presetInfoMutex);
+        m_presetInfoCache.clear();
+    }
     return m_presets.size();
 }
 
@@ -137,35 +146,99 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
     if (baseName.isEmpty() || (m_brushDir.isEmpty() && m_patternDir.isEmpty())) {
         return false;
     }
-    if (m_loadedBrushes.contains(baseName)) {
+    const QString cleanName = QUrl::fromPercentEncoding(baseName.toUtf8());
+    const QString bareName = QFileInfo(cleanName).fileName();
+
+    if (m_loadedBrushes.contains(baseName) || m_loadedBrushes.contains(cleanName) || m_loadedBrushes.contains(bareName)) {
         return true;
     }
+
     QString fullPath;
+    auto testPath = [](const QString &dir, const QString &name) -> QString {
+        if (dir.isEmpty() || name.isEmpty()) return QString();
+        const QString p = QDir(dir).filePath(name);
+        return QFile::exists(p) ? p : QString();
+    };
+
     if (!m_brushDir.isEmpty()) {
-        fullPath = QDir(m_brushDir).filePath(baseName);
+        fullPath = testPath(m_brushDir, baseName);
+        if (fullPath.isEmpty()) fullPath = testPath(m_brushDir, cleanName);
+        if (fullPath.isEmpty()) fullPath = testPath(m_brushDir, bareName);
     }
-    if ((fullPath.isEmpty() || !QFile::exists(fullPath)) && !m_patternDir.isEmpty()) {
-        fullPath = QDir(m_patternDir).filePath(baseName);
+    if (fullPath.isEmpty() && !m_patternDir.isEmpty()) {
+        fullPath = testPath(m_patternDir, baseName);
+        if (fullPath.isEmpty()) fullPath = testPath(m_patternDir, cleanName);
+        if (fullPath.isEmpty()) fullPath = testPath(m_patternDir, bareName);
     }
-    if (!QFile::exists(fullPath)) {
+
+    // Case-insensitive fallback lookup in m_brushDir and m_patternDir
+    if (fullPath.isEmpty()) {
+        auto findCaseInsensitive = [](const QString &dirPath, const QString &target) -> QString {
+            if (dirPath.isEmpty() || target.isEmpty()) return QString();
+            QDir d(dirPath);
+            const QStringList list = d.entryList(QDir::Files | QDir::NoDotAndDotDot);
+            for (const QString &entry : list) {
+                if (entry.compare(target, Qt::CaseInsensitive) == 0) {
+                    return d.filePath(entry);
+                }
+            }
+            return QString();
+        };
+        if (!m_brushDir.isEmpty()) fullPath = findCaseInsensitive(m_brushDir, bareName);
+        if (fullPath.isEmpty() && !m_patternDir.isEmpty()) fullPath = findCaseInsensitive(m_patternDir, bareName);
+    }
+
+    if (fullPath.isEmpty() || !QFile::exists(fullPath)) {
         return false;
     }
+
     if (!m_brushResources) {
         m_brushResources = KisResourcesInterfaceSP(new KisLocalStrokeResources());
     }
+    KisLocalStrokeResources *lr = dynamic_cast<KisLocalStrokeResources *>(m_brushResources.data());
+
+    // Support Photoshop .abr brush collections
+    if (bareName.endsWith(QLatin1String(".abr"), Qt::CaseInsensitive)) {
+        KisAbrBrushCollection coll(fullPath);
+        if (coll.load()) {
+            const auto abrList = coll.brushes();
+            if (!abrList.isEmpty()) {
+                for (KisAbrBrushSP b : abrList) {
+                    if (lr) {
+                        lr->addResource(b.staticCast<KoResource>());
+                    }
+                    KisBrushSP bSp = b.staticCast<KisBrush>();
+                    if (!b->name().isEmpty()) m_loadedBrushes.insert(b->name(), bSp);
+                    if (!b->filename().isEmpty()) m_loadedBrushes.insert(b->filename(), bSp);
+                }
+                KisBrushSP firstBrush = abrList.first().staticCast<KisBrush>();
+                m_loadedBrushes.insert(bareName, firstBrush);
+                if (baseName != bareName) {
+                    m_loadedBrushes.insert(baseName, firstBrush);
+                }
+                if (!cleanName.isEmpty() && cleanName != bareName && cleanName != baseName) {
+                    m_loadedBrushes.insert(cleanName, firstBrush);
+                }
+                RPC_LOG("RPC loadSingleBrushResource ABR loaded: %s (count=%d)", fullPath.toUtf8().constData(), static_cast<int>(abrList.size()));
+                return true;
+            }
+        }
+        return false;
+    }
+
     KoResource *res = nullptr;
-    if (baseName.endsWith(QLatin1String(".gbr"), Qt::CaseInsensitive)) {
-        res = new KisGbrBrush(baseName);
-    } else if (baseName.endsWith(QLatin1String(".gih"), Qt::CaseInsensitive)) {
-        res = new KisImagePipeBrush(baseName);
-    } else if (baseName.endsWith(QLatin1String(".png"), Qt::CaseInsensitive)) {
-        res = new KisPngBrush(baseName);
-    } else if (baseName.endsWith(QLatin1String(".svg"), Qt::CaseInsensitive)) {
-        res = new KisSvgBrush(baseName);
-    } else if (baseName.endsWith(QLatin1String(".pat"), Qt::CaseInsensitive)) {
+    if (bareName.endsWith(QLatin1String(".gbr"), Qt::CaseInsensitive)) {
+        res = new KisGbrBrush(bareName);
+    } else if (bareName.endsWith(QLatin1String(".gih"), Qt::CaseInsensitive)) {
+        res = new KisImagePipeBrush(bareName);
+    } else if (bareName.endsWith(QLatin1String(".png"), Qt::CaseInsensitive)) {
+        res = new KisPngBrush(bareName);
+    } else if (bareName.endsWith(QLatin1String(".svg"), Qt::CaseInsensitive)) {
+        res = new KisSvgBrush(bareName);
+    } else if (bareName.endsWith(QLatin1String(".pat"), Qt::CaseInsensitive)) {
         res = new KoPattern(fullPath);
-    } else if (baseName.endsWith(QLatin1String(".jpg"), Qt::CaseInsensitive) ||
-               baseName.endsWith(QLatin1String(".jpeg"), Qt::CaseInsensitive)) {
+    } else if (bareName.endsWith(QLatin1String(".jpg"), Qt::CaseInsensitive) ||
+               bareName.endsWith(QLatin1String(".jpeg"), Qt::CaseInsensitive)) {
         QImage img(fullPath);
         if (!img.isNull()) {
             QByteArray pngData;
@@ -174,16 +247,26 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
             if (img.save(&buf, "PNG")) {
                 buf.close();
                 buf.open(QIODevice::ReadOnly);
-                res = new KisPngBrush(baseName);
+                res = new KisPngBrush(bareName);
                 if (res->loadFromDevice(&buf, m_brushResources)) {
-                    KisLocalStrokeResources *lr =
-                        dynamic_cast<KisLocalStrokeResources *>(m_brushResources.data());
-                    if (lr) {
-                        lr->addResource(KoResourceSP(res));
-                        KisBrush *b = dynamic_cast<KisBrush *>(res);
-                        if (b) {
-                            m_loadedBrushes.insert(baseName, KisBrushSP(b));
+                    res->setFilename(bareName);
+                    KisBrush *brushRaw = dynamic_cast<KisBrush *>(res);
+                    if (brushRaw) {
+                        KisBrushSP brushSp(brushRaw);
+                        if (lr) {
+                            lr->addResource(brushSp.staticCast<KoResource>());
                         }
+                        m_loadedBrushes.insert(bareName, brushSp);
+                        if (baseName != bareName) {
+                            m_loadedBrushes.insert(baseName, brushSp);
+                        }
+                        if (!cleanName.isEmpty() && cleanName != bareName && cleanName != baseName) {
+                            m_loadedBrushes.insert(cleanName, brushSp);
+                        }
+                        return true;
+                    } else if (lr) {
+                        KoResourceSP resSp(res);
+                        lr->addResource(resSp);
                         return true;
                     }
                 }
@@ -197,13 +280,26 @@ bool ReverieCore::loadSingleBrushResource(const QString &baseName)
     QFile f(fullPath);
     if (f.open(QIODevice::ReadOnly)) {
         if (res->loadFromDevice(&f, m_brushResources)) {
-            KisLocalStrokeResources *lr =
-                dynamic_cast<KisLocalStrokeResources *>(m_brushResources.data());
-            if (lr) {
-                lr->addResource(KoResourceSP(res));
-                KisBrush *b = dynamic_cast<KisBrush *>(res);
-                if (b) {
-                    m_loadedBrushes.insert(baseName, KisBrushSP(b));
+            res->setFilename(bareName);
+            KisBrush *brushRaw = dynamic_cast<KisBrush *>(res);
+            if (brushRaw) {
+                KisBrushSP brushSp(brushRaw);
+                if (lr) {
+                    lr->addResource(brushSp.staticCast<KoResource>());
+                }
+                m_loadedBrushes.insert(bareName, brushSp);
+                if (baseName != bareName) {
+                    m_loadedBrushes.insert(baseName, brushSp);
+                }
+                if (!cleanName.isEmpty() && cleanName != bareName && cleanName != baseName) {
+                    m_loadedBrushes.insert(cleanName, brushSp);
+                }
+                f.close();
+                return true;
+            } else {
+                KoResourceSP resSp(res);
+                if (lr) {
+                    lr->addResource(resSp);
                 }
                 f.close();
                 return true;
@@ -247,8 +343,25 @@ void ReverieCore::ensureBrushForPreset(const QString &kppPath)
                 decomp.resize(destLen);
                 if (uncompress(reinterpret_cast<Bytef*>(decomp.data()), &destLen, zStream, zLen) == Z_OK) {
                     decomp.resize(destLen);
-                    static const QRegularExpression re(QStringLiteral("([\\w\\-\\._ ]+\\.(?:gbr|gih|png|svg|pat))"), QRegularExpression::CaseInsensitiveOption);
-                    auto it = re.globalMatch(QString::fromUtf8(decomp));
+                    const QString xmlStr = QString::fromUtf8(decomp);
+
+                    // 1. Explicit filename="..." and pattern="..." XML attributes
+                    static const QRegularExpression attrRe(
+                        QStringLiteral("(?:filename|pattern)\\s*=\\s*\"([^\"]+)\""),
+                        QRegularExpression::CaseInsensitiveOption);
+                    auto itAttr = attrRe.globalMatch(xmlStr);
+                    while (itAttr.hasNext()) {
+                        const QString rawVal = itAttr.next().captured(1).trimmed();
+                        if (!rawVal.isEmpty()) {
+                            loadSingleBrushResource(rawVal);
+                        }
+                    }
+
+                    // 2. Fallback regex to capture any brush resource file names in XML
+                    static const QRegularExpression re(
+                        QStringLiteral("([\\w\\-\\._ %]+\\.(?:gbr|gih|png|svg|pat|abr|jpg|jpeg))"),
+                        QRegularExpression::CaseInsensitiveOption);
+                    auto it = re.globalMatch(xmlStr);
                     while (it.hasNext()) {
                         const QString file = it.next().captured(1).trimmed();
                         loadSingleBrushResource(file);
@@ -378,6 +491,7 @@ bool ReverieCore::loadBrushPreset(int index)
     setBrushOpacity(m_brushOpacity);
     setBrushFlow(m_brushFlow);
     m_brushTipAsset.clear();
+    m_tipOverridden = false; // 刚重新解析预设, 出厂笔尖天然在场
     // Diagnostics: is the preset's brush resolved to a real brush resource
     // or did it fall back to the default auto_brush (circle)?
     KisBrushBasedPaintOpSettings *bs =
@@ -399,34 +513,54 @@ bool ReverieCore::loadBrushPreset(int index)
     return true;
 }
 
-QVector<double> ReverieCore::brushPresetDefaults(int index)
+// 一次 .kpp 解析同时提取 defaults / paintOpId / tipFilename 三个只读值。
+// 选择预设时 Kotlin 会在主线程连查这三个值 (原本各做一次完整解析:
+// 读文件 + PNG zTXt 解压 + 正则扫描 + XML loadFromDevice), 是"换笔卡顿"
+// 的主因; 这里解析一次后按 mtime+size 缓存 (updateKppFile 改写文件即失效)。
+bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
 {
     if (index < 0 || index >= m_presets.size()) {
-        return {20.0, 1.0, 1.0, 0.15, 0.0, 30.0, 0.5, 0.5};
+        return false;
     }
+    QMutexLocker lock(&m_presetInfoMutex);
+    const QString path = m_presets[index].second;
+    const QFileInfo fi(path);
+    const qint64 mtimeMs = fi.exists() ? fi.lastModified().toMSecsSinceEpoch() : 0;
+    const qint64 fsize = fi.size();
+    auto it = m_presetInfoCache.find(index);
+    if (it != m_presetInfoCache.end() && it->valid && it->mtimeMs == mtimeMs && it->fileSize == fsize) {
+        out = *it;
+        return true;
+    }
+
     registerPaintOps();
     if (!m_brushResources) {
         m_brushResources = KisResourcesInterfaceSP(new KisLocalStrokeResources());
     }
-    const QString path = m_presets[index].second;
     ensureBrushForPreset(path);
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
-        return {20.0, 1.0, 1.0, 0.15, 0.0, 30.0, 0.5, 0.5};
+        return false;
     }
     KisPaintOpPresetSP preset(new KisPaintOpPreset(m_presets[index].first));
     const bool ok = preset->loadFromDevice(&f, m_brushResources);
     f.close();
     if (!ok || !preset->settings()) {
-        return {20.0, 1.0, 1.0, 0.15, 0.0, 30.0, 0.5, 0.5};
+        return false;
     }
     KisPaintOpSettingsSP s = preset->settings();
+
+    CachedPresetInfo info;
+    info.mtimeMs = mtimeMs;
+    info.fileSize = fsize;
+
+    // ---- defaults (原 brushPresetDefaults 的提取逻辑) ----
     double size = s->paintOpSize();
     if (!(size > 0.0) || size != size) {  // NaN / non-positive guard
         size = 20.0;
     }
-    const double opacity = s->getDouble("OpacityValue", 1.0);
-    const double flow = s->getDouble("FlowValue", 1.0);
+    const double opacity = qBound(0.0, s->getDouble("OpacityValue", 1.0), 1.0);
+    const double flow = qBound(0.0, s->getDouble("FlowValue", 1.0), 1.0);
 
     // Spacing
     double spacing = 0.15;
@@ -457,7 +591,91 @@ QVector<double> ReverieCore::brushPresetDefaults(int index)
     const bool smudgeRateChecked = s->getBool("SmudgeRate/isChecked", true);
     const double smudgeLength = smudgeRateChecked ? s->getDouble("SmudgeRateValue", 0.5) : 0.0;
 
-    return {size, opacity, flow, spacing, isAirbrush ? 1.0 : 0.0, airbrushRate, smudgeRate, smudgeLength};
+    // Angle & Scatter
+    const double angle = s->paintOpAngle();
+    const double scatter = s->paintOpScatter();
+
+    // Softness, Ratio, Sharpness, Rotation
+    const double softness = s->getDouble("SoftnessValue", s->getDouble("Softness", 0.5));
+    const double ratio = s->getDouble("RatioValue", s->getDouble("Ratio", 1.0));
+    const double sharpness = s->getDouble("SharpnessValue", s->getDouble("Sharpness", 0.0));
+    const double rotation = s->getDouble("RotationValue", s->getDouble("Rotation", 0.0));
+
+    // Dynamics
+    const double pressureSize = s->getBool("PressureSize", true) ? 1.0 : 0.0;
+    const double pressureOpacity = s->getBool("PressureOpacity", false) ? 1.0 : 0.0;
+    const double pressureFlow = s->getBool("PressureFlow", false) ? 1.0 : 0.0;
+    const double followDirection = s->getBool("PressureRotation", false) ? 1.0 : 0.0;
+    const double mirrorX = s->getBool("HorizontalMirrorEnabled", false) ? 1.0 : 0.0;
+    const double mirrorY = s->getBool("VerticalMirrorEnabled", false) ? 1.0 : 0.0;
+    const double antiAliasing = s->getBool("Antialiasing", s->getBool("antialiasEdges", true)) ? 1.0 : 0.0;
+
+    info.defaults = {
+        size, opacity, flow, spacing,
+        isAirbrush ? 1.0 : 0.0, airbrushRate, smudgeRate, smudgeLength,
+        angle, scatter, softness, ratio, sharpness, rotation,
+        pressureSize, pressureOpacity, pressureFlow,
+        followDirection, mirrorX, mirrorY, antiAliasing
+    };
+
+    // ---- paintOpId (原 brushPresetPaintOpId 的提取逻辑) ----
+    info.paintOpId = preset->paintOp().id();
+
+    // ---- tipFilename (原 brushPresetTipFilename 的提取逻辑) ----
+    if (bs) {
+        KisBrushSP b = bs->brush();
+        if (b) {
+            info.tipFilename = b->filename();
+        }
+    }
+
+    info.valid = true;
+    m_presetInfoCache.insert(index, info);
+    out = info;
+    return true;
+}
+
+QVector<double> ReverieCore::brushPresetDefaults(int index)
+{
+    const QVector<double> defaultFallback = {
+        20.0, 1.0, 1.0, 0.15,
+        0.0, 30.0, 0.5, 0.5,
+        0.0, 0.0, 0.5, 1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    };
+    CachedPresetInfo info;
+    if (!ensurePresetInfo(index, info) || info.defaults.isEmpty()) {
+        return defaultFallback;
+    }
+    return info.defaults;
+}
+
+QString ReverieCore::brushPresetPaintOpId(int index)
+{
+    CachedPresetInfo info;
+    if (!ensurePresetInfo(index, info) || info.paintOpId.isEmpty()) {
+        return QStringLiteral("paintbrush");
+    }
+    return info.paintOpId;
+}
+
+QString ReverieCore::currentBrushPaintOpId() const
+{
+    if (m_brushPreset) {
+        const QString id = m_brushPreset->paintOp().id();
+        if (!id.isEmpty()) return id;
+    }
+    return QStringLiteral("paintbrush");
+}
+
+QString ReverieCore::brushPresetTipFilename(int index)
+{
+    CachedPresetInfo info;
+    if (!ensurePresetInfo(index, info)) {
+        return QString();
+    }
+    return info.tipFilename;
 }
 
 int ReverieCore::brushPresetCount() const
@@ -677,7 +895,14 @@ bool ReverieCore::setBrushTipAsset(const QString &assetName)
         return false;
     }
     if (assetName.isEmpty()) {
-        // Restore factory brush tip from the original .kpp preset file
+        // Restore factory brush tip from the original .kpp preset file.
+        // Skip the re-parse when no tip override is in effect: loadBrushPreset
+        // always parses a fresh preset whose settings already carry the
+        // factory brush, so restoring would re-read the very same file.
+        if (!m_tipOverridden) {
+            RPC_LOG("RPC setBrushTipAsset: no override in effect, factory tip already active (preset %d)", m_brushPresetIndex);
+            return true;
+        }
         if (m_brushPresetIndex >= 0 && m_brushPresetIndex < m_presets.size()) {
             QFile f(m_presets[m_brushPresetIndex].second);
             if (f.open(QIODevice::ReadOnly)) {
@@ -689,6 +914,7 @@ bool ReverieCore::setBrushTipAsset(const QString &assetName)
                         KisBrushOptionProperties prop;
                         prop.readOptionSetting(origBs, m_brushResources, origBs->canvasResourcesInterface());
                         prop.writeOptionSetting(bs);
+                        m_tipOverridden = false;
                         RPC_LOG("RPC setBrushTipAsset: restored factory brush tip for preset %d", m_brushPresetIndex);
                         return true;
                     }
@@ -720,6 +946,7 @@ bool ReverieCore::setBrushTipAsset(const QString &assetName)
     prop.readOptionSetting(bs, m_brushResources, bs->canvasResourcesInterface());
     prop.setBrush(brush);
     prop.writeOptionSetting(bs);
+    m_tipOverridden = true;
     RPC_LOG("RPC setBrushTipAsset SUCCESS: %s", assetName.toUtf8().constData());
     return true;
 }

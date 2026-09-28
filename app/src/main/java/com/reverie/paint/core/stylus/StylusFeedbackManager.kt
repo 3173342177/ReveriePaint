@@ -39,7 +39,7 @@ class StylusFeedbackManager(private val context: Context) {
     private var isWritingHapticsActive = false
 
     /** Procedural paper-friction writing sound (see [PaperSoundEngine]). */
-    val paperSound = PaperSoundEngine()
+    val paperSound = PaperSoundEngine(context.applicationContext)
 
     init {
         paperSound.start()
@@ -63,16 +63,16 @@ class StylusFeedbackManager(private val context: Context) {
      * Begin paper friction sound at stroke start (non-blocking, zero allocation).
      * @param isEraser slightly quiets the texture for eraser strokes.
      */
-    fun startStrokeSound(isEraser: Boolean) {
-        paperSound.startStroke(isEraser)
+    fun startStrokeSound(isEraser: Boolean, initialPressure: Float = 0.5f) {
+        paperSound.startStroke(isEraser, initialPressure)
     }
 
     /**
-     * Update friction loudness from stroke speed (px/ms in document space).
+     * Update friction loudness from stroke speed (px/ms in document space) and pressure.
      * Non-blocking, zero allocation: single volatile write.
      */
-    fun updateStrokeSound(speedPxPerMs: Float) {
-        paperSound.updateStroke(speedPxPerMs)
+    fun updateStrokeSound(speedPxPerMs: Float, pressure: Float = 0.5f) {
+        paperSound.updateStroke(speedPxPerMs, pressure)
     }
 
     /** Fade out friction sound on stroke end / cancel. */

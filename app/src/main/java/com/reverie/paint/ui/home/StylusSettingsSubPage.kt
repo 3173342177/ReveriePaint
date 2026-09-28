@@ -151,9 +151,14 @@ internal fun StylusSettingsSubPage(
             }
 
             // 2. 真实书写音效
+            val audioTypeOptions = listOf(
+                stringResource(R.string.stylus_audio_type_pencil),
+                stringResource(R.string.stylus_audio_type_ink),
+                stringResource(R.string.stylus_audio_type_tick),
+            )
             SettingCategoryTitle(stringResource(R.string.stylus_sound_title))
             SettingGroup {
-                val audioTotal = if (vm.stylusAudioEnabled) 2 else 1
+                val audioTotal = if (vm.stylusAudioEnabled) 3 else 1
                 SettingSwitchGroupItem(
                     icon = Icons.AutoMirrored.Rounded.VolumeUp,
                     title = stringResource(R.string.stylus_sound_paper),
@@ -163,13 +168,22 @@ internal fun StylusSettingsSubPage(
                     onCheckedChange = { vm.updateStylusAudioEnabled(it) },
                 )
                 if (vm.stylusAudioEnabled) {
+                    SettingDropdownGroupItem(
+                        icon = Icons.Rounded.Edit,
+                        title = stringResource(R.string.stylus_sound_type),
+                        summary = stringResource(R.string.stylus_sound_type_desc),
+                        currentText = audioTypeOptions.getOrElse(vm.stylusAudioType.ordinal) { audioTypeOptions[0] },
+                        options = audioTypeOptions,
+                        shape = settingGroupShape(1, audioTotal),
+                        onSelect = { vm.updateStylusAudioType(com.reverie.paint.core.stylus.StylusAudioType.fromOrdinal(it)) },
+                    )
                     SettingSliderGroupItem(
                         icon = Icons.AutoMirrored.Rounded.VolumeDown,
                         title = stringResource(R.string.stylus_sound_volume),
                         summary = stringResource(R.string.stylus_sound_volume_desc),
                         valueText = "${(vm.stylusAudioVolume * 100).toInt()}%",
                         sliderFraction = vm.stylusAudioVolume,
-                        shape = settingGroupShape(1, audioTotal),
+                        shape = settingGroupShape(2, audioTotal),
                         onValueChange = { vm.updateStylusAudioVolume(it) },
                     )
                 }

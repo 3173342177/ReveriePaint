@@ -402,6 +402,12 @@ object ReverieCoreBridge {
         h: Int,
     )
 
+    external fun scaleImage(
+        w: Int,
+        h: Int,
+        filterType: Int,
+    )
+
     external fun contentBounds(): IntArray?
 
     external fun contentBoundsLayers(layers: IntArray): IntArray?
@@ -479,6 +485,12 @@ object ReverieCoreBridge {
     external fun brushPresetDefaults(index: Int): DoubleArray
 
     external fun brushPresetName(index: Int): String
+
+    external fun brushPresetPaintOpId(index: Int): String
+
+    external fun currentBrushPaintOpId(): String
+
+    external fun brushPresetTipFilename(index: Int): String
 
     external fun brushPresetThumbData(index: Int): ByteArray
 
@@ -587,6 +599,12 @@ object ReverieCoreBridge {
     external fun setUndoCaptureEnabled(on: Boolean)
 
     external fun clearUndoHistory()
+
+    /** 设置撤销历史上限 (命令条数, 0 = 无上限); 超限命令在下次 push 时从栈底释放 */
+    external fun setUndoLimit(limit: Int)
+
+    /** 释放当前文档的全部 native 资源 (图层 tile/undo 栈/渲染与洋葱皮缓存)。回主页时调用: g_core 是进程级单例, 不释放则旧文档一直驻留内存 */
+    external fun closeDocument()
 
     external fun beginUndoMacro(text: String = "")
 

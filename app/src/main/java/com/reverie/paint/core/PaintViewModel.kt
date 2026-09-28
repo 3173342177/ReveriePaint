@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reverie.paint.R
+import com.reverie.paint.core.stylus.StylusAudioType
 import com.reverie.paint.model.*
 import com.reverie.paint.perf.PerfHud
 import kotlinx.coroutines.Dispatchers
@@ -554,7 +555,7 @@ class PaintViewModel : ViewModel() {
     var brushMinSizeLimit by mutableDoubleStateOf(1.0)
     var brushMaxSizeLimit by mutableDoubleStateOf(500.0)
     var brushTipAsset by mutableStateOf("")
-    var brushPaintOpId by mutableStateOf("defaultpaintop")
+    var brushPaintOpId by mutableStateOf("paintbrush")
     var brushAirbrush by mutableStateOf(false)
     var brushAirbrushRate by mutableDoubleStateOf(30.0)
     var brushSmudgeRate by mutableDoubleStateOf(0.5)
@@ -1084,6 +1085,78 @@ class PaintViewModel : ViewModel() {
 
     /** 左侧工具条滑块面板的实时高度 (px), 由 ToolRail 测量写入; 时间轴"展开至同高"对齐用 */
     var railSliderPanelHeightPx by mutableFloatStateOf(0f)
+    var showToolbarSqueezedDialog by mutableStateOf(false)
+    var toolbarSqueezedWarningDismissed by mutableStateOf(false)
+
+    fun dismissToolbarSqueezedWarning(forever: Boolean) {
+        showToolbarSqueezedDialog = false
+        if (forever) {
+            toolbarSqueezedWarningDismissed = true
+            if (::appContext.isInitialized) {
+                appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("toolbarSqueezedWarningDismissed", true)
+                    .apply()
+            }
+        }
+    }
+
+    var isCanvasAdjustActive by mutableStateOf(false)
+    var canvasAdjustState by mutableStateOf(com.reverie.paint.model.CanvasAdjustState())
+    /** 画布调整面板的拖拽偏移 (面板内部会按可视区钳制, 退出时归零) */
+    var canvasAdjustPanelOffset by mutableStateOf(androidx.compose.ui.geometry.Offset.Zero)
+    /** 画布调整面板折叠状态: 折叠后仅保留一条可拖动标题栏, 避免长期遮挡画布 */
+    var isCanvasAdjustPanelCollapsed by mutableStateOf(false)
+
+    fun enterCanvasAdjustMode(mode: com.reverie.paint.model.CanvasAdjustMode = com.reverie.paint.model.CanvasAdjustMode.CROP_EXPAND) {
+        val w = docWidth
+        val h = docHeight
+        canvasAdjustState = com.reverie.paint.model.CanvasAdjustState(
+            mode = mode,
+            origWidth = w,
+            origHeight = h,
+            targetWidth = w,
+            targetHeight = h,
+            lockAspectRatio = mode == com.reverie.paint.model.CanvasAdjustMode.RESAMPLE_SCALE,
+            selectedPreset = com.reverie.paint.model.AspectRatioPreset.FREE,
+            anchor = com.reverie.paint.model.AnchorPosition.CENTER,
+            resampleFilter = com.reverie.paint.model.ResampleFilter.BICUBIC,
+            cropX = 0,
+            cropY = 0,
+        )
+        isCanvasAdjustActive = true
+    }
+
+    fun exitCanvasAdjustMode() {
+        isCanvasAdjustActive = false
+        if (currentToolId == "crop") {
+            val prev = lastToolId.ifEmpty { "brush" }
+            applyTool(if (prev == "crop") "brush" else prev)
+        }
+    }
+
+    fun applyCanvasAdjustment() {
+        val s = canvasAdjustState
+        isCanvasAdjustActive = false
+        canvasAdjustPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+        if (currentToolId == "crop") {
+            val prev = lastToolId.ifEmpty { "brush" }
+            applyTool(if (prev == "crop") "brush" else prev)
+        }
+        if (s.mode == com.reverie.paint.model.CanvasAdjustMode.CROP_EXPAND) {
+            val (cx, cy) = if (s.selectedPreset != com.reverie.paint.model.AspectRatioPreset.FREE || s.lockAspectRatio || s.cropX != 0 || s.cropY != 0) {
+                s.cropX to s.cropY
+            } else {
+                com.reverie.paint.model.AnchorPosition.computeOffset(s.origWidth, s.origHeight, s.targetWidth, s.targetHeight, s.anchor)
+            }
+            cropCanvas(cx, cy, s.targetWidth, s.targetHeight)
+            showActionToast(R.string.canvas_toast_resized, R.drawable.ic_crop, s.targetWidth, s.targetHeight)
+        } else {
+            scaleImage(s.targetWidth, s.targetHeight, s.resampleFilter.filterType)
+            showActionToast(R.string.canvas_toast_scale_success, R.drawable.ic_crop, s.targetWidth, s.targetHeight)
+        }
+    }
+
     var extendToCutout by mutableStateOf(true)
     var homeSelectedTab by mutableIntStateOf(0)
 
@@ -1129,6 +1202,7 @@ class PaintViewModel : ViewModel() {
     var stylusHapticsIntensity by mutableFloatStateOf(0.5f)
     var stylusAudioEnabled by mutableStateOf(false)
     var stylusAudioVolume by mutableFloatStateOf(0.6f)
+    var stylusAudioType by mutableStateOf(StylusAudioType.PENCIL)
     var stylusStrokePredictionEnabled by mutableStateOf(true)
     // Samsung Notes 标准语义: 按住侧键落笔 = 临时橡皮 (默认开, 可在三星 S Pen 专属设置中关闭)
     var samsungSideButtonErase by mutableStateOf(true)
@@ -1714,6 +1788,15 @@ class PaintViewModel : ViewModel() {
         }
     }
 
+    fun updateStylusAudioType(type: StylusAudioType) {
+        stylusAudioType = type
+        if (::appContext.isInitialized) {
+            appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().putInt("stylusAudioType", type.ordinal).apply()
+            getOrCreateStylusDriver(appContext).syncSettings()
+        }
+    }
+
     fun updateStylusStrokePredictionEnabled(enabled: Boolean) {
         stylusStrokePredictionEnabled = enabled
         motionPredictorEnabled = enabled
@@ -2138,6 +2221,10 @@ class PaintViewModel : ViewModel() {
                 .putInt("maxUndoSteps", maxUndoSteps)
                 .apply()
         }
+        // 引擎侧撤销栈历史上限: 此前该设置从未传给 C++, 每笔的 tile 快照
+        // 命令无限堆积导致内存持续增长 ("越画越卡")。渲染线程未启动时
+        // runCore 静默跳过, 由文档创建点兜底应用 (C++ 默认同为 50)。
+        runCore(render = false) { ReverieCoreBridge.setUndoLimit(maxUndoSteps) }
     }
 
     fun updatePromptSaveOnExit(prompt: Boolean) {
@@ -2179,6 +2266,7 @@ class PaintViewModel : ViewModel() {
             paintingUiScale = prefs.getFloat("paintingUiScale", 1.0f).coerceIn(0.70f, 1.40f)
             layerRowHeightDp = prefs.getInt("layerRowHeightDp", 52).coerceIn(40, 80)
             quickSliderHeightDp = prefs.getInt("quickSliderHeightDp", 175).coerceIn(100, 260)
+            toolbarSqueezedWarningDismissed = prefs.getBoolean("toolbarSqueezedWarningDismissed", false)
             panelPinningEnabled = prefs.getBoolean("panelPinningEnabled", false)
             leftHandMode = prefs.getBoolean("leftHandMode", false)
             selectionMaskColorHex = prefs.getString("selection_mask_color", "#141416") ?: "#141416"
@@ -2208,7 +2296,7 @@ class PaintViewModel : ViewModel() {
             stylusHapticsIntensity = prefs.getFloat("stylusHapticsIntensity", 0.5f)
             stylusAudioEnabled = prefs.getBoolean("stylusAudioEnabled", false)
             stylusAudioVolume = prefs.getFloat("stylusAudioVolume", 0.6f)
-            // 音效类型设置已移除, 统一为程序化铅笔沙沙音色 (忽略历史存储值)
+            stylusAudioType = StylusAudioType.fromOrdinal(prefs.getInt("stylusAudioType", StylusAudioType.PENCIL.ordinal))
             samsungSideButtonErase = prefs.getBoolean("samsungSideButtonErase", true)
             stylusStrokePredictionEnabled = prefs.getBoolean("stylusStrokePredictionEnabled", true)
             motionPredictorEnabled = stylusStrokePredictionEnabled
@@ -3058,6 +3146,7 @@ class PaintViewModel : ViewModel() {
     private val strokeBatchCoords = FloatArray(STROKE_BATCH_CAPACITY * STROKE_SAMPLE_STRIDE)
     private val strokeDrainCoords = FloatArray(STROKE_BATCH_CAPACITY * STROKE_SAMPLE_STRIDE)
     private var strokeBatchCount = 0
+    private var batchOverflowLogCounter = 0 // queueStrokeMove 仅 UI 线程调用
     @Volatile private var strokeBatchQueued = false
     @Volatile private var lastQueuedInputEventTime = 0L
     @Volatile private var lastQueuedUptime = 0L
@@ -3130,6 +3219,23 @@ class PaintViewModel : ViewModel() {
                 strokeBatchCoords[o + 4] = safeTiltY
                 strokeBatchCoords[o + 5] = safeRotation
                 strokeBatchCount++
+            } else {
+                // 队列满 (渲染线程被长任务阻塞): 覆盖最后一个样本而非静默
+                // 丢弃新样本 —— drain 时笔画尾端仍是最新位置, 中段被直线化
+                // 但不断线不缺墨 (此前满后直接 return, 新点整段丢失)。
+                val o = (strokeBatchCount - 1) * STROKE_SAMPLE_STRIDE
+                strokeBatchCoords[o] = x
+                strokeBatchCoords[o + 1] = y
+                strokeBatchCoords[o + 2] = safeP
+                strokeBatchCoords[o + 3] = safeTiltX
+                strokeBatchCoords[o + 4] = safeTiltY
+                strokeBatchCoords[o + 5] = safeRotation
+                if (++batchOverflowLogCounter % 60 == 1) {
+                    android.util.Log.w(
+                        "ReveriePerf",
+                        "StrokeBatch overflow: render thread backed up, overwriting tail (capacity=$STROKE_BATCH_CAPACITY)"
+                    )
+                }
             }
         }
         if (!strokeBatchQueued) {
@@ -3464,6 +3570,7 @@ class PaintViewModel : ViewModel() {
     var currentFolder by mutableStateOf<com.reverie.paint.model.Project?>(null)
     var searchQuery by mutableStateOf("")
     var pendingExternalImageUri by mutableStateOf<android.net.Uri?>(null)
+    var pendingExternalBrushUris by mutableStateOf<List<android.net.Uri>?>(null)
     var isDraggingExternal by mutableStateOf(false)
 
     /** Injected by MainActivity; the engine needs it for file paths. */
@@ -3631,7 +3738,7 @@ data class BrushPresetInfo(
 
 val BUILT_IN_BRUSH_GROUPS = setOf(
     "全部", "常用", "最近", "基础", "铅笔", "勾线", "马克笔", "绘画", "水彩", "混合",
-    "速写", "形状", "特效与滤镜", "纹理与排线", "印章与喷溅", "像素画", "橡皮擦", "导入"
+    "速写", "形状", "特效与滤镜", "纹理与排线", "印章与喷溅", "像素画", "橡皮擦"
 )
 
 fun isBuiltInBrushGroup(group: String, presets: List<BrushPresetInfo> = emptyList()): Boolean {
@@ -3640,4 +3747,7 @@ fun isBuiltInBrushGroup(group: String, presets: List<BrushPresetInfo> = emptyLis
     return false
 }
 
-fun PaintViewModel.isBuiltInGroup(group: String): Boolean = isBuiltInBrushGroup(group, brushPresets)
+fun PaintViewModel.isBuiltInGroup(group: String): Boolean {
+    if (customBrushGroups.contains(group)) return false
+    return isBuiltInBrushGroup(group, brushPresets)
+}

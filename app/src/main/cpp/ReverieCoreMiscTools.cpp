@@ -18,7 +18,7 @@ void ReverieCore::cropCanvas(int x, int y, int w, int h)
     if (!image || w <= 0 || h <= 0) {
         return;
     }
-    const QRect crop(qMax(0, x), qMax(0, y), w, h);
+    const QRect crop(x, y, w, h);
     image->resizeImage(crop);
     // resizeImage goes through KisProcessingApplicator (async stroke) - the
     // document size changes only after the stroke lands, so wait or the
@@ -27,6 +27,37 @@ void ReverieCore::cropCanvas(int x, int y, int w, int h)
     syncLayersFromImage();
     // Document size changed: keep the viewport/cache mirrors in sync or the
     // render pipeline reads stale dimensions (the crop crash)
+    m_docWidth = image->width();
+    m_docHeight = image->height();
+    m_renderBufW = -1;
+    m_renderBufH = -1;
+    m_dirtyRect = QRect(0, 0, m_docWidth, m_docHeight);
+    m_bitmapInited = false;
+    m_lastDirty = QRect();
+    recompositeProjection();
+    markDirty();
+}
+
+void ReverieCore::scaleImage(int w, int h, int filterStrategyType)
+{
+    KisImageSP image = m_document;
+    if (!image || w <= 0 || h <= 0) {
+        return;
+    }
+    const char *filterName = "Bicubic";
+    if (filterStrategyType == 1) {
+        filterName = "Box"; // Nearest neighbor for pixel art
+    } else if (filterStrategyType == 2) {
+        filterName = "Bilinear";
+    }
+    KisFilterStrategy *strategy = KisFilterStrategyRegistry::instance()->value(filterName);
+    if (!strategy) {
+        strategy = KisFilterStrategyRegistry::instance()->value("Bicubic");
+    }
+
+    image->scaleImage(QSize(w, h), image->xRes(), image->yRes(), strategy);
+    image->waitForDone();
+    syncLayersFromImage();
     m_docWidth = image->width();
     m_docHeight = image->height();
     m_renderBufW = -1;

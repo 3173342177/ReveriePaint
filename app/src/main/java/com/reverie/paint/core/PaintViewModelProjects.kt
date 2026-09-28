@@ -185,9 +185,11 @@ private fun PaintViewModel.recSessionDir(): File = File(appContext.filesDir, "re
 internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
     android.util.Log.d("RP_IO", "loadProject START: name=${p.name}, path=${p.filePath}, isAutoSaved=${p.isAutoSaved}")
     stopPaintingTimer()
+    resetAnimationState()
     // Navigate to painting page first, then show loading overlay while reading native file
     currentPage = Page.PAINTING
     isBlockingLoading = true
+    blockingLoadingMessage = getString(R.string.project_loading_progress)
     val isRecovered = p.isAutoSaved || p.filePath.contains(".autosave")
     docName = p.name
     lastAutoSaveTimeMs = 0L
@@ -247,6 +249,8 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
                 renderW = coreW
                 renderH = coreH
                 displayBufferInvalid = true
+                // 新文档的撤销栈是 C++ 侧新建的, 每次都要重新应用历史上限
+                ReverieCoreBridge.setUndoLimit(maxUndoSteps)
                 ReverieCoreBridge.setBrushColor(brushColor)
                 refreshSavedSelections()
                 // Chain the project's own recording so new strokes extend the
@@ -267,8 +271,12 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
                     syncAnimationFromNative()
                 }
                 mainHandler.post {
-                    anim.enabled = animated
-                    anim.panelOpen = animated
+                    if (animated) {
+                        anim.enabled = true
+                        anim.panelOpen = true
+                    } else {
+                        resetAnimationState()
+                    }
                 }
                 android.util.Log.d("RP_IO", "loadProject OP OK: coreW=$coreW, coreH=$coreH, nativeLayers=${ReverieCoreBridge.layerCount()}, animated=$animated")
             } else {
@@ -712,7 +720,50 @@ internal fun PaintViewModel.exportDocument(
                 }
 
                 "jpg", "jpeg" -> {
-                    ReverieCoreBridge.exportJpg(targetFile.absolutePath, 95)
+                    val tempPng = java.io.File(appContext.cacheDir, "temp_jpg_${System.currentTimeMillis()}.png")
+                    try {
+                        if (ReverieCoreBridge.savePng(tempPng.absolutePath)) {
+                            val bmp = android.graphics.BitmapFactory.decodeFile(tempPng.absolutePath)
+                            if (bmp != null) {
+                                // JPEG 不支持 Alpha 通道, 在纯白背景上合成后输出
+                                val solidBmp = android.graphics.Bitmap.createBitmap(
+                                    bmp.width,
+                                    bmp.height,
+                                    android.graphics.Bitmap.Config.ARGB_8888,
+                                )
+                                val canvas = android.graphics.Canvas(solidBmp)
+                                canvas.drawColor(android.graphics.Color.WHITE)
+                                canvas.drawBitmap(bmp, 0f, 0f, null)
+                                bmp.recycle()
+                                targetFile.outputStream().use { out ->
+                                    solidBmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                                }
+                                solidBmp.recycle()
+
+                                if (embedAuthor && authorProfile.enabled && authorProfile.isNotEmpty()) {
+                                    try {
+                                        val exif = android.media.ExifInterface(targetFile.absolutePath)
+                                        val author = authorProfile.name.trim().ifEmpty { authorProfile.nickname.trim() }
+                                        if (author.isNotEmpty()) {
+                                            exif.setAttribute(android.media.ExifInterface.TAG_ARTIST, author)
+                                        }
+                                        if (authorProfile.copyright.trim().isNotEmpty()) {
+                                            exif.setAttribute(android.media.ExifInterface.TAG_COPYRIGHT, authorProfile.copyright.trim())
+                                        }
+                                        exif.setAttribute(android.media.ExifInterface.TAG_SOFTWARE, "ReveriePaint")
+                                        exif.saveAttributes()
+                                    } catch (_: Exception) {}
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } finally {
+                        tempPng.delete()
+                    }
                 }
 
                 "psd" -> {
@@ -869,9 +920,13 @@ internal fun PaintViewModel.exportImageToGallery(
 internal fun PaintViewModel.goHome() {
     recorder.endSession()
     stopPaintingTimer()
-    // 动画播放是自续定时链: 离开绘画页必须停掉, 否则主页/回放页仍在按帧率
-    // 渲染并循环播放导入音频, 系统判为"应用在静音播放视频"而报耗电异常
-    stopAnimationPlaybackForPageExit()
+    // 动画播放与状态镜像: 离开绘画页彻底停止并重置动画状态, 避免耗电和跨画布状态残留
+    resetAnimationState()
+    // 释放 native 文档: g_core 是进程级单例, 不释放则旧 KisImage (所有图层
+    // tile) 一直驻留内存, 重新打开时新旧文档共存推高峰值内存 (大文档被 LMK
+    // 杀进程)。排队到渲染线程, FIFO 保证已排队的引擎操作先完成; 之后残留的
+    // 渲染/保存调用在 C++ 侧空文档防护中安全返回。
+    runCore(render = false) { ReverieCoreBridge.closeDocument() }
     currentProjectFile = null
     docName = ""
     isModified = false
@@ -887,7 +942,7 @@ internal fun PaintViewModel.goHome() {
 
 internal fun PaintViewModel.goCreate() {
     stopPaintingTimer()
-    stopAnimationPlaybackForPageExit()
+    resetAnimationState()
     currentPage = Page.CREATE
 }
 
@@ -944,6 +999,7 @@ internal fun PaintViewModel.startPainting(
     elapsedSeconds = 0L
     canvasCreatedTime = System.currentTimeMillis()
     stopPaintingTimer()
+    resetAnimationState()
     currentPage = Page.PAINTING
     isBlockingLoading = true
     blockingLoadingMessage = getString(R.string.project_creating_canvas)
@@ -965,6 +1021,8 @@ internal fun PaintViewModel.startPainting(
                 anim.length = 1
                 anim.revision++
                 syncAnimationFromNativeAfter()
+            } else {
+                resetAnimationState()
             }
         },
     ) {
@@ -992,6 +1050,7 @@ internal fun PaintViewModel.startPainting(
                     ReverieCoreBridge.clearUndoHistory()
                 }
                 syncLayersFromNative()
+                ReverieCoreBridge.setUndoLimit(maxUndoSteps)
                 ReverieCoreBridge.setBrushColor(brushColor)
                 if (animation) {
                     // 动画画布: 为最上面的可动画图层建关键帧通道并设帧率
@@ -1012,9 +1071,8 @@ internal fun PaintViewModel.startPainting(
 internal fun PaintViewModel.goReplay(p: com.reverie.paint.model.Project) {
     recorder.endSession()
     stopPaintingTimer()
-    // 回放页与动画播放互斥: 不停播的话两套自续链会同时渲染 (动画帧还会覆盖
-    // 回放画布), 且回放播完后动画链仍在跑, 持续耗电
-    stopAnimationPlaybackForPageExit()
+    // 回放页与动画互斥: 停播并重置动画状态, 避免后台渲染和画布覆盖
+    resetAnimationState()
     currentPage = Page.REPLAY
     isBlockingLoading = true
     blockingLoadingMessage = getString(R.string.project_preparing_replay)
@@ -1249,7 +1307,12 @@ fun PaintViewModel.importDocuments(
         var successCount = 0
         var lastImportedName = ""
 
-        for (uri in uris) {
+        for ((index, uri) in uris.withIndex()) {
+            if (uris.size > 1) {
+                withContext(Dispatchers.Main) {
+                    blockingLoadingMessage = "${getString(R.string.project_importing_progress)} (${index + 1}/${uris.size})"
+                }
+            }
             try {
                 val defaultName = getString(R.string.project_default_import_name)
                 val originalName = queryFileName(context, uri) ?: "${defaultName}_${System.currentTimeMillis() % 10000}"
@@ -1368,22 +1431,28 @@ private suspend fun PaintViewModel.convertViaCore(
             cont.resume(destFile.exists() && destFile.length() > 0)
         },
     ) {
-        val loaded = when (format) {
-            "psd" -> ReverieCoreBridge.loadPsd(srcFile.absolutePath)
-            "kra" -> ReverieCoreBridge.loadRevp(srcFile.absolutePath)
-            else -> ReverieCoreBridge.loadPng(srcFile.absolutePath)
-        }
-        if (loaded) {
-            val extraJson = """
-            {
-                "strokeCount": 0,
-                "elapsedSeconds": 0,
-                "createdTime": ${System.currentTimeMillis()},
-                "colorMode": "RGB 8位",
-                "layerCount": ${ReverieCoreBridge.layerCount()}
+        try {
+            val loaded = when (format) {
+                "psd" -> ReverieCoreBridge.loadPsd(srcFile.absolutePath)
+                "kra" -> ReverieCoreBridge.loadRevp(srcFile.absolutePath)
+                else -> ReverieCoreBridge.loadPng(srcFile.absolutePath)
             }
-            """.trimIndent()
-            ReverieCoreBridge.saveRevp(destFile.absolutePath, extraJson, null)
+            if (loaded) {
+                ReverieCoreBridge.setUndoLimit(maxUndoSteps)
+                val extraJson = """
+                {
+                    "strokeCount": 0,
+                    "elapsedSeconds": 0,
+                    "createdTime": ${System.currentTimeMillis()},
+                    "colorMode": "RGB 8位",
+                    "layerCount": ${ReverieCoreBridge.layerCount()}
+                }
+                """.trimIndent()
+                ReverieCoreBridge.saveRevp(destFile.absolutePath, extraJson, null)
+            }
+        } finally {
+            // 导入转换完成后立即释放 native 文档, 避免多图层超大工程驻留在 g_core 累积内存峰值
+            ReverieCoreBridge.closeDocument()
         }
     }
 }
@@ -1399,7 +1468,7 @@ internal fun openStreamSafely(context: android.content.Context, uri: android.net
     }
 }
 
-private fun queryFileName(context: android.content.Context, uri: android.net.Uri): String? {
+internal fun queryFileName(context: android.content.Context, uri: android.net.Uri): String? {
     if (uri.scheme == "content") {
         try {
             context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -1421,6 +1490,41 @@ private fun queryFileName(context: android.content.Context, uri: android.net.Uri
         return "web_image_${System.currentTimeMillis() % 10000}.jpg"
     }
     return uri.path?.substringAfterLast('/')
+}
+
+fun isBrushUri(context: android.content.Context, uri: android.net.Uri): Boolean {
+    val name = queryFileName(context, uri) ?: uri.path ?: ""
+    val ext = name.substringAfterLast('.', "").substringBefore('?').lowercase()
+    if (ext in listOf("kpp", "bundle", "abr", "gbr", "gih")) return true
+    if (ext == "zip") {
+        try {
+            openStreamSafely(context, uri)?.use { inStream ->
+                java.util.zip.ZipInputStream(inStream).use { zipIn ->
+                    var count = 0
+                    while (count < 100) {
+                        val entry = zipIn.nextEntry ?: break
+                        val eName = entry.name
+                        if (eName.contains("paintoppresets/") ||
+                            eName.contains("brushes/") ||
+                            eName.endsWith(".kpp", ignoreCase = true) ||
+                            eName.endsWith(".gbr", ignoreCase = true) ||
+                            eName.endsWith(".abr", ignoreCase = true) ||
+                            eName.endsWith(".bundle", ignoreCase = true) ||
+                            eName == "META-INF/manifest.xml"
+                        ) {
+                            return true
+                        }
+                        count++
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+    val mime = try { context.contentResolver.getType(uri) } catch (_: Exception) { null }
+    if (mime != null && (mime.contains("kpp") || mime.contains("bundle") || mime.contains("photoshop-brush") || mime.contains("paintoppreset"))) {
+        return true
+    }
+    return false
 }
 
 fun isImageFile(context: android.content.Context, uri: android.net.Uri): Boolean {
@@ -1488,15 +1592,34 @@ fun PaintViewModel.handleIncomingUris(
     context: android.content.Context,
 ) {
     if (uris.isEmpty()) return
-    if (currentPage == Page.PAINTING) {
-        if (uris.size == 1 && isImageFile(context, uris[0])) {
-            pendingExternalImageUri = uris[0]
-        } else {
-            importDocuments(uris, context)
-            showActionToast(R.string.toast_project_imported_to_gallery, R.drawable.ic_import)
+    viewModelScope.launch(Dispatchers.IO) {
+        val brushUris = mutableListOf<android.net.Uri>()
+        val otherUris = mutableListOf<android.net.Uri>()
+        for (u in uris) {
+            if (isBrushUri(context, u)) {
+                brushUris.add(u)
+            } else {
+                otherUris.add(u)
+            }
         }
-    } else {
-        importDocuments(uris, context)
+
+        withContext(Dispatchers.Main) {
+            if (brushUris.isNotEmpty()) {
+                pendingExternalBrushUris = brushUris
+            }
+            if (otherUris.isNotEmpty()) {
+                if (currentPage == Page.PAINTING) {
+                    if (otherUris.size == 1 && isImageFile(context, otherUris[0])) {
+                        pendingExternalImageUri = otherUris[0]
+                    } else {
+                        importDocuments(otherUris, context)
+                        showActionToast(R.string.toast_project_imported_to_gallery, R.drawable.ic_import)
+                    }
+                } else {
+                    importDocuments(otherUris, context)
+                }
+            }
+        }
     }
 }
 

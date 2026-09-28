@@ -261,6 +261,46 @@ internal class AnimationState {
      * 避免"幽灵步进"继续推进时间轴 (与 PlaybackEngine.ReplaySession.stepGen 同一手法)。
      */
     var playGen = 0
+
+    /** 重置动画状态为初始默认值 (新建静态画布或关闭工程时调用) */
+    fun reset() {
+        enabled = false
+        panelOpen = false
+        currentTime = 0
+        length = 1
+        framerate = DEFAULT_ANIMATION_FPS
+        playbackStart = 0
+        playbackEnd = 0
+        isPlaying = false
+        loopPlayback = true
+        hasCustomPlaybackRange = false
+        selectedTrack = -1
+        selectedFrames = emptySet()
+        isMultiSelectMode = false
+        scrollPx = 0f
+        frameThumbs = emptyMap()
+        frameThumbImages = emptyMap()
+        frameThumbBitmapsForImages = emptyMap()
+        thumbGen = 0L
+        pendingAddedFrame = -1
+        thumbRevision = 0
+        draggingKeyframe = null
+        onionSkin = false
+        shiftTraceActive = false
+        shiftTracePrevBitmap = null
+        shiftTraceNextBitmap = null
+        audioAssets = emptyList()
+        keyframeCache = emptyMap()
+        lastFrameHold = emptyMap()
+        keyframeTags = emptyMap()
+        isTemporaryOnionSkin = false
+        isFlipPeeking = false
+        flipOriginalTime = -1
+        audioWaveform = emptyList()
+        cachedAudioFile = null
+        revision++
+        playGen++
+    }
 }
 
 // ============================================================
@@ -1569,15 +1609,30 @@ internal fun PaintViewModel.stopAnimationPlaybackForPageExit() {
 
 /** 清理循环播放帧 RAM 缓存 (释放位图堆内存) */
 internal fun PaintViewModel.clearPlaybackRamCache() {
+    val bmpsToRecycle: List<Bitmap>
+    synchronized(anim.playbackRamCache) {
+        if (anim.playbackRamCache.isEmpty()) return
+        bmpsToRecycle = anim.playbackRamCache.values.toList()
+        anim.playbackRamCache.clear()
+    }
     renderHandler?.post {
         displayBitmap = frontBuffer
-        for ((_, bmp) in anim.playbackRamCache) {
+        for (bmp in bmpsToRecycle) {
             if (!bmp.isRecycled) {
                 bmp.recycle()
             }
         }
-        anim.playbackRamCache.clear()
     }
+}
+
+/**
+ * 彻底重置动画状态镜像与运行时资源 (新建画布、加载非动画工程或退出到画廊时调用)。
+ * 保证静态画布 100% 不继承任何动画状态与时间轴展开标记。
+ */
+internal fun PaintViewModel.resetAnimationState() {
+    stopAnimationPlaybackForPageExit()
+    clearPlaybackRamCache()
+    anim.reset()
 }
 
 // ============================================================

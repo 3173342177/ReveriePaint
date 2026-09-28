@@ -1177,7 +1177,7 @@ private fun EngineTabContent(
 ) {
     StudioSectionHeader(stringResource(R.string.brush_studio_engine_title), textSub)
     val engines = listOf(
-        "defaultpaintop" to R.string.brush_studio_engine_pixel,
+        "paintbrush" to R.string.brush_studio_engine_pixel,
         "colorsmudge" to R.string.brush_studio_engine_smudge,
         "spray" to R.string.brush_studio_engine_spray,
         "sketch" to R.string.brush_studio_engine_sketch,
@@ -1191,7 +1191,7 @@ private fun EngineTabContent(
             .background(cardBg),
     ) {
         engines.forEachIndexed { idx, (id, nameRes) ->
-            val sel = vm.brushPaintOpId == id
+            val sel = (vm.brushPaintOpId == id) || (id == "paintbrush" && vm.brushPaintOpId == "defaultpaintop")
             StudioRadioRow(name = stringResource(nameRes), selected = sel, textMain = textMain, textSub = textSub) { vm.updateBrushPaintOpId(id) }
             if (idx < engines.size - 1) {
                 Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.15f)))

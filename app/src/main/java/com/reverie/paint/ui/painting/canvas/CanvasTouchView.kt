@@ -2798,8 +2798,8 @@ class CanvasTouchView(context: Context) : View(context) {
                 }
                 strokeStarted = v.touchStart(docPos.x, docPos.y, pressure.toDouble(), tiltX, tiltY, rotation)
                 if (strokeStarted) {
-                    // 纸张摩擦音效: 落笔起振 (橡皮稍收音量)
-                    getOrCreateStylusDriver()?.feedbackManager?.startStrokeSound(effTool() == Tool.ERASER)
+                    // 纸张摩擦音效: 落笔起振 (橡皮稍收音量, 附带初始落笔压感)
+                    getOrCreateStylusDriver()?.feedbackManager?.startStrokeSound(effTool() == Tool.ERASER, pressure.toFloat())
                     lastSoundTimeMs = 0L
                 }
                 val isAssist = hasSymmetry || (v.drawingGuide.mode != GuideMode.OFF && v.drawingGuide.assistedDrawing)
@@ -3070,7 +3070,7 @@ class CanvasTouchView(context: Context) : View(context) {
                             getOrCreateStylusDriver()?.feedbackManager?.setWritingHapticsEnabled(true, isEraser = (effTool() == Tool.ERASER))
                         }
                         // 迟到的笔画起点 (首帧被历史点吞掉): 补启摩擦音效
-                        getOrCreateStylusDriver()?.feedbackManager?.startStrokeSound(effTool() == Tool.ERASER)
+                        getOrCreateStylusDriver()?.feedbackManager?.startStrokeSound(effTool() == Tool.ERASER, pressure.toFloat())
                         lastSoundTimeMs = 0L
                         if (hasSymmetry) {
                             updateSymmetryPressureLut(v)
@@ -3111,13 +3111,13 @@ class CanvasTouchView(context: Context) : View(context) {
                 updateStylusSensors(event, pointerIndex, isStylus, historyPos = -1)
                 v.touchMove(effectiveDocPos.x, effectiveDocPos.y, pressure.toDouble(), event.eventTime, touchTiltX, touchTiltY, touchRotation)
 
-                // 纸张摩擦音效: 按文档坐标瞬时速度调制增益 (零分配, 单次 volatile 写)
+                // 纸张摩擦音效: 按文档坐标瞬时速度与压感动态调制增益与共振 (零分配, 单次 volatile 写)
                 val soundDt = event.eventTime - lastSoundTimeMs
                 if (lastSoundTimeMs != 0L && soundDt > 0) {
                     val sdx = effectiveDocPos.x - lastSoundDocPos.x
                     val sdy = effectiveDocPos.y - lastSoundDocPos.y
                     val speedPxPerMs = kotlin.math.sqrt(sdx * sdx + sdy * sdy) / soundDt
-                    getOrCreateStylusDriver()?.feedbackManager?.updateStrokeSound(speedPxPerMs)
+                    getOrCreateStylusDriver()?.feedbackManager?.updateStrokeSound(speedPxPerMs, pressure.toFloat())
                 }
                 lastSoundDocPos = effectiveDocPos
                 lastSoundTimeMs = event.eventTime

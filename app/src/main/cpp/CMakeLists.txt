@@ -202,12 +202,14 @@ add_library(reverie_jni SHARED
     ReverieCoreSelectionLasso.cpp
     ReverieCoreBrush.cpp
     ReverieCoreStroke.cpp
+    ReverieCoreUndoStore.cpp
     ReverieCoreRender.cpp
     ReverieCoreTransform.cpp
     ReverieCoreMiscTools.cpp
     ReverieCoreAnimation.cpp
     ReverieCoreInbetween.cpp
     ReverieCoreIO.cpp
+    ReverieCoreColorSpaceHook.cpp
     ${KRITA_SRC_DIR}/plugins/impex/psd/psd_colormode_block.cpp
     ${KRITA_SRC_DIR}/plugins/impex/psd/psd_image_data.cpp
 )

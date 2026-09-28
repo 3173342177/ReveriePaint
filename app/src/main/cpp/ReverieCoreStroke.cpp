@@ -8,6 +8,7 @@
  * ReverieCoreInternal.h, public API in ReverieCore.h)
  * ============================================================ */
 #include "ReverieCoreInternal.h"
+#include "ReverieCoreUndoStore.h"
 #include <cmath>
 
 void ReverieCore::touchStrokeStart(qreal x, qreal y, qreal pressure, qreal tiltX, qreal tiltY, qreal rotation)
@@ -821,6 +822,15 @@ void ReverieCore::clearUndoHistory()
     m_redoCount = 0;
 }
 
+void ReverieCore::setUndoLimit(int limit)
+{
+    // 0 = 无上限 (KUndo2QStack 语义); Kotlin 侧正常只会传 10..200
+    m_undoLimit = qMax(0, limit);
+    if (m_undoStore) {
+        m_undoStore->setUndoLimit(m_undoLimit);
+    }
+}
+
 void ReverieCore::beginUndoMacro(const QString &text)
 {
     if (m_document && m_document->undoAdapter() && m_undoCaptureEnabled) {
@@ -870,9 +880,23 @@ void ReverieCore::undo()
 
     m_undoStore->undo();
     ++m_redoCount;
+    m_document->waitForDone();
     syncLayersFromImage();
 
-    bool structureChanged = isStructuralCmd || oldNodes.size() != m_layers.size();
+    const int newW = m_document->width();
+    const int newH = m_document->height();
+    const bool sizeChanged = (newW != m_docWidth || newH != m_docHeight);
+    if (sizeChanged) {
+        m_docWidth = newW;
+        m_docHeight = newH;
+        m_renderBufW = -1;
+        m_renderBufH = -1;
+        m_dirtyRect = QRect(0, 0, m_docWidth, m_docHeight);
+        m_bitmapInited = false;
+        m_lastDirty = QRect();
+    }
+
+    bool structureChanged = sizeChanged || isStructuralCmd || oldNodes.size() != m_layers.size();
     if (!structureChanged) {
         for (int i = 0; i < oldNodes.size(); ++i) {
             if (oldNodes[i] != m_layers[i].node || oldVisibilities[i] != m_layers[i].visible) {
@@ -884,8 +908,6 @@ void ReverieCore::undo()
 
     if (structureChanged) {
         recompositeProjection();
-    } else {
-        m_document->waitForDone();
     }
     markDirty();
     m_snapshotPending = false;
@@ -913,9 +935,23 @@ void ReverieCore::redo()
 
     m_undoStore->redo();
     --m_redoCount;
+    m_document->waitForDone();
     syncLayersFromImage();
 
-    bool structureChanged = oldNodes.size() != m_layers.size();
+    const int newW = m_document->width();
+    const int newH = m_document->height();
+    const bool sizeChanged = (newW != m_docWidth || newH != m_docHeight);
+    if (sizeChanged) {
+        m_docWidth = newW;
+        m_docHeight = newH;
+        m_renderBufW = -1;
+        m_renderBufH = -1;
+        m_dirtyRect = QRect(0, 0, m_docWidth, m_docHeight);
+        m_bitmapInited = false;
+        m_lastDirty = QRect();
+    }
+
+    bool structureChanged = sizeChanged || oldNodes.size() != m_layers.size();
     if (!structureChanged) {
         for (int i = 0; i < oldNodes.size(); ++i) {
             if (oldNodes[i] != m_layers[i].node || oldVisibilities[i] != m_layers[i].visible) {
@@ -927,8 +963,6 @@ void ReverieCore::redo()
 
     if (structureChanged) {
         recompositeProjection();
-    } else {
-        m_document->waitForDone();
     }
     markDirty();
     m_snapshotPending = false;
