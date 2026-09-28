@@ -5,6 +5,7 @@
 package com.reverie.paint.core
 
 import android.graphics.Bitmap
+import com.reverie.paint.R
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
@@ -869,13 +870,30 @@ internal fun PaintViewModel.selectionFromLayer(i: Int) {
     if (recorder.recording) {
         recorder.toolOp(com.reverie.paint.model.RecordingEvents.T_SELECT_ALL) { it.u16(i.coerceIn(0, 65535)) }
     }
-    runCore(after = ::notifyLayerChanged) {
-        ReverieCoreBridge.selectionFromLayer(i)
+    var ov: android.graphics.Bitmap? = null
+    var has = false
+    runCore(render = false, after = {
+        selectionOverlayBitmap = ov
+        hasSelection = has && ov != null
+        notifyLayerChanged()
+        if (hasSelection) {
+            showActionToast(R.string.toast_selection_from_layer_success, R.drawable.ic_select)
+        } else {
+            showActionToast(R.string.toast_selection_layer_empty, R.drawable.ic_select)
+        }
+    }) {
+        val ok = ReverieCoreBridge.selectionFromLayer(i)
+        has = ok && ReverieCoreBridge.hasSelection()
+        if (has) {
+            ov = buildSelectionOverlayLocked()
+        }
     }
 }
 
 internal fun PaintViewModel.clearSelection() {
-    runCore(after = ::notifyLayerChanged) {
+    hasSelection = false
+    selectionOverlayBitmap = null
+    runCore(render = false, after = ::notifyLayerChanged) {
         ReverieCoreBridge.clearSelection()
     }
 }

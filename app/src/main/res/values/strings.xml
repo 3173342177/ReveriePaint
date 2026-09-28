@@ -397,6 +397,8 @@
     <string name="toast_redo">恢复</string>
     <string name="toast_selection_required">请先创建选区</string>
     <string name="toast_selection_empty_pixels">选区范围内无像素</string>
+    <string name="toast_selection_from_layer_success">已根据图层内容创建选区</string>
+    <string name="toast_selection_layer_empty">当前图层无有效像素内容</string>
     <string name="toast_selection_points_min">选区至少需要3个点</string>
     <string name="toast_text_created">文字已生成</string>
     <string name="toast_shape_created">形状已生成</string>

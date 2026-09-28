@@ -397,6 +397,8 @@
     <string name="toast_redo">Redo</string>
     <string name="toast_selection_required">Please create a selection first</string>
     <string name="toast_selection_empty_pixels">No pixels within selection</string>
+    <string name="toast_selection_from_layer_success">Selection created from layer</string>
+    <string name="toast_selection_layer_empty">Current layer has no pixel content</string>
     <string name="toast_selection_points_min">Selection requires at least 3 points</string>
     <string name="toast_text_created">Text created</string>
     <string name="toast_shape_created">Shape created</string>

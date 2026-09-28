@@ -1092,7 +1092,13 @@ internal fun LayerDetailPage(
                     vm.mergeDown(index)
                     onBack()
                 }
-                OpItem(R.drawable.ic_select, stringResource(R.string.layer_op_select_from_layer), enabled = !isFilterLayer) { vm.selectionFromLayer(index) }
+                OpItem(R.drawable.ic_select, stringResource(R.string.layer_op_select_from_layer), enabled = !isFilterLayer) {
+                    vm.selectionFromLayer(index)
+                    onBack()
+                    if (!vm.isLayerPanelPinned) {
+                        vm.layerPanelOpen = false
+                    }
+                }
                 OpToggle(R.drawable.ic_lock, stringResource(R.string.layer_op_lock_layer), layer?.locked == true || isBg, enabled = !isBg) {
                     vm.setLayerLocked(index, !(layer?.locked == true))
                 }
