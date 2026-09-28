@@ -13,6 +13,7 @@
 #include <strokes/KisMaskedFreehandStrokePainter.h>
 #include <KisFreehandStrokeInfo.h>
 #include <KoCompositeOpRegistry.h>
+#include <filter/kis_filter_registry.h>
 #include <cmath>
 
 void ReverieCore::touchStrokeStart(qreal x, qreal y, qreal pressure, qreal tiltX, qreal tiltY, qreal rotation)
@@ -381,9 +382,18 @@ bool ReverieCore::flushStrokeBatch()
     const bool isSmudgeOp = (m_toolMode == ToolSmudge) ||
         (m_brushPreset && m_brushPreset->paintOp().id() == QStringLiteral("colorsmudge"));
 
+    // 读取图层既有像素的引擎 (deform 形变/移动、filter 卷积滤波、duplicate 克隆采样)
+    // 一旦被间接绘制重定向到全新的空白 tempTarget, 读到的全是透明像素, 落笔等于空操作。
+    // 这些引擎必须始终直接作用于 currentPaintDevice()。
+    const QString paintOpId = m_brushPreset ? m_brushPreset->paintOp().id() : QString();
+    const bool readsLayerPixels = isSmudgeOp ||
+        paintOpId == QStringLiteral("deformbrush") ||
+        paintOpId == QStringLiteral("filter") ||
+        paintOpId == QStringLiteral("duplicate");
+
     const bool hasMasking = !isSmudgeOp && m_brushPreset && m_brushPreset->hasMaskingPreset();
 
-    const bool needsIndirect = (!isSmudgeOp && m_brushPreset && m_brushPreset->settings() &&
+    const bool needsIndirect = (!readsLayerPixels && m_brushPreset && m_brushPreset->settings() &&
         !m_brushPreset->settings()->paintIncremental()) || hasMasking;
 
     KisPaintLayer *pl = (m_currentLayer >= 0 && m_currentLayer < m_layers.size())
@@ -432,6 +442,25 @@ bool ReverieCore::flushStrokeBatch()
     if (m_snapshotPending || (!m_strokePainter && !m_maskedStrokePainter) || m_strokeDevice != (void *)target.data()) {
         endStrokeBatch();
         m_strokeDevice = (void *)target.data();
+        // 特效笔刷 (deform/filter/spray/particle...) 无效果的排查埋点: 一条笔画只打一次,
+        // 输出引擎 id / 增量绘制判定 / 间接绘制判定 / 绘制目标是否为临时图层。
+        const QRect tgtExtent = target ? target->extent() : QRect();
+        RPC_LOG("RPC strokeSetup op=%s incr=%d masking=%d indirect=%d tempTarget=%d compOp=%s size=%.1f tgtExtent=%d,%d %dx%d",
+                paintOpId.isEmpty() ? "none" : paintOpId.toUtf8().constData(),
+                (m_brushPreset && m_brushPreset->settings() && m_brushPreset->settings()->paintIncremental()) ? 1 : 0,
+                hasMasking ? 1 : 0,
+                needsIndirect ? 1 : 0,
+                (needsIndirect && pl) ? 1 : 0,
+                painterCompOp.toUtf8().constData(),
+                (double)m_brushSize,
+                tgtExtent.x(), tgtExtent.y(), tgtExtent.width(), tgtExtent.height());
+        // 滤镜笔刷专属校验: KisFilterOp 在 KisFilterRegistry 查不到滤镜时会静默空转
+        // (paintAt 直接 return, 一笔不出墨), 这里把查库结果暴露出来。
+        if (paintOpId == QLatin1String("filter") && m_brushPreset && m_brushPreset->settings()) {
+            const QString fid = m_brushPreset->settings()->getString(QStringLiteral("Filter/id"));
+            KisFilterSP f = fid.isEmpty() ? KisFilterSP() : KisFilterRegistry::instance()->get(fid);
+            RPC_LOG("RPC filterOp id=%s found=%d", fid.isEmpty() ? "empty" : fid.toUtf8().constData(), f ? 1 : 0);
+        }
         // Deferred Krita undo: for direct painting, start transaction on the layer.
         if (!needsIndirect && m_snapshotPending && !m_strokeTxnActive && m_undoCaptureEnabled) {
             delete m_strokeTxn;
@@ -463,12 +492,29 @@ bool ReverieCore::flushStrokeBatch()
         const QPointF start =
             m_strokeSamples.isEmpty() ? m_strokeStartImg : m_strokeSamples.first().imgPos;
 
-        if (hasMasking) {
-            const QString maskingCompOpId = (m_brushPreset && m_brushPreset->settings())
+        // 双笔刷蒙版链路: 渲染器与蒙版预设任一不可用都不能硬闯 —— 否则
+        // KisPaintDevice(nullptr) / setPaintOpPreset(nullptr) 会直接崩进程。
+        // 兜底时退回普通单笔刷链路, 该笔画退化为无水渍效果但绝不闪退。
+        KisPaintOpPresetSP maskingPreset;
+        if (hasMasking && m_brushPreset) {
+            const QString maskingCompOpId = m_brushPreset->settings()
                 ? m_brushPreset->settings()->maskingBrushCompositeOp()
                 : QStringLiteral("alphadarken");
             m_maskingBrushRenderer = new KisMaskingBrushRenderer(target, maskingCompOpId);
-
+            if (!m_maskingBrushRenderer->strokeDevice() || !m_maskingBrushRenderer->maskDevice()) {
+                delete m_maskingBrushRenderer;
+                m_maskingBrushRenderer = nullptr;
+                RPC_LOG("RPC masking: renderer devices unavailable, fall back to plain stroke");
+            } else {
+                maskingPreset = m_brushPreset->createMaskingPreset();
+                if (!maskingPreset) {
+                    delete m_maskingBrushRenderer;
+                    m_maskingBrushRenderer = nullptr;
+                    RPC_LOG("RPC masking: createMaskingPreset null, fall back to plain stroke");
+                }
+            }
+        }
+        if (m_maskingBrushRenderer && maskingPreset) {
             KisDistanceInformation startDist(start, 0.0);
             m_strokeInfo = new KisFreehandStrokeInfo(startDist);
             m_maskInfo = new KisFreehandStrokeInfo(startDist);
@@ -495,7 +541,7 @@ bool ReverieCore::flushStrokeBatch()
             maskP->setPaintColor(KoColor(Qt::white, maskP->device()->colorSpace()));
             maskP->setBackgroundColor(KoColor(Qt::black, maskP->device()->colorSpace()));
             maskP->setChannelFlags(QBitArray());
-            maskP->setPaintOpPreset(m_brushPreset->createMaskingPreset(), KisNodeSP(m_layers[layerIndex].node), image);
+            maskP->setPaintOpPreset(maskingPreset, KisNodeSP(m_layers[layerIndex].node), image);
 
             m_maskedStrokePainter = new KisMaskedFreehandStrokePainter(m_strokeInfo, m_maskInfo);
         } else {
@@ -545,9 +591,17 @@ bool ReverieCore::flushStrokeBatch()
                         m_brushPreset, m_strokePainter,
                         KisNodeSP(m_layers[layerIndex].node), image);
                 }
+                // 最后一档兜底: 引擎未注册时静默退化成 KisBrushOp 会让笔迹完全不对
+                // 且毫无提示 (本机 mypaintbrush / dynabrush 就是这种情况)。这里显式
+                // 打一条警告, 让"这支笔为什么画得不对"可以直接从 logcat 看出来。
+                const bool engineFellBack = !m_strokeOp;
                 if (!m_strokeOp) {
                     m_strokeOp = new KisBrushOp(m_brushPreset->settings(), m_strokePainter,
                                                 KisNodeSP(m_layers[layerIndex].node), image);
+                }
+                if (engineFellBack) {
+                    RPC_LOG("RPC strokeOp UNSUPPORTED engine=%s -> fell back to KisBrushOp (engine not registered in this build)",
+                            m_brushPreset->paintOp().id().toUtf8().constData());
                 }
                 RPC_LOG("RPC strokeOp created: presetId=%s, actualOp=%s",
                         m_brushPreset->paintOp().id().toUtf8().constData(),
@@ -849,6 +903,18 @@ bool ReverieCore::flushStrokeBatch()
         m_strokeSamples.append(t);
     }
     m_strokeCarryCount = trailing.size();
+
+    // 排查埋点: 整批 flush 一个脏区都没产出 = 该引擎这一批完全没落墨。
+    // 只在异常时打, 正常笔画不刷屏。
+    if (strokeDirty.isNull()) {
+        const QRect ext = target ? target->extent() : QRect();
+        RPC_LOG("RPC strokeNoInk op=%s samples=%d size=%.1f compOp=%s devExtent=%d,%d %dx%d",
+                paintOpId.isEmpty() ? "none" : paintOpId.toUtf8().constData(),
+                m_strokeSamples.size(),
+                (double)m_brushSize,
+                painterCompOp.toUtf8().constData(),
+                ext.x(), ext.y(), ext.width(), ext.height());
+    }
 
     // Hot path: propagate the dirty region for fast synchronous compositing without
     // scheduling background jobs in Krita's thread pool during active stroke

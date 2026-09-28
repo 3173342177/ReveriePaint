@@ -213,7 +213,10 @@ add_library(reverie_jni SHARED
     ReverieCoreColorSpaceHook.cpp
     ${KRITA_SRC_DIR}/plugins/impex/psd/psd_colormode_block.cpp
     ${KRITA_SRC_DIR}/plugins/impex/psd/psd_image_data.cpp
-    ${KRITA_SRC_DIR}/libs/ui/tool/strokes/KisMaskingBrushRenderer.cpp
+    # Android 定制版: 掩膜设备色彩空间带 GrayA→alpha8 空指针兜底
+    # (上游版本无条件查询 GrayA/U8, Android 无 lcms2 插件与 Gray ICC 时返回
+    #  nullptr, 水彩类预设落笔即 SIGSEGV)。详见文件头注释。
+    ReverieMaskingBrushRenderer.cpp
     ${KRITA_SRC_DIR}/libs/ui/tool/strokes/KisMaskingBrushCompositeOpFactory.cpp
 )
 
