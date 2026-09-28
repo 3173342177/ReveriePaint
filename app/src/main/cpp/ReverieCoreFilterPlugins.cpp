@@ -146,7 +146,24 @@ public:
         if (channelFlags.isEmpty()) {
             channelFlags = QBitArray(device->colorSpace()->channelCount(), true);
         }
-        KisGaussianKernel::applyGaussian(device, rect, horizontalRadius, verticalRadius, channelFlags, progressUpdater);
+        if (horizontalRadius <= 0.0 && verticalRadius <= 0.0) return;
+
+        // 与 ReverieBlurFilter 保持同一条已验证的单趟卷积路径。
+        // 原先调用 KisGaussianKernel::applyGaussian: 非 FFTW 构建下它走
+        // "new KisPaintDevice + prepareClone" 的两趟可分离卷积
+        // (kis_gaussian_kernel.cpp:127-149), 在 Android 的笔刷 dab 路径上
+        // 实测不产出可见结果 —— x)_Filter_Blur 划过去完全没反应, 而同为
+        // filter 引擎、走单趟路径的 FX_blur_light (Filter/id=blur) 正常。
+        // 两趟路径第一趟读取的区域会超出 KisFilterOp 拷进临时设备的
+        // neededRect, 顶部/底部读到空白, 也是该路径在此场景下的隐患。
+        KisConvolutionKernelSP kernel =
+            KisGaussianKernel::createUniform2DKernel(horizontalRadius, verticalRadius);
+        if (!kernel) return;
+
+        KisConvolutionPainter painter(device);
+        painter.setChannelFlags(channelFlags);
+        painter.setProgress(progressUpdater);
+        painter.applyMatrix(kernel, device, rect.topLeft(), rect.topLeft(), rect.size(), BORDER_REPEAT);
     }
 
     QRect neededRect(const QRect &rect, const KisFilterConfigurationSP config, int lod) const override {
@@ -216,7 +233,17 @@ public:
         const uint lightnessOnly = (config->getProperty("lightnessOnly", value)) ? value.toBool() : true;
 
         QBitArray channelFlags = config->channelFlags();
-        KisGaussianKernel::applyGaussian(device, rect, halfSize, halfSize, channelFlags, progressUpdater);
+        // 同 ReverieGaussianBlurFilter: 改用单趟 2D 高斯卷积, 避开
+        // applyGaussian 的两趟可分离路径 (见上方注释)。
+        if (halfSize > 0.0) {
+            KisConvolutionKernelSP kernel = KisGaussianKernel::createUniform2DKernel(halfSize, halfSize);
+            if (kernel) {
+                KisConvolutionPainter gp(device);
+                gp.setChannelFlags(channelFlags);
+                gp.setProgress(progressUpdater);
+                gp.applyMatrix(kernel, device, rect.topLeft(), rect.topLeft(), rect.size(), BORDER_REPEAT);
+            }
+        }
 
         qreal weights[2];
         qreal factor = 128;
