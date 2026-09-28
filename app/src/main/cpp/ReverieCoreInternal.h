@@ -610,7 +610,19 @@ static inline QVector<quint8> combineSelectionMasks(const QVector<quint8> &exist
                                              const QVector<quint8> &added,
                                              int mode)
 {
-    const int n = existing.size();
+    if (existing.isEmpty()) {
+        if (mode == ReverieCore::SelAdd || mode == ReverieCore::SelReplace) {
+            return added;
+        }
+        return QVector<quint8>(added.size(), 0);
+    }
+    if (added.isEmpty()) {
+        if (mode == ReverieCore::SelAdd || mode == ReverieCore::SelSubtract) {
+            return existing;
+        }
+        return QVector<quint8>(existing.size(), 0);
+    }
+    const int n = qMin(existing.size(), added.size());
     QVector<quint8> out(n, 0);
     for (int i = 0; i < n; ++i) {
         const bool a = existing[i] > 127;
@@ -986,6 +998,10 @@ static inline void setSelectionFromMask(ReverieCore *core, const KisImageSP &ima
             ps->readBytes(existing.data(), 0, 0, image->width(), image->height());
         }
         finalMask = combineSelectionMasks(existing, mask, selMode);
+    } else if (selMode == ReverieCore::SelSubtract || selMode == ReverieCore::SelIntersect) {
+        if (!core->hasSelection()) {
+            finalMask = QVector<quint8>(mask.size(), 0);
+        }
     }
     core->setSelection(selectionFromMask(image, finalMask));
 }

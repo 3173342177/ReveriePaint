@@ -337,12 +337,16 @@ QVector<quint32> ReverieCore::previewLassoOverlay(const QVector<QPoint> &points,
     for (size_t i = 0; i < mask.size(); ++i) {
         selMask[i] = mask[i] ? 255 : 0;
     }
-    if (m_selectionMode != SelReplace && m_selection) {
+    if (m_selectionMode != SelReplace && hasSelection() && m_selection) {
         QVector<quint8> existing(size_t(iw) * ih, 0);
         KisPixelSelectionSP ps = m_selection->pixelSelection();
         if (ps) {
             ps->readBytes(existing.data(), 0, 0, iw, ih);
             selMask = combineSelectionMasks(existing, selMask, m_selectionMode);
+        }
+    } else if (m_selectionMode == SelSubtract || m_selectionMode == SelIntersect) {
+        if (!hasSelection()) {
+            selMask.fill(0);
         }
     }
     vw = qMax(1, vw);

@@ -43,8 +43,12 @@ void ReverieCore::selectShape(int kind, int x1, int y1, int x2, int y2)
 
     QVector<quint8> finalMask;
     const int selMode = qBound(0, (int)m_selectionMode, 3);
-    if (selMode == 0) {
-        finalMask = mask;
+    if (selMode == 0 || !hasSelection() || oldMask.isEmpty()) {
+        if (selMode == ReverieCore::SelSubtract || selMode == ReverieCore::SelIntersect) {
+            finalMask = QVector<quint8>(mask.size(), 0);
+        } else {
+            finalMask = mask;
+        }
     } else {
         finalMask = combineSelectionMasks(oldMask, mask, selMode);
     }
@@ -83,8 +87,12 @@ void ReverieCore::selectPolygon(const QVector<QPoint> &points)
 
     QVector<quint8> finalMask;
     const int selMode = qBound(0, (int)m_selectionMode, 3);
-    if (selMode == 0) {
-        finalMask = mask;
+    if (selMode == 0 || !hasSelection() || oldMask.isEmpty()) {
+        if (selMode == ReverieCore::SelSubtract || selMode == ReverieCore::SelIntersect) {
+            finalMask = QVector<quint8>(mask.size(), 0);
+        } else {
+            finalMask = mask;
+        }
     } else {
         finalMask = combineSelectionMasks(oldMask, mask, selMode);
     }
