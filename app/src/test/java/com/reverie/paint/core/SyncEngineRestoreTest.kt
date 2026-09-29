@@ -3,6 +3,7 @@
  */
 package com.reverie.paint.core
 
+import com.reverie.paint.core.sync.ManifestEntry
 import com.reverie.paint.core.sync.RemoteEntry
 import com.reverie.paint.core.sync.SyncCategory
 import com.reverie.paint.core.sync.SyncClient
@@ -202,7 +203,15 @@ class SyncEngineRestoreTest {
             client.files["a.revp"] = "remote-different".toByteArray()
 
             val src = sources(root, brushes)
-            val out = SyncEngine.restore(client, src, SyncCategory.ARTWORKS, SyncEngine.scan(src), mapOf("a.revp" to hash), suffix)
+            val out =
+                SyncEngine.restore(
+                    client,
+                    src,
+                    SyncCategory.ARTWORKS,
+                    SyncEngine.scan(src),
+                    mapOf("a.revp" to ManifestEntry(hash, "")),
+                    suffix,
+                )
             assertEquals(0, out.downloaded)
             assertEquals(1, out.skipped)
             assertEquals("same", local.readText())
@@ -244,7 +253,19 @@ class SyncEngineRestoreTest {
             client.files["a.revp"] = "payload".toByteArray()
 
             val src = sources(root, brushes)
-            val out = SyncEngine.restore(client, src, SyncCategory.ARTWORKS, emptyList(), mapOf("a.revp" to "deadbeef"), suffix)
+            val token =
+                SyncEngine.versionToken(
+                    RemoteEntry("a.revp", false, "payload".toByteArray().size.toLong(), 0L, null),
+                )
+            val out =
+                SyncEngine.restore(
+                    client,
+                    src,
+                    SyncCategory.ARTWORKS,
+                    emptyList(),
+                    mapOf("a.revp" to ManifestEntry("deadbeef", token)),
+                    suffix,
+                )
             assertEquals(0, out.downloaded)
             assertEquals(1, out.failed)
             assertFalse(root.resolve("a.revp").exists())
@@ -269,6 +290,30 @@ class SyncEngineRestoreTest {
             assertEquals(1, out.downloaded)
             assertEquals(1, out.failed)
             assertTrue(root.resolve("b.revp").exists())
+        } finally {
+            root.deleteRecursively()
+            brushes.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `restore updates a locally unchanged file when remote changed`() {
+        val root = Files.createTempDirectory("revp-restore-update").toFile()
+        val brushes = Files.createTempDirectory("revp-restore-update-b").toFile()
+        try {
+            val local = root.resolve("a.revp")
+            local.writeText("old-local")
+            val oldHash = SyncEngine.sha256(local)
+
+            val client = TreeClient()
+            client.files["a.revp"] = "new-from-cloud".toByteArray()
+
+            val src = sources(root, brushes)
+            val manifest = mapOf("a.revp" to ManifestEntry(oldHash, "stale-token"))
+            val out = SyncEngine.restore(client, src, SyncCategory.ARTWORKS, SyncEngine.scan(src), manifest, suffix)
+            assertEquals(1, out.updated)
+            assertEquals(0, out.conflicts)
+            assertEquals("new-from-cloud", local.readText())
         } finally {
             root.deleteRecursively()
             brushes.deleteRecursively()

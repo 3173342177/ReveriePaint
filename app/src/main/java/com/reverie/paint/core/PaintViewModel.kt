@@ -193,6 +193,7 @@ class PaintViewModel : ViewModel() {
         // 后台不再每秒唤醒: 计时与自动保存都只在绘画页前台有意义。
         // 必须放在下面几个早退之前 —— 否则"无未保存改动"时计时器会一直留在后台跑。
         stopPaintingTimer()
+        stopSyncTimer()
         maybeExitBackup()
         if (!autoSaveEnabled || isAutoSaving || isBlockingLoading) return
         if (currentPage != Page.PAINTING) return
@@ -205,6 +206,7 @@ class PaintViewModel : ViewModel() {
     /** 回到前台: 若仍停在绘画页, 恢复每秒计时与自动保存唤醒。 */
     fun onAppForegrounded() {
         if (currentPage == Page.PAINTING) startPaintingTimer()
+        startSyncTimerIfNeeded()
     }
 
     /** ElapsedRealtime of the last stroke end; autosave defers for a quiet window after it. */

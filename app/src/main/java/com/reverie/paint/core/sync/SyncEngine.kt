@@ -14,24 +14,40 @@ internal data class LocalProject(
     val sha256: String,
 )
 
+internal data class ManifestEntry(
+    val hash: String,
+    val token: String,
+)
+
 internal data class BackupOutcome(
     val uploaded: Int,
     val skipped: Int,
+    val remoteNewer: Int,
+    val conflicts: Int,
     val deleted: Int,
     val failed: Int,
     val bytes: Long,
     val errors: List<String>,
-    val manifest: Map<String, String>,
+    val notices: List<String>,
+    val manifest: Map<String, ManifestEntry>,
+)
+
+internal enum class BackupDecision { UPLOAD, SKIP, REMOTE_NEWER, CONFLICT }
+
+internal data class PlannedFile(
+    val project: LocalProject,
+    val decision: BackupDecision,
 )
 
 internal data class RestoreOutcome(
     val downloaded: Int,
+    val updated: Int,
     val skipped: Int,
     val conflicts: Int,
     val failed: Int,
     val bytes: Long,
     val errors: List<String>,
-    val manifest: Map<String, String>,
+    val manifest: Map<String, ManifestEntry>,
 )
 
 internal enum class SyncCategory { ARTWORKS, BRUSHES }
@@ -110,10 +126,29 @@ internal object SyncEngine {
         return sb.toString()
     }
 
-    fun planUploads(
-        local: List<LocalProject>,
-        manifest: Map<String, String>,
-    ): List<LocalProject> = local.filter { manifest[it.relativePath] != it.sha256 }
+    fun versionToken(entry: RemoteEntry): String {
+        val etag = entry.etag
+        if (!etag.isNullOrEmpty()) return etag
+        return "${entry.size}:${entry.lastModifiedMs}"
+    }
+
+    fun encodeManifest(manifest: Map<String, ManifestEntry>): String =
+        manifest.entries
+            .sortedBy { it.key }
+            .joinToString("\n") { "${it.key}\t${it.value.hash}\t${sanitize(it.value.token)}" }
+
+    fun decodeManifest(text: String): Map<String, ManifestEntry> {
+        val out = LinkedHashMap<String, ManifestEntry>()
+        for (line in text.lineSequence()) {
+            if (line.isBlank()) continue
+            val parts = line.split('\t')
+            if (parts.size < 2 || parts[0].isEmpty()) continue
+            out[parts[0]] = ManifestEntry(parts[1], parts.getOrElse(2) { "" })
+        }
+        return out
+    }
+
+    private fun sanitize(token: String): String = token.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
 
     fun requiredRemoteDirs(paths: List<String>): List<String> {
         val dirs = LinkedHashSet<String>()
@@ -125,20 +160,6 @@ internal object SyncEngine {
             }
         }
         return dirs.sorted()
-    }
-
-    fun encodeManifest(manifest: Map<String, String>): String =
-        manifest.entries.sortedBy { it.key }.joinToString("\n") { "${it.key}\t${it.value}" }
-
-    fun decodeManifest(text: String): Map<String, String> {
-        val out = LinkedHashMap<String, String>()
-        for (line in text.lineSequence()) {
-            if (line.isBlank()) continue
-            val tab = line.indexOf('\t')
-            if (tab <= 0) continue
-            out[line.substring(0, tab)] = line.substring(tab + 1)
-        }
-        return out
     }
 
     fun writeAtomically(
@@ -187,6 +208,18 @@ internal object SyncEngine {
         return File(source.localDir, rel)
     }
 
+    fun conflictName(
+        name: String,
+        suffix: String,
+    ): String {
+        val dot = name.lastIndexOf('.')
+        return if (dot > 0) {
+            "${name.substring(0, dot)}$suffix${name.substring(dot)}"
+        } else {
+            name + suffix
+        }
+    }
+
     fun listRemote(
         client: SyncClient,
         sources: List<SyncSource>,
@@ -227,15 +260,47 @@ internal object SyncEngine {
         return out.sortedBy { it.path }
     }
 
+    fun listRemoteAll(
+        client: SyncClient,
+        sources: List<SyncSource>,
+    ): List<RemoteEntry> = SyncCategory.values().flatMap { listRemote(client, sources, it) }
+
+    fun planBackup(
+        local: List<LocalProject>,
+        manifest: Map<String, ManifestEntry>,
+        remoteTokens: Map<String, String>,
+    ): List<PlannedFile> =
+        local.map { project ->
+            val recorded = manifest[project.relativePath]
+            val now = remoteTokens[project.relativePath]
+            val localChanged = recorded == null || project.sha256 != recorded.hash
+            val remoteChanged = recorded != null && now != null && recorded.token.isNotEmpty() && now != recorded.token
+            val decision =
+                when {
+                    recorded == null || now == null -> BackupDecision.UPLOAD
+                    remoteChanged && localChanged -> BackupDecision.CONFLICT
+                    remoteChanged -> BackupDecision.REMOTE_NEWER
+                    localChanged -> BackupDecision.UPLOAD
+                    else -> BackupDecision.SKIP
+                }
+            PlannedFile(project, decision)
+        }
+
     fun planDeletions(
         sources: List<SyncSource>,
         local: List<LocalProject>,
-        manifest: Map<String, String>,
+        manifest: Map<String, ManifestEntry>,
+        remoteTokens: Map<String, String>,
     ): List<String> {
         val localPaths = local.mapTo(HashSet()) { it.relativePath }
         return manifest.keys
             .filter { it !in localPaths }
             .filter { path -> assignSource(sources, path)?.localDir?.isDirectory == true }
+            .filter { path ->
+                val recorded = manifest[path]
+                val now = remoteTokens[path] ?: return@filter true
+                recorded == null || recorded.token.isEmpty() || now == recorded.token
+            }
             .sorted()
     }
 
@@ -243,14 +308,21 @@ internal object SyncEngine {
         client: SyncClient,
         sources: List<SyncSource>,
         local: List<LocalProject>,
-        manifest: Map<String, String>,
+        manifest: Map<String, ManifestEntry>,
+        remoteEntries: List<RemoteEntry>,
+        conflictSuffix: String,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BackupOutcome {
-        val uploads = planUploads(local, manifest)
-        val deletions = planDeletions(sources, local, manifest)
+        val remoteTokens = remoteEntries.associate { it.path to versionToken(it) }
+        val plan = planBackup(local, manifest, remoteTokens)
+        val deletions = planDeletions(sources, local, manifest, remoteTokens)
         val newManifest = LinkedHashMap(manifest)
         val errors = ArrayList<String>()
+        val notices = ArrayList<String>()
         var uploaded = 0
+        var skipped = 0
+        var remoteNewer = 0
+        var conflicts = 0
         var deleted = 0
         var bytes = 0L
 
@@ -261,18 +333,73 @@ internal object SyncEngine {
             }
         }
 
-        val total = uploads.size
+        val total = plan.count { it.decision != BackupDecision.SKIP }
         onProgress(0, total)
-        for ((index, project) in uploads.withIndex()) {
-            try {
-                client.put(project.relativePath, project.file.readBytes())
-                newManifest[project.relativePath] = project.sha256
-                uploaded++
-                bytes += project.size
-            } catch (e: Exception) {
-                errors.add("${project.relativePath}: ${e.message ?: e.javaClass.simpleName}")
+        var done = 0
+
+        for (planned in plan) {
+            val project = planned.project
+            val recorded = manifest[project.relativePath]
+            when (planned.decision) {
+                BackupDecision.SKIP -> skipped++
+
+                BackupDecision.REMOTE_NEWER -> {
+                    done++
+                    onProgress(done, total)
+                    try {
+                        val data = client.get(project.relativePath)
+                        val hash = sha256(data)
+                        if (recorded != null && hash == recorded.hash) {
+                            newManifest[project.relativePath] =
+                                ManifestEntry(hash, remoteTokens[project.relativePath] ?: "")
+                            skipped++
+                        } else {
+                            remoteNewer++
+                            notices.add("${project.relativePath}: newer version in the cloud, restore to get it")
+                        }
+                    } catch (e: Exception) {
+                        errors.add("${project.relativePath}: ${e.message ?: e.javaClass.simpleName}")
+                    }
+                }
+
+                BackupDecision.CONFLICT -> {
+                    done++
+                    onProgress(done, total)
+                    try {
+                        val data = client.get(project.relativePath)
+                        writeAtomically(File(project.file.parentFile, conflictName(project.file.name, conflictSuffix)), data)
+                        client.put(project.relativePath, project.file.readBytes())
+                        newManifest[project.relativePath] =
+                            ManifestEntry(project.sha256, tokenAfterUpload(client, project.relativePath))
+                        uploaded++
+                        bytes += project.size
+                        val copyPath = conflictName(project.relativePath, conflictSuffix)
+                        try {
+                            client.put(copyPath, data)
+                            newManifest[copyPath] = ManifestEntry(sha256(data), tokenAfterUpload(client, copyPath))
+                        } catch (_: Exception) {
+                        }
+                        conflicts++
+                        notices.add("${project.relativePath}: kept local, cloud version saved as a copy")
+                    } catch (e: Exception) {
+                        errors.add("${project.relativePath}: ${e.message ?: e.javaClass.simpleName}")
+                    }
+                }
+
+                BackupDecision.UPLOAD -> {
+                    done++
+                    onProgress(done, total)
+                    try {
+                        client.put(project.relativePath, project.file.readBytes())
+                        newManifest[project.relativePath] =
+                            ManifestEntry(project.sha256, tokenAfterUpload(client, project.relativePath))
+                        uploaded++
+                        bytes += project.size
+                    } catch (e: Exception) {
+                        errors.add("${project.relativePath}: ${e.message ?: e.javaClass.simpleName}")
+                    }
+                }
             }
-            onProgress(index + 1, total)
         }
 
         for (path in deletions) {
@@ -296,11 +423,14 @@ internal object SyncEngine {
 
         return BackupOutcome(
             uploaded = uploaded,
-            skipped = local.size - uploads.size,
+            skipped = skipped,
+            remoteNewer = remoteNewer,
+            conflicts = conflicts,
             deleted = deleted,
             failed = errors.size,
             bytes = bytes,
             errors = errors,
+            notices = notices,
             manifest = newManifest,
         )
     }
@@ -310,7 +440,7 @@ internal object SyncEngine {
         sources: List<SyncSource>,
         category: SyncCategory,
         local: List<LocalProject>,
-        manifest: Map<String, String>,
+        manifest: Map<String, ManifestEntry>,
         conflictSuffix: String,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): RestoreOutcome {
@@ -319,6 +449,7 @@ internal object SyncEngine {
         val newManifest = LinkedHashMap(manifest)
         val errors = ArrayList<String>()
         var downloaded = 0
+        var updated = 0
         var skipped = 0
         var conflicts = 0
         var bytes = 0L
@@ -331,8 +462,13 @@ internal object SyncEngine {
                 onProgress(index + 1, remote.size)
                 continue
             }
+            val recorded = manifest[entry.path]
             val existingHash = localHashes[entry.path]
-            if (existingHash != null && existingHash == manifest[entry.path]) {
+            val token = versionToken(entry)
+            val localUnchanged = existingHash != null && existingHash == recorded?.hash
+            val remoteChanged = recorded != null && recorded.token.isNotEmpty() && recorded.token != token
+
+            if (existingHash != null && localUnchanged && !remoteChanged) {
                 skipped++
                 onProgress(index + 1, remote.size)
                 continue
@@ -340,15 +476,20 @@ internal object SyncEngine {
             try {
                 val data = client.get(entry.path)
                 val hash = sha256(data)
-                val expected = manifest[entry.path]
-                if (expected != null && hash != expected) {
+                if (recorded != null && !remoteChanged && recorded.hash.isNotEmpty() && hash != recorded.hash) {
                     errors.add("${entry.path}: checksum mismatch")
                 } else if (existingHash == null) {
                     writeAtomically(target, data)
-                    newManifest[entry.path] = hash
+                    newManifest[entry.path] = ManifestEntry(hash, token)
                     downloaded++
                     bytes += data.size.toLong()
+                } else if (localUnchanged) {
+                    writeAtomically(target, data)
+                    newManifest[entry.path] = ManifestEntry(hash, token)
+                    updated++
+                    bytes += data.size.toLong()
                 } else if (hash == existingHash) {
+                    newManifest[entry.path] = ManifestEntry(hash, token)
                     skipped++
                 } else {
                     val copy = File(target.parentFile, conflictName(target.name, conflictSuffix))
@@ -368,6 +509,7 @@ internal object SyncEngine {
 
         return RestoreOutcome(
             downloaded = downloaded,
+            updated = updated,
             skipped = skipped,
             conflicts = conflicts,
             failed = errors.size,
@@ -377,17 +519,15 @@ internal object SyncEngine {
         )
     }
 
-    fun conflictName(
-        name: String,
-        suffix: String,
-    ): String {
-        val dot = name.lastIndexOf('.')
-        return if (dot > 0) {
-            "${name.substring(0, dot)}$suffix${name.substring(dot)}"
-        } else {
-            name + suffix
+    private fun tokenAfterUpload(
+        client: SyncClient,
+        path: String,
+    ): String =
+        try {
+            client.stat(path)?.let { versionToken(it) } ?: ""
+        } catch (_: Exception) {
+            ""
         }
-    }
 
     private fun commonDirPrefix(prefixes: List<String>): String {
         if (prefixes.isEmpty()) return ""
