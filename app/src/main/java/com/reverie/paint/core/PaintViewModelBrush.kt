@@ -886,7 +886,7 @@ import kotlinx.coroutines.withContext
                 val rawCop = o.optString("cop", "normal")
                 val rawSp = o.optDouble("sp", 0.1)
                 val spc = o.optBoolean("spc", false)
-                val healedSpacing = if ((resetLegacySpacing || !spc) && rawSp >= 0.75) 0.1 else rawSp
+                val healedSpacing = if (!spc || (resetLegacySpacing && rawSp >= 0.75)) 0.1 else rawSp
                 brushParams[name] = BrushParams(
                     size = o.optDouble("s", 20.0),
                     opacity = o.optDouble("o", 1.0),
@@ -1303,7 +1303,13 @@ import kotlinx.coroutines.withContext
                 brushSize = saved.size
                 brushOpacity = saved.opacity
                 brushFlow = saved.flow
-                brushSpacing = saved.spacing
+                brushSpacing = if (saved.spacingCustomized) {
+                    saved.spacing
+                } else {
+                    val d = ReverieCoreBridge.brushPresetDefaults(index)
+                    val rawSp = d.getOrNull(3) ?: 0.1
+                    if (rawSp >= 0.75) 0.1 else rawSp.coerceIn(0.01, 2.5)
+                }
                 brushAngle = saved.angle
                 brushScatter = saved.scatter
                 brushFade = saved.fade

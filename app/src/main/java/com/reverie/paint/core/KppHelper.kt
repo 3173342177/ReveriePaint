@@ -463,7 +463,9 @@ object KppHelper {
 
         // 4. Update Spacing
         xml = updateParam(xml, "Spacing", params.spacing.toString())
-        xml = updateParam(xml, "SpacingValue", params.spacing.toString())
+        if (xml.contains("SpacingValue")) {
+            xml = updateParam(xml, "SpacingValue", params.spacing.toString())
+        }
 
         // 5. Update Angle & Scatter
         xml = updateParam(xml, "paintopAngle", params.angle.toString())

@@ -737,17 +737,25 @@ internal fun PaintViewModel.applyTool(toolId: String) {
                     brushSize = saved.size
                     brushOpacity = saved.opacity
                     brushFlow = saved.flow
+                    if (saved.spacingCustomized) {
+                        brushSpacing = saved.spacing
+                    }
                     runCore(render = false) {
+                        ReverieCoreBridge.setPresetIsEraser(isCurEraser)
                         ReverieCoreBridge.setBrushCompositeOp(effectiveOp)
                         ReverieCoreBridge.setBrushSize(saved.size)
                         ReverieCoreBridge.setBrushOpacity(saved.opacity)
                         ReverieCoreBridge.setBrushFlow(saved.flow)
+                        if (saved.spacingCustomized) {
+                            ReverieCoreBridge.setBrushSpacing(saved.spacing)
+                        }
                         ReverieCoreBridge.setBrushSmudgeRate(brushSmudgeRate)
                         ReverieCoreBridge.setBrushSmudgeLength(brushSmudgeLength)
                         ReverieCoreBridge.setBrushAirbrush(brushAirbrush, brushAirbrushRate)
                     }
                 } else {
                     runCore(render = false) {
+                        ReverieCoreBridge.setPresetIsEraser(isCurEraser)
                         ReverieCoreBridge.setBrushCompositeOp(effectiveOp)
                     }
                 }

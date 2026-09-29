@@ -736,21 +736,24 @@ bool ReverieCore::loadBrushPreset(int index)
         m_brushFlow = qBound(0.0, s->getDouble("FlowValue", 1.0), 1.0);
         KisBrushBasedPaintOpSettings *bs = dynamic_cast<KisBrushBasedPaintOpSettings *>(s.data());
         if (bs) {
-            const double sp = bs->spacing();
-            if (sp > 0.0 && sp == sp && sp < 0.75) {
-                m_brushSpacing = sp;
-            } else if (sp >= 0.75) {
+            if (bs->autoSpacingActive()) {
                 m_brushSpacing = 0.1;
+            } else {
+                const double sp = bs->spacing();
+                if (sp > 0.0 && sp == sp && sp < 0.75) {
+                    m_brushSpacing = sp;
+                } else if (sp >= 0.75) {
+                    m_brushSpacing = 0.1;
+                }
             }
         }
     }
-    // Apply size / opacity / flow / spacing to the newly loaded preset.
+    // Apply size / opacity / flow to the newly loaded preset.
     // If the caller (ViewModel) has user-customized saved parameters,
     // it will immediately follow with setBrush* to override these defaults.
     setBrushSize(m_brushSize);
     setBrushOpacity(m_brushOpacity);
     setBrushFlow(m_brushFlow);
-    setBrushSpacing(m_brushSpacing);
     m_brushTipAsset.clear();
     m_tipOverridden = false; // 刚重新解析预设, 出厂笔尖天然在场
     // Diagnostics: is the preset's brush resolved to a real brush resource
@@ -846,11 +849,15 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
     double spacing = 0.15;
     KisBrushBasedPaintOpSettings *bs = dynamic_cast<KisBrushBasedPaintOpSettings *>(s.data());
     if (bs) {
-        const double sp = bs->spacing();
-        if (sp > 0.0 && sp == sp && sp < 0.75) {
-            spacing = sp;
-        } else if (sp >= 0.75) {
+        if (bs->autoSpacingActive()) {
             spacing = 0.1;
+        } else {
+            const double sp = bs->spacing();
+            if (sp > 0.0 && sp == sp && sp < 0.75) {
+                spacing = sp;
+            } else if (sp >= 0.75) {
+                spacing = 0.1;
+            }
         }
     }
     if (!(spacing > 0.0) || spacing != spacing || spacing >= 0.75) {
@@ -1099,7 +1106,6 @@ void ReverieCore::setBrushSpacing(qreal v)
         // 非笔刷型引擎 (deform / spray / particle ...) 没有 brush_definition,
         // 保持原有的 settings 属性通道, 不动它的行为。
         s->setProperty("spacing", v);
-        s->setProperty("SpacingValue", v);
         return;
     }
     // 自动间距 (brush_definition 的 useAutoSpacing="1") 开启时, 引擎实际用的是
