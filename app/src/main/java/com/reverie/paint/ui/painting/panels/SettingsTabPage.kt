@@ -730,28 +730,20 @@ internal fun SettingsTabPage(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(44.dp)
+                                .height(42.dp)
                                 .padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Morandi.accent.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_pencil),
-                                        contentDescription = null,
-                                        tint = Morandi.accent,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_pencil),
+                                    contentDescription = null,
+                                    tint = Morandi.icon,
+                                    modifier = Modifier.size(18.dp),
+                                )
                                 Spacer(Modifier.width(10.dp))
-                                Text(stringResource(R.string.settings_pen_mode), color = Morandi.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                Text(stringResource(R.string.settings_pen_mode), color = Morandi.text, fontSize = 13.sp)
                             }
                             ReSwitch(
                                 checked = vm.penOnlyMode,
@@ -764,8 +756,6 @@ internal fun SettingsTabPage(
                         SettingNavRow(
                             title = stringResource(R.string.settings_gestures),
                             icon = R.drawable.ic_hand,
-                            iconTint = Color(0xFFE5A88B),
-                            iconBg = Color(0xFFE5A88B).copy(alpha = 0.15f),
                         ) {
                             currentSubPage = "GESTURE"
                         }
@@ -775,8 +765,6 @@ internal fun SettingsTabPage(
                         SettingNavRow(
                             title = stringResource(R.string.settings_stylus),
                             icon = R.drawable.ic_pencil,
-                            iconTint = Color(0xFF8BAAE5),
-                            iconBg = Color(0xFF8BAAE5).copy(alpha = 0.15f),
                         ) {
                             vm.openMoreSettings("STYLUS")
                             onClose()
@@ -788,8 +776,6 @@ internal fun SettingsTabPage(
                         SettingNavRow(
                             title = stringResource(R.string.settings_view_display),
                             icon = R.drawable.ic_canvas_tab,
-                            iconTint = Color(0xFF7EBFAC),
-                            iconBg = Color(0xFF7EBFAC).copy(alpha = 0.15f),
                         ) {
                             currentSubPage = "VIEW"
                         }
@@ -799,8 +785,6 @@ internal fun SettingsTabPage(
                         SettingNavRow(
                             title = stringResource(R.string.settings_color_title),
                             icon = R.drawable.ic_picker,
-                            iconTint = Color(0xFFE58BB7),
-                            iconBg = Color(0xFFE58BB7).copy(alpha = 0.15f),
                         ) {
                             currentSubPage = "COLOR"
                         }
@@ -811,8 +795,6 @@ internal fun SettingsTabPage(
                         SettingNavRow(
                             title = stringResource(R.string.settings_shortcuts_title),
                             icon = R.drawable.ic_grid,
-                            iconTint = Color(0xFFB58BE5),
-                            iconBg = Color(0xFFB58BE5).copy(alpha = 0.15f),
                         ) {
                             currentSubPage = "SHORTCUTS"
                         }
@@ -823,7 +805,7 @@ internal fun SettingsTabPage(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 4.dp, vertical = 8.dp),
+                                .padding(horizontal = 4.dp, vertical = 6.dp),
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -831,22 +813,14 @@ internal fun SettingsTabPage(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Morandi.accent.copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_brush),
-                                            contentDescription = null,
-                                            tint = Morandi.accent,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                    }
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_brush),
+                                        contentDescription = null,
+                                        tint = Morandi.icon,
+                                        modifier = Modifier.size(18.dp),
+                                    )
                                     Spacer(Modifier.width(10.dp))
-                                    Text(stringResource(R.string.settings_stroke_stabilizer), color = Morandi.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    Text(stringResource(R.string.settings_stroke_stabilizer), color = Morandi.text, fontSize = 13.sp)
                                 }
                                 Box(
                                     modifier = Modifier
@@ -963,8 +937,6 @@ internal fun SettingsTabPage(
                         SettingNavRow(
                             title = stringResource(R.string.settings_more_settings),
                             icon = R.drawable.ic_settings,
-                            iconTint = Morandi.subText,
-                            iconBg = Morandi.subText.copy(alpha = 0.15f),
                         ) {
                             vm.openMoreSettings("MAIN")
                             onClose()
@@ -1095,16 +1067,14 @@ internal fun SettingsTabPage(
 internal fun SettingNavRow(
     title: String,
     icon: Int? = null,
-    iconTint: Color = Morandi.accent,
-    iconBg: Color = Morandi.accent.copy(alpha = 0.14f),
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(44.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .height(42.dp)
+            .clip(RoundedCornerShape(8.dp))
             .clickable(interactionSource = interaction, indication = null) { onClick() }
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1112,28 +1082,20 @@ internal fun SettingNavRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(iconBg),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(icon),
-                        contentDescription = null,
-                        tint = iconTint,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
+                Icon(
+                    painter = painterResource(icon),
+                    contentDescription = null,
+                    tint = Morandi.icon,
+                    modifier = Modifier.size(18.dp),
+                )
                 Spacer(Modifier.width(10.dp))
             }
-            Text(title, color = Morandi.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(title, color = Morandi.text, fontSize = 13.sp)
         }
         Icon(
             painter = painterResource(R.drawable.ic_chevron),
             contentDescription = null,
-            tint = Morandi.subText.copy(alpha = 0.7f),
+            tint = Morandi.subText.copy(alpha = 0.6f),
             modifier = Modifier.size(16.dp),
         )
     }

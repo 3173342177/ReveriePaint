@@ -280,11 +280,11 @@ internal fun CanvasTabPage(
                 color = Morandi.subText,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 CanvasActionTile(
                     icon = R.drawable.ic_save,
@@ -332,11 +332,11 @@ internal fun CanvasTabPage(
                 color = Morandi.subText,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 CanvasActionTile(
                     icon = R.drawable.ic_canvas_resize,
@@ -387,16 +387,16 @@ private fun CanvasActionTile(
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(10.dp)
 
     Column(
         modifier = modifier
             .pressScale(interaction, pressedScale = 0.94f)
             .clip(shape)
-            .liquidHighlight(interaction, Color.White, radius = 30.dp)
+            .liquidHighlight(interaction, Color.White, radius = 24.dp)
             .background(Morandi.panelHi.copy(alpha = 0.55f))
             .clickable(interactionSource = interaction, indication = null) { onClick() }
-            .padding(vertical = 12.dp, horizontal = 4.dp),
+            .padding(vertical = 7.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -404,13 +404,13 @@ private fun CanvasActionTile(
             painter = painterResource(icon),
             contentDescription = label,
             tint = Morandi.icon,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(18.dp),
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(3.dp))
         Text(
             text = label,
             color = Morandi.text,
-            fontSize = 11.sp,
+            fontSize = 10.5.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
         )
