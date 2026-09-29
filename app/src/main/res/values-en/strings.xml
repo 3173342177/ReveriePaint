@@ -694,6 +694,9 @@
     <string name="settings_panel_pinning_title">Panel Pin &amp; Drag</string>
     <string name="settings_panel_pinning_desc">Allow pinning and dragging layer and brush panels freely</string>
     <string name="settings_canvas_rotation">Rotate Canvas</string>
+    <string name="settings_canvas_rotation_snap">Snap Rotation to Quarter Turns</string>
+    <string name="settings_canvas_rotation_snap_off">Off</string>
+    <string name="settings_canvas_rotation_snap_format">±%d°</string>
     <string name="settings_magnification_interpolation">Interpolate Zoom</string>
     <string name="settings_pixel_grid">Pixel Grid When Zoomed</string>
     <string name="settings_undo_toast">Undo Notifications</string>

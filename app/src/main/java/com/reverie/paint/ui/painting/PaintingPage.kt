@@ -119,6 +119,7 @@ import com.reverie.paint.ui.painting.layers.FilterSessionController
 import com.reverie.paint.ui.painting.layers.FilterTopPillHUD
 import com.reverie.paint.ui.painting.layers.FilterBottomDock
 import com.reverie.paint.model.CanvasAdjustMode
+import com.reverie.paint.model.RotationSnap
 import com.reverie.paint.ui.painting.canvas.CanvasAdjustOverlay
 import com.reverie.paint.ui.painting.panels.CanvasAdjustPanel
 import com.reverie.paint.ui.painting.panels.FillPanel
@@ -670,6 +671,10 @@ fun PaintingPage(
                 filterSessionActive = (filterController != null),
                 onFilterSlideDelta = filterController?.let { c -> { delta -> c.onSlideDelta(delta) } },
                 onFilterHoldingCompare = filterController?.let { c -> { holding -> c.updateHoldingCompare(holding) } },
+                onRotationSnap = {
+                    // 进入 90° 倍数吸附区: 亮出角度 HUD (触觉反馈在 CanvasTouchView 内触发)
+                    flashIndicator()
+                },
             )
 
             // Diffusion Animation Canvas Overlay
@@ -1576,6 +1581,9 @@ fun PaintingPage(
         ) {
             val zoomPct = (zoom * fitScale * 100).toInt()
             val rotDeg = ((rotation % 360 + 360) % 360).toInt()
+            // 当前角度是否已磁性吸附在 90° 倍数附近 (0/90/180/270/360): 用强调色轻微提示
+            val rotSnapped =
+                kotlin.math.abs(RotationSnap.shortestDelta(RotationSnap.nearestMultiple(rotation), rotation)) < 0.35f
             Box(
                 modifier =
                     Modifier
@@ -1603,7 +1611,7 @@ fun PaintingPage(
                     )
                     Text(
                         stringResource(R.string.canvas_rotation_format, rotDeg),
-                        color = Morandi.text,
+                        color = if (rotSnapped) Morandi.accent else Morandi.text,
                         fontSize = 12.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                     )
