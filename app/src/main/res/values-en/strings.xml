@@ -2082,5 +2082,6 @@
     <string name="canvas_edit_cut_done">Cut; use Undo to restore</string>
     <string name="canvas_edit_copied">Copied</string>
     <string name="canvas_edit_failed">Action failed; check the current layer and selection</string>
+    <string name="toast_project_save_failed">Save failed. Your changes are still unsaved. Please try again.</string>
 </resources>
 
