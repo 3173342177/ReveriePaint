@@ -193,6 +193,7 @@ class PaintViewModel : ViewModel() {
         // 后台不再每秒唤醒: 计时与自动保存都只在绘画页前台有意义。
         // 必须放在下面几个早退之前 —— 否则"无未保存改动"时计时器会一直留在后台跑。
         stopPaintingTimer()
+        maybeExitBackup()
         if (!autoSaveEnabled || isAutoSaving || isBlockingLoading) return
         if (currentPage != Page.PAINTING) return
         if (!hasUnsavedChanges()) return
@@ -2399,6 +2400,8 @@ class PaintViewModel : ViewModel() {
             authorProfile = com.reverie.paint.model.AuthorProfile.fromJson(authorJson)
             syncAuthorProfileToCore()
 
+            loadSyncSettings()
+
             brushColor = prefs.getString("brushColor", "#000000") ?: "#000000"
             brushSecondaryColor = prefs.getString("brushSecondaryColor", "#ffffff") ?: "#ffffff"
             runCore {
@@ -2993,6 +2996,8 @@ class PaintViewModel : ViewModel() {
     // 这里只镜像 UI 需要的元信息。所有动画操作必须经
     // PaintViewModelAnimation.kt 的封装, 保持引擎调用不上 UI 线程。
     internal val anim = AnimationState()
+
+    internal val syncState = SyncState()
 
     /** 动画音频播放器 (导入的音频资源, 播放动画时循环同步播放; 见 PaintViewModelAnimation.kt) */
     internal val animAudioPlayers = mutableListOf<android.media.MediaPlayer>()
@@ -3630,6 +3635,8 @@ class PaintViewModel : ViewModel() {
 
     /** Injected by MainActivity; the engine needs it for file paths. */
     lateinit var appContext: android.content.Context
+
+    internal fun hasAppContext(): Boolean = ::appContext.isInitialized
     var selectionMask: ByteArray? by mutableStateOf(null)
     var hasSelection by mutableStateOf(false)
 
