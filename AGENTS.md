@@ -1,6 +1,6 @@
 # AGENTS.md — ReveriePaint 开发规范
 
-> 本文档面向人类开发者与 AI 编码代理。修改代码前请先阅读本文件, 遵守其中的架构约束、编码规范与变更工作流。
+> 本文档面向人类开发者与 AI 编码代理，修改代码前请先阅读本文件, 遵守其中的架构约束、编码规范与变更工作流
 
 ## 1. 项目简介
 
@@ -24,8 +24,8 @@ Kotlin/Compose UI ──JNI── C++ ReverieCore ── Krita libs (KisImage/Ki
 
 ### 构建模式
 
-- **预编译模式 (默认)**: 使用 `third_party/android-native-libs` 内置动态库, 不编译 C++。克隆后先执行 `./scripts/copy_jni_libs.sh`, 然后 `./gradlew assembleDebug` 即可。
-- **buildNative 模式 (开发者)**: 重新编译 C++, 需要本地 Qt for Android 6.6.3 + Krita 源码 + KF6。执行 `./scripts/build_native.sh` 或 `./gradlew assembleDebug -PbuildNative`。
+- **预编译模式 (默认)**: 使用 `third_party/android-native-libs` 内置动态库, 不编译 C++，克隆后先执行 `./scripts/copy_jni_libs.sh`, 然后 `./gradlew assembleDebug` 即可
+- **buildNative 模式 (开发者)**: 重新编译 C++, 需要本地 Qt for Android 6.6.3 + Krita 源码 + KF6，执行 `./scripts/build_native.sh` 或 `./gradlew assembleDebug -PbuildNative`
 
 ### 常用命令
 
@@ -38,7 +38,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ./gradlew assembleRelease -PappIdSuffix=.beta   # 测试分发: 独立包名 com.reverie.paint.beta 的 release 包 (与正式版同装互不影响)
 ```
 
-**改动 Kotlin 代码后至少运行 `compileDebugKotlin`; 改动 `model/` 或纯逻辑代码后运行 `testDebugUnitTest`。**
+**改动 Kotlin 代码后至少运行 `compileDebugKotlin`; 改动 `model/` 或纯逻辑代码后运行 `testDebugUnitTest`**
 
 ## 3. 目录结构
 
@@ -48,7 +48,8 @@ app/src/main/java/com/reverie/paint/     # 正式(与 debug 共用)代码
 ├── core/                    # 引擎桥接层 (不含 Compose UI)
 │   ├── ReverieCoreBridge.kt #   JNI 外部函数声明 (唯一 JNI 边界)
 │   ├── PaintViewModel.kt    #   主 ViewModel (UI 状态 + 引擎调用)
-│   ├── PaintViewModel{Brush,Layers,Tools,Filters,Projects,Shortcuts}.kt
+│   ├── PaintViewModel{Brush,Layers,Tools,Filters,Projects,Shortcuts,
+│   │                  Adjustment,Animation,AnimationExport,Memory}.kt
 │   │                        #   ViewModel 扩展文件 (同包同类的 partial 模式)
 │   ├── PaintRecorder.kt     #   绘制过程录制 (紧凑二进制事件流)
 │   ├── PlaybackEngine.kt    #   回放会话与渲染线程
@@ -80,10 +81,12 @@ app/src/main/cpp/            # C++ 引擎 (按域拆分, 与 Kotlin 一一对应
 ├── ReverieCore.h            #   引擎主头文件 (SPDX GPL-3.0 必需)
 ├── ReverieCoreInternal.h    #   内部共享声明
 ├── ReverieCore{Stroke,Brush,Layers,LayerOps,Filters,FilterPreview,
+│   FilterKernels,FilterPlugins,FilterPreviewFx,FilterRegistry,
 │   Selection,SelectionTools,SelectionLasso,Transform,Render,IO,
-│   Document,MiscTools}.cpp  #   按域拆分的实现
+│   Document,MiscTools,Adjustment,Animation,Inbetween,Generators,
+│   UndoStore}.cpp           #   按域拆分的实现
 ├── reverie_jni_common.h     #   JNI 公共工具 (异常/位图/字符串转换)
-├── reverie_jni_{core,brush,layers,filters,io,selection,tools}.cpp
+├── reverie_jni_{core,brush,layers,filters,io,selection,tools,animation}.cpp
 └── CMakeLists.txt           #   链接 Krita/Qt/KF6
 
 其他目录:
@@ -103,62 +106,62 @@ art/        # 图标素材
 
 ## 4. 架构铁律 (违反会导致卡顿/崩溃回归)
 
-1. **文档真身在 C++**: 所有文档操作 (笔画/图层/撤销/渲染) 通过 JNI 进入 ReverieCore。Kotlin 侧只持有 UI 状态镜像 (`PaintViewModel` 的 `mutableStateOf` 字段), 不要在 Kotlin 侧复制像素数据。
-2. **引擎调用禁止上 UI 线程**: Krita 投影重组合在真机上耗时 5ms+, 会阻塞触摸分发导致笔画成段。所有文档操作走专用 HandlerThread (见 `PaintViewModel` 头注释)。
-3. **双缓冲渲染**: 写像素的线程与 Compose 读取的 Bitmap 必须是两个对象 (front/back buffer), 新增渲染路径必须维持此模式。
-4. **热路径零分配**: 笔画事件批处理、`RecordingEvents` 编解码、JNI 笔画提交路径上禁止每帧创建对象/字符串; 触摸采样以 ~8ms 批量 flush。
-5. **手势处理不 key 在视口状态上**: `pointerInput` 不能以 zoom/pan/rotation 为 key, 否则手势第一帧后被取消 (见 `CanvasView` 头注释的历史教训)。
-6. **单实例引擎**: `g_core` 全局唯一, UI 单窗口假设; JNI 方法不做重入防护, 调用时序由 ViewModel 保证。
-7. **Qt 无 GUI 运行**: 引擎是软件渲染, 首次使用时惰性创建 `QCoreApplication`; 禁止引入任何 QWidget 依赖。
+1. **文档真身在 C++**: 所有文档操作 (笔画/图层/撤销/渲染) 通过 JNI 进入 ReverieCore，Kotlin 侧只持有 UI 状态镜像 (`PaintViewModel` 的 `mutableStateOf` 字段), 不要在 Kotlin 侧复制像素数据
+2. **引擎调用禁止上 UI 线程**: Krita 投影重组合在真机上耗时 5ms+, 会阻塞触摸分发导致笔画成段，所有文档操作走专用 HandlerThread (见 `PaintViewModel` 头注释)
+3. **双缓冲渲染**: 写像素的线程与 Compose 读取的 Bitmap 必须是两个对象 (front/back buffer), 新增渲染路径必须维持此模式
+4. **热路径零分配**: 笔画事件批处理、`RecordingEvents` 编解码、JNI 笔画提交路径上禁止每帧创建对象/字符串; 触摸采样以 ~8ms 批量 flush
+5. **手势处理不 key 在视口状态上**: `pointerInput` 不能以 zoom/pan/rotation 为 key, 否则手势第一帧后被取消 (见 `CanvasView` 头注释的历史教训)
+6. **单实例引擎**: `g_core` 全局唯一, UI 单窗口假设; JNI 方法不做重入防护, 调用时序由 ViewModel 保证
+7. **Qt 无 GUI 运行**: 引擎是软件渲染, 首次使用时惰性创建 `QCoreApplication`; 禁止引入任何 QWidget 依赖
 
 ## 5. 解耦与健壮性要求
 
 新增或修改功能时, 把"对其他部分的影响降到最小"当作硬性要求:
 
-- **依赖单向**: `ui/ → core/ → model/`, 禁止反向依赖; JNI 边界 (`ReverieCoreBridge.kt` ↔ `reverie_jni_*.cpp`) 是唯一跨语言契约, 改任何一侧必须同步另一侧并全文检索签名引用。
-- **先查波及面再动手**: 修改共享代码 (`PaintViewModel*`、`ui/theme`、`ui/components`、`ReverieCore.h`、`ReverieCoreInternal.h`、`reverie_jni_common.h`) 前, 必须先搜索全部调用点, 列出可能受影响的功能清单, 再决定改动方式。
-- **扩而不改**: 给既有能力加可选行为时, 优先新增带默认值的参数/方法或新建扩展文件 (ViewModel partial 模式), 不改变既有签名与调用方; 能加新函数就不要在既有热路径上堆分支。
-- **单一职责**: 新功能优先作为独立单元 (独立 Composable / 独立域文件 / 独立扩展文件) 插入, 不塞进已有的大函数; 单文件超限时按 §6 的拆分规则处理。
-- **C++ 域隔离**: 跨域复用走 `ReverieCoreInternal.h` 的声明接口, 不直接 include 其他域的实现细节; JNI 层只做参数搬运。
-- **健壮性底线**: 新代码必须处理边界输入 (空图层/空选区/0 尺寸/越界坐标), JNI 调用点检查返回值与异常; 失败时保持 UI 状态一致 (回滚状态镜像), 不允许半更新。
+- **依赖单向**: `ui/ → core/ → model/`, 禁止反向依赖; JNI 边界 (`ReverieCoreBridge.kt` ↔ `reverie_jni_*.cpp`) 是唯一跨语言契约, 改任何一侧必须同步另一侧并全文检索签名引用
+- **先查波及面再动手**: 修改共享代码 (`PaintViewModel*`、`ui/theme`、`ui/components`、`ReverieCore.h`、`ReverieCoreInternal.h`、`reverie_jni_common.h`) 前, 必须先搜索全部调用点, 列出可能受影响的功能清单, 再决定改动方式
+- **扩而不改**: 给既有能力加可选行为时, 优先新增带默认值的参数/方法或新建扩展文件 (ViewModel partial 模式), 不改变既有签名与调用方; 能加新函数就不要在既有热路径上堆分支
+- **单一职责**: 新功能优先作为独立单元 (独立 Composable / 独立域文件 / 独立扩展文件) 插入, 不塞进已有的大函数; 单文件超限时按 §6 的拆分规则处理
+- **C++ 域隔离**: 跨域复用走 `ReverieCoreInternal.h` 的声明接口, 不直接 include 其他域的实现细节; JNI 层只做参数搬运
+- **健壮性底线**: 新代码必须处理边界输入 (空图层/空选区/0 尺寸/越界坐标), JNI 调用点检查返回值与异常; 失败时保持 UI 状态一致 (回滚状态镜像), 不允许半更新
 
 ## 6. Kotlin / Compose 编码规范
 
-- 缩进 4 空格, 行宽 ≤120 (见 `.editorconfig`)。
+- 缩进 4 空格, 行宽 ≤120 (见 `.editorconfig`)
 - **UI 文案统一使用 strings.xml 国际化资源管理** (`stringResource(R.string.*)`), 严禁在 Compose 中硬编码中文字符串字面量; 新增或修改文案需同步提供中英文翻译 (`values/` 与 `values-en/`), 中文文案尽量少用句号; 主题色一律引用 `ui/theme` 的 Morandi 语义色, 禁止散落硬编码颜色
-- 状态管理: ViewModel 用 `mutableStateOf/mutableIntStateOf/...` + `by` 委托; 高频数值 (缩放%/旋转°) 用专用 `mutable*StateOf` 重载避免装箱。
-- ViewModel 过大时按域拆分为同包扩展文件 (如 `PaintViewModelBrush.kt`), 保持类名不变, 不要为拆分而引入新接口层。
-- Composable 命名 PascalCase, 普通函数 camelCase; 一个功能族一个文件是允许的 (如 `ToolPanels.kt` 收纳多个小面板), 但单文件超过 ~2000 行时应拆分。
-- import 禁止保留通配符以外的无用导入; 允许 `import com.reverie.paint.core.*` 这类同模块通配 (现状惯例)。
-- 协程: UI 侧用 `viewModelScope`; 引擎线程通信走 Handler (与现有 `HandlerThread` 模式一致), 不要混用两套线程模型。
+- 状态管理: ViewModel 用 `mutableStateOf/mutableIntStateOf/...` + `by` 委托; 高频数值 (缩放%/旋转°) 用专用 `mutable*StateOf` 重载避免装箱
+- ViewModel 过大时按域拆分为同包扩展文件 (如 `PaintViewModelBrush.kt`), 保持类名不变, 不要为拆分而引入新接口层
+- Composable 命名 PascalCase, 普通函数 camelCase; 一个功能族一个文件是允许的 (如 `ToolPanels.kt` 收纳多个小面板), 但单文件超过 ~2000 行时应拆分
+- import 禁止保留通配符以外的无用导入; 允许 `import com.reverie.paint.core.*` 这类同模块通配 (现状惯例)
+- 协程: UI 侧用 `viewModelScope`; 引擎线程通信走 Handler (与现有 `HandlerThread` 模式一致), 不要混用两套线程模型
 
 ## 7. C++ 编码规范
 
-- 每个新 `.h/.cpp` 文件顶部必须有 `SPDX-License-Identifier: GPL-3.0-or-later` 注释头。
-- 编译选项 `-fno-operator-names` 已全局开启 (Krita 头文件把 `and/or/xor` 当标识符), 不要依赖这些关键字。
-- 文件按域拆分: 新功能优先加到既有域文件; 只有独立域才新建 `ReverieCore<域>.cpp` 并同步更新 `ReverieCoreInternal.h`。
-- 命名: 类/函数 Krita 风格 (camelCase 方法, `m_` 成员前缀); JNI 函数命名 `Java_com_reverie_paint_core_ReverieCoreBridge_<name>`。
-- JNI 边界统一使用 `reverie_jni_common.h` 的工具函数做字符串/位图/异常转换; JNI 层只做参数搬运, 业务逻辑放 ReverieCore。
-- 内存: JNI 返回的 Bitmap 由 Kotlin 侧复用 (双缓冲), C++ 侧不长期持有 Android Bitmap 引用。
+- 每个新 `.h/.cpp` 文件顶部必须有 `SPDX-License-Identifier: GPL-3.0-or-later` 注释头
+- 编译选项 `-fno-operator-names` 已全局开启 (Krita 头文件把 `and/or/xor` 当标识符), 不要依赖这些关键字
+- 文件按域拆分: 新功能优先加到既有域文件; 只有独立域才新建 `ReverieCore<域>.cpp` 并同步更新 `ReverieCoreInternal.h`
+- 命名: 类/函数 Krita 风格 (camelCase 方法, `m_` 成员前缀); JNI 函数命名 `Java_com_reverie_paint_core_ReverieCoreBridge_<name>`
+- JNI 边界统一使用 `reverie_jni_common.h` 的工具函数做字符串/位图/异常转换; JNI 层只做参数搬运, 业务逻辑放 ReverieCore
+- 内存: JNI 返回的 Bitmap 由 Kotlin 侧复用 (双缓冲), C++ 侧不长期持有 Android Bitmap 引用
 
 ## 8. 测试规范
 
-- 单元测试位于 `app/src/test/java/`, 仅覆盖**纯 Kotlin 逻辑** (`model/`、编解码、几何计算等), 不引入 Android 框架依赖。
-- 测试框架 JUnit4, 用反引号方法名描述行为 (见 `PaintModelsTest`)。
-- C++ 引擎逻辑暂无自动化测试; 涉及引擎的修复需在真机手动回归并在 commit message 中注明验证结果。
-- 新增可纯测的逻辑 (坐标变换、事件编解码、LUT 计算等) 应补对应单元测试。
+- 单元测试位于 `app/src/test/java/`, 仅覆盖**纯 Kotlin 逻辑** (`model/`、编解码、几何计算等), 不引入 Android 框架依赖
+- 测试框架 JUnit4, 用反引号方法名描述行为 (见 `PaintModelsTest`)
+- C++ 引擎逻辑暂无自动化测试; 涉及引擎的修复需在真机手动回归并在 commit message 中注明验证结果
+- 新增可纯测的逻辑 (坐标变换、事件编解码、LUT 计算等) 应补对应单元测试
 
 ## 9. 变更工作流与回归自检
 
 每次新增或修改功能, 必须完整走一遍以下流程:
 
-1. **改动前 — 影响评估**: 定位目标域 → 全文搜索调用点 → 按 §5 列出"可能受影响的功能清单"; 同时核对 §4 铁律是否触及 (线程模型/双缓冲/零分配/手势 key)。
-2. **改动中 — 最小 diff**: 只改与目标相关的代码, 不顺手重构无关部分; 保持每个中间步骤可编译。
+1. **改动前 — 影响评估**: 定位目标域 → 全文搜索调用点 → 按 §5 列出"可能受影响的功能清单"; 同时核对 §4 铁律是否触及 (线程模型/双缓冲/零分配/手势 key)
+2. **改动中 — 最小 diff**: 只改与目标相关的代码, 不顺手重构无关部分; 保持每个中间步骤可编译
 3. **改动后 — 两轮自检**:
-   - **第一轮 (机械验证)**: 按改动范围运行 §2 命令 — 至少 `compileDebugKotlin`; 改 `model/` 或纯逻辑加跑 `testDebugUnitTest`; 大范围改动加跑 `lintDebug` 与 `assembleDebug`。
-   - **第二轮 (回归审查)**: 对照第 1 步的影响清单, 逐一重新检查每个调用方行为是否被破坏; 重点确认新代码未违反 §4 铁律。发现问题必须修复后重跑第一轮。
-   - **引擎/C++ 改动**: 额外真机手动回归受影响路径 (笔画/图层/撤销/滤镜等), 结果写入 commit body。
-4. **收尾**: 按需更新 §11 文档; commit 信息按 §10 规范注明验证方式。
+   - **第一轮 (机械验证)**: 按改动范围运行 §2 命令 — 至少 `compileDebugKotlin`; 改 `model/` 或纯逻辑加跑 `testDebugUnitTest`; 大范围改动加跑 `lintDebug` 与 `assembleDebug`
+   - **第二轮 (回归审查)**: 对照第 1 步的影响清单, 逐一重新检查每个调用方行为是否被破坏; 重点确认新代码未违反 §4 铁律，发现问题必须修复后重跑第一轮
+   - **引擎/C++ 改动**: 额外真机手动回归受影响路径 (笔画/图层/撤销/滤镜等), 结果写入 commit body
+4. **收尾**: 按需更新 §11 文档; commit 信息按 §10 规范注明验证方式
 
 ## 10. Git 提交规范
 
@@ -175,15 +178,15 @@ Conventional Commits, **中文描述**, 格式:
 
 ## 11. 文档规范
 
-- `docs/PROGRESS.md`: 完成里程碑/大特性时更新勾选项与日期。
-- 研究结论、实验记录写入 `docs/<TOPIC>.md` (如 `FILTER-LAYER-RESEARCH.md`), 回滚实验时必须在文档记录发现。
-- README.md 面向用户/构建者, 保持构建说明与脚本行为同步 (改了构建流程必须同步 README)。
+- `docs/PROGRESS.md`: 完成里程碑/大特性时更新勾选项与日期
+- 研究结论、实验记录写入 `docs/<TOPIC>.md` (如 `FILTER-LAYER-RESEARCH.md`), 回滚实验时必须在文档记录发现
+- README.md 面向用户/构建者, 保持构建说明与脚本行为同步 (改了构建流程必须同步 README)
 
 ## 12. 安全与机密
 
-- `local.properties` 含签名/赞助 API token, 已被 .gitignore 排除, **严禁提交或复制其内容到其他文件**。
-- 机密注入顺序: gradle property → 环境变量 → local.properties (见 `app/build.gradle.kts`); CI 通过 GitHub Secrets 写入。
-- 发布签名当前复用 debug 签名 (release buildType), 变更前需与维护者确认。
+- `local.properties` 含签名/赞助 API token, 已被 .gitignore 排除, **严禁提交或复制其内容到其他文件**
+- 机密注入顺序: gradle property → 环境变量 → local.properties (见 `app/build.gradle.kts`); CI 通过 GitHub Secrets 写入
+- 发布签名当前复用 debug 签名 (release buildType), 变更前需与维护者确认
 
 ## 13. 版本发布与更新自动化规范 (Release Workflow)
 
@@ -199,10 +202,14 @@ Conventional Commits, **中文描述**, 格式:
 
 ### 3. 版本号与更新日志撰写
 - **更新版本配置**: 修改 `app/build.gradle.kts` 中的 `versionCode` 与 `versionName`
-- **解析 Git 历史**: 执行 `git log <last_tag>..HEAD` 提取自上个正式 tag 以来的全量提交
+- **解析 Git 历史与 PR 关联**:
+  - 执行 `git log <last_tag>..HEAD --oneline` 提取自上个正式 tag 以来的全量提交
+  - **识别 PR 编号**: 匹配形如 `Merge pull request #<num>` 的合并提交，或 commit 标题末尾的 `(#<num>)`
+  - **查询 PR 贡献者 Handle**: 对涉及的 PR 编号执行 `gh pr view <num> --json author --jq .author.login` 获取作者 GitHub 用户名
 - **生成结构化日志并写入 CHANGELOG.md**:
   - 在 `CHANGELOG.md` 顶部插入 `## [vX.Y.Z] - YYYY-MM-DD`
   - 严格按 Conventional Commits 分类为两大板块: `### 新增特性 (Features)` 与 `### 缺陷修复 (Bug Fixes)` (如有系统级调整可追加 `### 体验优化与工程调整`)
+  - **PR 贡献者行内署名**: 凡是通过 Pull Request 引入的条目 (包含维护者与社区贡献者), 须在条目末尾追加 `(by @<username> in #<num>)` (示例: `- **WebDAV 同步**: 支持通过 WebDAV 协议进行云端备份与还原 (by @ChinsaaWei in #16)`)
   - 严禁使用句号 (。) 与任何表情符号 (emoji), 保持极简清晰
 - **提交版本变更**: 执行 `git add app/build.gradle.kts CHANGELOG.md && git commit -m "chore(release): 发布 X.Y.Z 版本并更新变更日志"`
 
