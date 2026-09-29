@@ -737,13 +737,11 @@ bool ReverieCore::loadBrushPreset(int index)
         KisBrushBasedPaintOpSettings *bs = dynamic_cast<KisBrushBasedPaintOpSettings *>(s.data());
         if (bs) {
             if (bs->autoSpacingActive()) {
-                m_brushSpacing = 0.1;
+                m_brushSpacing = bs->autoSpacingCoeff();
             } else {
                 const double sp = bs->spacing();
-                if (sp > 0.0 && sp == sp && sp < 0.75) {
+                if (sp > 0.0 && sp == sp) {
                     m_brushSpacing = sp;
-                } else if (sp >= 0.75) {
-                    m_brushSpacing = 0.1;
                 }
             }
         }
@@ -850,17 +848,15 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
     KisBrushBasedPaintOpSettings *bs = dynamic_cast<KisBrushBasedPaintOpSettings *>(s.data());
     if (bs) {
         if (bs->autoSpacingActive()) {
-            spacing = 0.1;
+            spacing = bs->autoSpacingCoeff();
         } else {
             const double sp = bs->spacing();
-            if (sp > 0.0 && sp == sp && sp < 0.75) {
+            if (sp > 0.0 && sp == sp) {
                 spacing = sp;
-            } else if (sp >= 0.75) {
-                spacing = 0.1;
             }
         }
     }
-    if (!(spacing > 0.0) || spacing != spacing || spacing >= 0.75) {
+    if (!(spacing > 0.0) || spacing != spacing) {
         spacing = s->getDouble("spacing", 0.15);
     }
     if (!(spacing > 0.0) || spacing != spacing || spacing >= 0.75) {
@@ -1108,14 +1104,14 @@ void ReverieCore::setBrushSpacing(qreal v)
         s->setProperty("spacing", v);
         return;
     }
-    // 自动间距 (brush_definition 的 useAutoSpacing="1") 开启时, 引擎实际用的是
-    // calcAutoSpacing(尺寸, 系数), brush_definition 里的 spacing 属性被完全忽略
-    // —— 直接 setSpacing 不会有任何效果。这里显式关掉自动间距, 让用户拖出来的
-    // 数值真正生效, 并与面板上显示的数字保持一致。
     if (bs->autoSpacingActive()) {
-        bs->setAutoSpacing(false, bs->autoSpacingCoeff());
+        // 与 Krita 官方 KisBrushBasedPaintOpSettings 完全对齐:
+        // 自动间距开启时, 间距参数控制的是 autoSpacingCoeff, 保持 autoSpacingActive(true)!
+        // 严禁设为 false, 否则大尺寸下间距无法根据 sqrt(size) 自适应, 必然变成散点珠串!
+        bs->setAutoSpacing(true, v);
+    } else {
+        bs->setSpacing(v);
     }
-    bs->setSpacing(v);
     // 不再写 SpacingValue: 它是 KisSpacingOption 的 extraScale 乘数, 会与
     // brush spacing 相乘把间距再缩一次 (PressureSpacing=true 的预设尤其明显)。
 }

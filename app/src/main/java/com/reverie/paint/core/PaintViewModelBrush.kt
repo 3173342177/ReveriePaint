@@ -874,8 +874,8 @@ import kotlinx.coroutines.withContext
         val resetLegacyFade = !prefs().getBoolean("brush_fade_solidity_migrated", false)
         // 一次性迁移: 修复因未判断 Pressureh/PressureMix 开关导致的 100% 杂色抖动与副色混合残留
         val resetLegacyJitter = !prefs().getBoolean("brush_jitter_mix_migrated", false)
-        // 一次性迁移: 修复自动间距错误换算导致间距被锁定为 1.0(100%) 珠串点状的问题
-        val resetLegacySpacing = !prefs().getBoolean("brush_spacing_dotted_migrated", false)
+        // 一次性迁移: 修复自动间距错误换算与历史脏数据导致间距异常变点状的问题
+        val resetLegacySpacing = !prefs().getBoolean("brush_spacing_dotted_migrated_v4", false)
         try {
             val raw = prefs().getString("brush_params", null) ?: return
             val json = org.json.JSONArray(raw)
@@ -886,7 +886,7 @@ import kotlinx.coroutines.withContext
                 val rawCop = o.optString("cop", "normal")
                 val rawSp = o.optDouble("sp", 0.1)
                 val spc = o.optBoolean("spc", false)
-                val healedSpacing = if (!spc || (resetLegacySpacing && rawSp >= 0.75)) 0.1 else rawSp
+                val healedSpacing = if (!spc || resetLegacySpacing) 0.1 else rawSp
                 brushParams[name] = BrushParams(
                     size = o.optDouble("s", 20.0),
                     opacity = o.optDouble("o", 1.0),
@@ -949,7 +949,7 @@ import kotlinx.coroutines.withContext
                     },
                     dynamicsCustomized = o.optBoolean("dc", false),
                     smudgeCustomized = o.optBoolean("scus", false),
-                    spacingCustomized = if (resetLegacySpacing && rawSp >= 0.75) false else spc,
+                    spacingCustomized = if (resetLegacySpacing) false else spc,
                     maskingEnabled = o.optBoolean("m_en", false),
                     maskingCompositeOp = o.optString("m_op", "multiply"),
                     maskingSizeRatio = o.optDouble("m_sr", 1.0),
@@ -969,7 +969,7 @@ import kotlinx.coroutines.withContext
                 prefs().edit().putBoolean("brush_softness_neutral_migrated", true).apply()
                 prefs().edit().putBoolean("brush_fade_solidity_migrated", true).apply()
                 prefs().edit().putBoolean("brush_jitter_mix_migrated", true).apply()
-                prefs().edit().putBoolean("brush_spacing_dotted_migrated", true).apply()
+                prefs().edit().putBoolean("brush_spacing_dotted_migrated_v4", true).apply()
                 persistBrushParams()
             }
         } catch (_: Exception) {
