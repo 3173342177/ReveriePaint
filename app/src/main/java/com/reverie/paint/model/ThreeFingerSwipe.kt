@@ -51,6 +51,9 @@ class ThreeFingerSwipe {
                 reject()
                 return
             }
+        }
+        // Validate every pointer before an unfinished finger can defer recognition.
+        for (i in 0..2) {
             if (dy[i] < 48f * density || abs(dx[i]) > dy[i] * 0.6f) return
         }
         // A pinch/rotation or one moving finger must not become a menu swipe.

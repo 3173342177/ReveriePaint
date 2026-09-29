@@ -89,4 +89,28 @@ class ThreeFingerSwipeTest {
         assertTrue(gesture.isTap(2100L))
         assertFalse(gesture.swiped)
     }
+    @Test fun `invalid travel on any pointer rejects before an unfinished pointer returns`() {
+        for (pointer in 0..2) {
+            for ((dx, dy) in listOf(60f to 0f, 0f to -20f)) {
+                val gesture = tracker()
+                gesture.update(pointer, pointer * 40f + dx, 100f + dy)
+                gesture.evaluate(1100L)
+                assertTrue("pointer $pointer must reject the gesture", gesture.rejected)
+                for (i in 0..2) gesture.update(i, i * 40f, 160f)
+                gesture.evaluate(1200L)
+                assertFalse(gesture.swiped)
+                assertFalse(gesture.isTap(1200L))
+            }
+        }
+    }
+
+    @Test fun `valid staggered travel waits for every finger without rejection`() {
+        val gesture = tracker()
+        for (i in 2 downTo 0) {
+            gesture.update(i, i * 40f, 160f)
+            gesture.evaluate(1100L + (2 - i) * 50L)
+            assertFalse(gesture.rejected)
+            assertEquals(i == 0, gesture.swiped)
+        }
+    }
 }

@@ -40,7 +40,7 @@
 
 已验证：
 
-- `:app:compileDebugKotlin :app:testDebugUnitTest` 最终完整运行通过，318 个测试、0 失败、0 错误，包含新增的 9 个手势测试
+- `:app:compileDebugKotlin :app:testDebugUnitTest` 最终完整运行通过，320 个测试、0 失败、0 错误，包含新增的 11 个手势测试
 - 中英文字符串 XML 有效，新增键无重复
 - `git diff --check` 通过
 - 通过英文目录 junction 指向原项目解决 Windows 中文路径下测试类找不到的问题；最终使用 `-Pkotlin.incremental=false` 排除切换路径造成的增量缓存问题，不修改工程全局配置
@@ -68,3 +68,7 @@
 XuanTree 的 [enhance/rotate 分支](https://github.com/XuanTree/ReveriePaint/tree/enhance/rotate) 已有画布旋转吸附实现（`ff70fb9`），截至此次核对尚未合入上游。本功能不包含旋转吸附，两者都修改手势与设置入口，后合入的一方需要复核手势状态和合并位置
 
 同一 fork 的 [dev/native-tools 分支](https://github.com/XuanTree/ReveriePaint/tree/dev/native-tools) 提供 Linux/WSL 原生构建环境脚本，可作为后续原生验证的参考；本次没有合入该分支
+
+## 手势漏检修复
+
+先检查全部三根手指的横移和上滑越界，再判断各指是否达到下滑距离，避免较早遍历的手指尚未下滑时跳过后续手指校验。新增任意指越界后回正仍被拒绝、正常分批下滑两项测试。Kotlin 编译与 320 项 JVM 测试通过，其中手势模型 11 项。
