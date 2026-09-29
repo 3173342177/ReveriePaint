@@ -58,6 +58,22 @@ object KppHelper {
                         }
                     }
                 }
+            } else if (chunkType == "tEXt") {
+                var nullPos = -1
+                for (p in chunkDataStart until chunkDataEnd) {
+                    if (kppBytes[p] == 0.toByte()) {
+                        nullPos = p
+                        break
+                    }
+                }
+                if (nullPos != -1) {
+                    val keyword = String(kppBytes, chunkDataStart, nullPos - chunkDataStart, Charsets.ISO_8859_1)
+                    if (keyword == "preset") {
+                        val textStart = nullPos + 1
+                        val textLen = chunkDataEnd - textStart
+                        return String(kppBytes, textStart, textLen, Charsets.UTF_8)
+                    }
+                }
             }
             idx += 12 + length
         }
@@ -198,8 +214,8 @@ object KppHelper {
             val chunkDataEnd = chunkDataStart + length
             if (chunkDataEnd + 4 > kppBytes.size || length < 0) break
 
-            var isPresetZtxt = false
-            if (chunkType == "zTXt") {
+            var isPresetChunk = false
+            if (chunkType == "zTXt" || chunkType == "tEXt") {
                 var nullPos = -1
                 for (p in chunkDataStart until chunkDataEnd) {
                     if (kppBytes[p] == 0.toByte()) {
@@ -210,19 +226,21 @@ object KppHelper {
                 if (nullPos != -1) {
                     val keyword = String(kppBytes, chunkDataStart, nullPos - chunkDataStart, Charsets.ISO_8859_1)
                     if (keyword == "preset") {
-                        isPresetZtxt = true
+                        isPresetChunk = true
                     }
                 }
             }
 
-            if (isPresetZtxt) {
-                val lenBuf = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(newChunkData.size).array()
-                out.write(lenBuf)
-                out.write("zTXt".toByteArray(Charsets.ISO_8859_1))
-                out.write(newChunkData)
-                val crcBuf = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(crcVal).array()
-                out.write(crcBuf)
-                replaced = true
+            if (isPresetChunk) {
+                if (!replaced) {
+                    val lenBuf = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(newChunkData.size).array()
+                    out.write(lenBuf)
+                    out.write("zTXt".toByteArray(Charsets.ISO_8859_1))
+                    out.write(newChunkData)
+                    val crcBuf = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(crcVal).array()
+                    out.write(crcBuf)
+                    replaced = true
+                }
             } else {
                 if (chunkType == "IEND" && !replaced) {
                     val lenBuf = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(newChunkData.size).array()
@@ -340,10 +358,15 @@ object KppHelper {
             else -> if (texModeRaw != null) "multiply" else null
         }
 
-        val hueJitter = Regex("""<param[^>]*name="hValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
-        val satJitter = Regex("""<param[^>]*name="sValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
-        val valJitter = Regex("""<param[^>]*name="vValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
-        val secondaryMix = Regex("""<param[^>]*name="MixValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val hasPressureH = Regex("""<param[^>]*name="Pressureh"[^>]*>(?:<!\[CDATA\[)?(true|false)""").find(xml)?.groupValues?.getOrNull(1)?.toBoolean() ?: false
+        val hasPressureS = Regex("""<param[^>]*name="Pressures"[^>]*>(?:<!\[CDATA\[)?(true|false)""").find(xml)?.groupValues?.getOrNull(1)?.toBoolean() ?: false
+        val hasPressureV = Regex("""<param[^>]*name="Pressurev"[^>]*>(?:<!\[CDATA\[)?(true|false)""").find(xml)?.groupValues?.getOrNull(1)?.toBoolean() ?: false
+        val hasPressureMix = Regex("""<param[^>]*name="PressureMix"[^>]*>(?:<!\[CDATA\[)?(true|false)""").find(xml)?.groupValues?.getOrNull(1)?.toBoolean() ?: false
+
+        val hueJitter = if (hasPressureH) Regex("""<param[^>]*name="hValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull() else 0.0
+        val satJitter = if (hasPressureS) Regex("""<param[^>]*name="sValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull() else 0.0
+        val valJitter = if (hasPressureV) Regex("""<param[^>]*name="vValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull() else 0.0
+        val secondaryMix = if (hasPressureMix) Regex("""<param[^>]*name="MixValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull() else 0.0
 
         return KppParsedAttributes(
             fade = fade,
@@ -552,7 +575,7 @@ object KppHelper {
                 "svg" -> "svg_brush"
                 else -> "png_brush"
             }
-            val brushDef = """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="$tipType" useAutoSpacing="0" BrushVersion="2" filename="$tipFile" spacing="${params.spacing}" angle="${params.angle}"/> ]]></param>"""
+            val brushDef = """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="$tipType" useAutoSpacing="0" BrushVersion="2" filename="$tipFile" spacing="${params.spacing}" angle="${params.angle}" brushApplication="0"/> ]]></param>"""
             if (mainBrushDefPattern.containsMatchIn(xml)) {
                 xml = mainBrushDefPattern.replace(xml, brushDef)
             } else {

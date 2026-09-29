@@ -545,10 +545,13 @@ import kotlinx.coroutines.withContext
                 val delayMs = if (immediateReload) 0L else 120L
                 pendingKppReloadJob = viewModelScope.launch(Dispatchers.Default) {
                     if (delayMs > 0) delay(delayMs)
+                    if (brushPresetIndex != targetIdx) return@launch
                     runCore(render = false) {
+                        if (brushPresetIndex != targetIdx) return@runCore
                         KppHelper.updateKppFile(kppFile, name, pSnapshot)
                         if (ReverieCoreBridge.loadBrushPreset(targetIdx)) {
                             ReverieCoreBridge.setPresetIsEraser(isEraserPreset)
+                            ReverieCoreBridge.setBrushColor(brushColor)
                             ReverieCoreBridge.setBrushSize(pSnapshot.size)
                             ReverieCoreBridge.setBrushOpacity(pSnapshot.opacity)
                             ReverieCoreBridge.setBrushFlow(pSnapshot.flow)
@@ -698,10 +701,11 @@ import kotlinx.coroutines.withContext
     internal fun PaintViewModel.migrateDuplicatedPresetParams(dir: File) {
         val dedupeDone = prefs().getBoolean("kpp_dedupe_migrated", false)
         val rollbackDone = prefs().getBoolean("kpp_edge_semantics_migrated", false)
-        if (dedupeDone && rollbackDone) return
+        val jitterCleanDone = prefs().getBoolean("kpp_jitter_clean_migrated", false)
+        if (dedupeDone && rollbackDone && jitterCleanDone) return
         var fixed = 0
         try {
-            if (!rollbackDone) {
+            if (!rollbackDone || !jitterCleanDone) {
                 for (name in appContext.assets.list("paintoppresets") ?: emptyArray()) {
                     val target = File(dir, name)
                     if (!target.exists()) continue
@@ -717,6 +721,7 @@ import kotlinx.coroutines.withContext
         }
         prefs().edit().putBoolean("kpp_dedupe_migrated", true).apply()
         prefs().edit().putBoolean("kpp_edge_semantics_migrated", true).apply()
+        prefs().edit().putBoolean("kpp_jitter_clean_migrated", true).apply()
         android.util.Log.d("ReveriePaint", "kpp migration: dedupe fixed=$fixed")
     }
 
@@ -730,6 +735,8 @@ import kotlinx.coroutines.withContext
         // Eraser_hard=1.0 / Eraser_Soft=0.0)，而旧默认值 0.0 会在每次选笔时经
         // setBrushFade(0.0) 把笔尖打到全羽化 —— 这就是大笔触边缘发糊的直接来源。
         val resetLegacyFade = !prefs().getBoolean("brush_fade_solidity_migrated", false)
+        // 一次性迁移: 修复因未判断 Pressureh/PressureMix 开关导致的 100% 杂色抖动与副色混合残留
+        val resetLegacyJitter = !prefs().getBoolean("brush_jitter_mix_migrated", false)
         try {
             val raw = prefs().getString("brush_params", null) ?: return
             val json = org.json.JSONArray(raw)
@@ -762,10 +769,10 @@ import kotlinx.coroutines.withContext
                     textureScale = o.optDouble("tscl", 1.0),
                     textureStrength = o.optDouble("tstr", 0.5),
                     textureMode = o.optString("tm", "multiply"),
-                    hueJitter = o.optDouble("hj", 0.0),
-                    satJitter = o.optDouble("sj", 0.0),
-                    valJitter = o.optDouble("vj", 0.0),
-                    secondaryMix = o.optDouble("sm", 0.0),
+                    hueJitter = if (resetLegacyJitter) 0.0 else o.optDouble("hj", 0.0),
+                    satJitter = if (resetLegacyJitter) 0.0 else o.optDouble("sj", 0.0),
+                    valJitter = if (resetLegacyJitter) 0.0 else o.optDouble("vj", 0.0),
+                    secondaryMix = if (resetLegacyJitter) 0.0 else o.optDouble("sm", 0.0),
                     pressureColorMix = o.optBoolean("pcm", false),
                     pressureEnabled = o.optBoolean("pe", true),
                     pressureSize = o.optDouble("ps", 1.0),
@@ -802,9 +809,10 @@ import kotlinx.coroutines.withContext
                     smudgeCustomized = o.optBoolean("scus", false),
                 )
             }
-            if (resetLegacySoftness || resetLegacyFade) {
+            if (resetLegacySoftness || resetLegacyFade || resetLegacyJitter) {
                 prefs().edit().putBoolean("brush_softness_neutral_migrated", true).apply()
                 prefs().edit().putBoolean("brush_fade_solidity_migrated", true).apply()
+                prefs().edit().putBoolean("brush_jitter_mix_migrated", true).apply()
                 persistBrushParams()
             }
         } catch (_: Exception) {
@@ -1155,19 +1163,16 @@ import kotlinx.coroutines.withContext
             recorder.resetContextDiff()
         }
 
-        // Krita-style decoupling: presets never force a tool change except
-        // the one-way convenience of jumping to the eraser tool when an
-        // eraser-group preset is picked elsewhere. The eraser tool may adopt
-        // ANY preset - native erasing is driven by m_toolMode (setToolMode),
-        // so any brush shape works as an eraser.
-        if (isEraserPreset && currentToolId != "eraser") {
-            applyTool("eraser")
-        }
+        pendingKppReloadJob?.cancel()
+        pendingKppReloadJob = null
+
+        brushPresetIndex = index
+        updateCurrentToolBrushState { it.copy(presetIndex = index) }
 
         val saved = if (preset != null) brushParams[preset.name] else null
         val isCustomized = saved?.isCustomized == true
         val nativeCompOp = if (index >= 0) ReverieCoreBridge.brushPresetCompositeOp(index) else "normal"
-        val effectiveCompOp = if (isEraserPreset || currentToolId == "eraser") {
+        val effectiveCompOp = if (currentToolId == "eraser" || isEraserPreset) {
             "erase"
         } else {
             val savedOp = saved?.compositeOp
@@ -1299,14 +1304,14 @@ import kotlinx.coroutines.withContext
             }
             // 主线程先写预设值, 再由 overlay 用当前工具记忆覆盖;
             // overlay 内部的引擎 setter 经 runCore 追加在预设 setter 之后, 写序确定。
-            applyToolParamMemoryOverlay()
+            applyToolParamMemoryOverlay(preset?.name)
         }) {
             if (ReverieCoreBridge.loadBrushPreset(index)) {
                 // 分组元数据覆盖 C++ 名字启发式; 必须在 loadBrushPreset 之后下发,
                 // 否则会被加载成功路径里的 override 重置抹掉
-                ReverieCoreBridge.setPresetIsEraser(isEraserPreset)
-                brushPresetIndex = index
-                updateCurrentToolBrushState { it.copy(presetIndex = index) }
+                ReverieCoreBridge.setPresetIsEraser(currentToolId == "eraser" || isEraserPreset)
+                ReverieCoreBridge.setBrushCompositeOp(effectiveCompOp)
+                ReverieCoreBridge.setBrushColor(brushColor)
                 try {
                     prefs().edit().putInt("last_brush_preset_index", index).apply()
                 } catch (_: Exception) {
@@ -1403,12 +1408,12 @@ import kotlinx.coroutines.withContext
 
     /** 预设参数加载完成后, 用当前工具对该预设的记忆覆盖 size/opacity/flow。
      *  无记忆时保持预设参数不变 (首次使用语义)。 */
-    internal fun PaintViewModel.applyToolParamMemoryOverlay() {
+    internal fun PaintViewModel.applyToolParamMemoryOverlay(targetPresetName: String? = null) {
         val t = com.reverie.paint.model.Tool.fromId(currentToolId)
         if (t != com.reverie.paint.model.Tool.BRUSH && t != com.reverie.paint.model.Tool.ERASER &&
             t != com.reverie.paint.model.Tool.SMUDGE
         ) return
-        val name = brushPresets.firstOrNull { it.index == brushPresetIndex }?.name ?: return
+        val name = targetPresetName ?: brushPresets.firstOrNull { it.index == brushPresetIndex }?.name ?: return
         val mem = toolBrushStates[t.id]?.paramMemory?.get(name) ?: return
         if (mem.size < 3) return
         // 损坏数据防护: 每个值做 isFinite() 检查, 非有限值跳过该值, 防 NaN 流入引擎

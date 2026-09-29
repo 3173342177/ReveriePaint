@@ -382,4 +382,71 @@ class KppHelperTest {
         assertEquals(0.2, parsed.valJitter)
         assertEquals(0.6, parsed.secondaryMix)
     }
+
+    @Test
+    fun `parseKppAttributes returns 0 for jitter and mix when Pressure flags are false`() {
+        val xml = """<Preset name="Test" paintopid="paintbrush">
+  <param name="Pressureh" type="string"><![CDATA[false]]></param>
+  <param name="hValue" type="string"><![CDATA[1]]></param>
+  <param name="Pressures" type="string"><![CDATA[false]]></param>
+  <param name="sValue" type="string"><![CDATA[1]]></param>
+  <param name="Pressurev" type="string"><![CDATA[false]]></param>
+  <param name="vValue" type="string"><![CDATA[1]]></param>
+  <param name="PressureMix" type="string"><![CDATA[false]]></param>
+  <param name="MixValue" type="string"><![CDATA[1]]></param>
+</Preset>"""
+        val parsed = KppHelper.parseKppAttributes(xml)
+        assertEquals(0.0, parsed.hueJitter)
+        assertEquals(0.0, parsed.satJitter)
+        assertEquals(0.0, parsed.valJitter)
+        assertEquals(0.0, parsed.secondaryMix)
+    }
+
+    @Test
+    fun `readPresetXml and replacePresetXml support uncompressed tEXt chunks`() {
+        // Build a PNG with a tEXt preset chunk
+        val keyword = "preset"
+        val xmlContent = """<Preset name="TextPreset" paintopid="paintbrush"></Preset>"""
+        val textBytes = (keyword + "\u0000" + xmlContent).toByteArray(Charsets.ISO_8859_1)
+
+        val crc = java.util.zip.CRC32()
+        crc.update("tEXt".toByteArray(Charsets.ISO_8859_1))
+        crc.update(textBytes)
+
+        val bos = java.io.ByteArrayOutputStream()
+        bos.write(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+        // IHDR
+        val ihdrData = ByteArray(13)
+        bos.write(java.nio.ByteBuffer.allocate(4).putInt(13).array())
+        bos.write("IHDR".toByteArray(Charsets.ISO_8859_1))
+        bos.write(ihdrData)
+        val ihdrCrc = java.util.zip.CRC32()
+        ihdrCrc.update("IHDR".toByteArray(Charsets.ISO_8859_1))
+        ihdrCrc.update(ihdrData)
+        bos.write(java.nio.ByteBuffer.allocate(4).putInt(ihdrCrc.value.toInt()).array())
+
+        // tEXt chunk
+        bos.write(java.nio.ByteBuffer.allocate(4).putInt(textBytes.size).array())
+        bos.write("tEXt".toByteArray(Charsets.ISO_8859_1))
+        bos.write(textBytes)
+        bos.write(java.nio.ByteBuffer.allocate(4).putInt(crc.value.toInt()).array())
+
+        // IEND
+        bos.write(java.nio.ByteBuffer.allocate(4).putInt(0).array())
+        bos.write("IEND".toByteArray(Charsets.ISO_8859_1))
+        val iendCrc = java.util.zip.CRC32()
+        iendCrc.update("IEND".toByteArray(Charsets.ISO_8859_1))
+        bos.write(java.nio.ByteBuffer.allocate(4).putInt(iendCrc.value.toInt()).array())
+
+        val pngBytes = bos.toByteArray()
+        val readXml = KppHelper.readPresetXml(pngBytes)
+        assertEquals(xmlContent, readXml)
+
+        // Verify updateKppBytes replaces the tEXt chunk with updated zTXt without corrupting
+        val updatedBytes = KppHelper.updateKppBytes(pngBytes, "UpdatedPreset", BrushParams(size = 35.0))
+        val updatedXml = KppHelper.readPresetXml(updatedBytes)
+        assertNotNull(updatedXml)
+        assertTrue(updatedXml!!.contains("""name="UpdatedPreset""""))
+        assertTrue(updatedXml.contains("""35.0"""))
+    }
 }
