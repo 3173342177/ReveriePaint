@@ -1479,6 +1479,18 @@ class PaintViewModel : ViewModel() {
 
     var gestureTwoFingerUndo by mutableStateOf(true)
     var gestureThreeFingerRedo by mutableStateOf(true)
+    var gestureThreeFingerEditMenu by mutableStateOf(true)
+    var canvasEditBusy by mutableStateOf(false)
+    var canvasEditCapabilities by mutableIntStateOf(0)
+    var canvasClipboardAvailable by mutableStateOf(true)
+
+    fun updateGestureThreeFingerEditMenu(enable: Boolean) {
+        gestureThreeFingerEditMenu = enable
+        if (::appContext.isInitialized) {
+            appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().putBoolean("gestureThreeFingerEditMenu", enable).apply()
+        }
+    }
     var gesturePinchTransform by mutableStateOf(true)
     var gestureQuickPinchFit by mutableStateOf(true)
 
@@ -2373,6 +2385,7 @@ class PaintViewModel : ViewModel() {
             honorHapticsEnabled = prefs.getBoolean("honorHapticsEnabled", true)
             gestureTwoFingerUndo = prefs.getBoolean("gestureTwoFingerUndo", true)
             gestureThreeFingerRedo = prefs.getBoolean("gestureThreeFingerRedo", true)
+            gestureThreeFingerEditMenu = prefs.getBoolean("gestureThreeFingerEditMenu", true)
             gesturePinchTransform = prefs.getBoolean("gesturePinchTransform", true)
             gestureQuickPinchFit = prefs.getBoolean("gestureQuickPinchFit", true)
             longPressEyedropperEnabled = prefs.getBoolean("longPressEyedropperEnabled", true)

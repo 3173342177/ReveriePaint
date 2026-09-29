@@ -407,6 +407,10 @@ public:
     void selectAll();
     void invertSelection();
     int copySelectionToNewLayer(bool cut);
+    // Document-local pixel clipboard, owned entirely by the engine.
+    int canvasClipboardCapabilities() const; // bits: copy=1, cut=2, paste=4
+    bool copyCanvasToClipboard(bool cut);
+    int pasteCanvasClipboard();
     // Selection merge mode: 0=replace, 1=add, 2=subtract, 3=intersect
     enum SelMode { SelReplace, SelAdd, SelSubtract, SelIntersect };
     void setSelectionMode(int mode) { m_selectionMode = SelMode(mode); }
@@ -953,6 +957,7 @@ private:
 
     KisTransaction *m_previewTransaction = nullptr;
     KisPaintDeviceSP m_previewTempDevice;
+    KisPaintDeviceSP m_canvasClipboard;
     // Multi-layer preview: one transaction per targeted device so a
     // cancel/commit reverts every hidden layer (Kotlin passes the multi-
     // selected set to startTransformPreview). m_previewTransaction stays for

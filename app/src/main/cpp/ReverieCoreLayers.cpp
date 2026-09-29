@@ -423,6 +423,78 @@ int ReverieCore::copySelectionToNewLayer(bool cut)
     return m_currentLayer;
 }
 
+int ReverieCore::canvasClipboardCapabilities() const
+{
+    if (!m_document) return 0;
+    int flags = m_canvasClipboard ? 4 : 0;
+    if (m_currentLayer < 0 || m_currentLayer >= m_layers.size()) return flags;
+    const LayerEntry &src = m_layers[m_currentLayer];
+    auto *layer = dynamic_cast<KisPaintLayer *>(src.node);
+    if (!layer || src.isStrokeLayer) return flags;
+    const auto dev = layer->paintDevice();
+    if (!dev) return flags;
+    QRect bounds = dev->exactBounds().intersected(QRect(0, 0, m_document->width(), m_document->height()));
+    if (hasSelection()) bounds = bounds.intersected(m_selection->selectedExactRect());
+    if (bounds.isEmpty()) return flags;
+    flags |= 1;
+    bool locked = src.background || src.locked || layer->alphaLocked();
+    for (KisNodeSP n = layer->parent(); n; n = n->parent()) locked |= n->userLocked();
+    if (!locked) flags |= 2;
+    return flags;
+}
+
+bool ReverieCore::copyCanvasToClipboard(bool cut)
+{
+    if (!(canvasClipboardCapabilities() & (cut ? 2 : 1))) return false;
+    const auto srcDev = dynamic_cast<KisPaintLayer *>(m_layers[m_currentLayer].node)->paintDevice();
+    QRect bounds = srcDev->exactBounds().intersected(QRect(0, 0, m_document->width(), m_document->height()));
+    const KisSelectionSP selection = hasSelection() ? m_selection : KisSelectionSP();
+    if (selection) bounds = bounds.intersected(selection->selectedExactRect());
+    KisPaintDeviceSP copied = new KisPaintDevice(srcDev->colorSpace());
+    KisPainter painter(copied);
+    if (selection) painter.setSelection(selection);
+    painter.bitBlt(bounds.topLeft(), srcDev, bounds);
+    painter.end();
+    // Do not replace a valid clipboard or cut pixels on an empty selection.
+    if (copied->exactBounds().isEmpty()) return false;
+    if (cut) {
+        KisTransaction txn(kundo2_i18n("Cut"), srcDev);
+        if (selection) srcDev->clearSelection(selection);
+        else srcDev->clear(bounds);
+        srcDev->setDirty(bounds);
+        pushUndoCommand(txn.endAndTake());
+        recompositeProjection();
+        markDirty();
+    }
+    m_canvasClipboard = copied;
+    return true;
+}
+
+int ReverieCore::pasteCanvasClipboard()
+{
+    if (!m_document || !m_canvasClipboard) return -1;
+    const QRect bounds = m_canvasClipboard->exactBounds().intersected(
+        QRect(0, 0, m_document->width(), m_document->height()));
+    if (bounds.isEmpty()) return -1;
+    KisPaintLayerSP layer = new KisPaintLayer(m_document, QStringLiteral("Pasted"), 255, m_document->colorSpace());
+    KisPainter painter(layer->paintDevice());
+    // Clipboard pixels already contain the selection alpha. Do not mask them a second time.
+    painter.bitBlt(bounds.topLeft(), m_canvasClipboard, bounds);
+    painter.end();
+    layer->paintDevice()->setDirty(bounds);
+    // Paste at root level so a locked/hidden group cannot trap the new editable layer.
+    pushUndoCommand(new KisImageLayerAddCommand(m_document, layer, m_document->rootLayer(),
+                                                m_document->rootLayer()->lastChild()));
+    m_document->waitForDone();
+    recompositeProjection();
+    syncLayersFromImage();
+    const int index = indexOfNode(layer.data());
+    if (index < 0) return -1;
+    m_currentLayer = index;
+    markDirty();
+    return index;
+}
+
 int ReverieCore::stampVisibleLayers()
 {
     KisImageSP image = m_document;

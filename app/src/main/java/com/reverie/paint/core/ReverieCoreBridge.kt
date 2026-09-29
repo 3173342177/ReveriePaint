@@ -922,6 +922,9 @@ object ReverieCoreBridge {
     external fun copyLayer(index: Int): Int
 
     external fun copySelectionToNewLayer(cut: Boolean): Int
+    external fun canvasClipboardCapabilities(): Int
+    external fun copyCanvasToClipboard(cut: Boolean): Boolean
+    external fun pasteCanvasClipboard(): Int
 
     external fun clearLayer(index: Int)
 

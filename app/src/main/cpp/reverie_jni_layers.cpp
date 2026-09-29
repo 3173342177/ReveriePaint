@@ -549,6 +549,24 @@ Java_com_reverie_paint_core_ReverieCoreBridge_copySelectionToNewLayer(JNIEnv *, 
     return core()->copySelectionToNewLayer(cut == JNI_TRUE);
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_canvasClipboardCapabilities(JNIEnv *, jobject)
+{
+    return core()->canvasClipboardCapabilities();
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_copyCanvasToClipboard(JNIEnv *, jobject, jboolean cut)
+{
+    return core()->copyCanvasToClipboard(cut == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_pasteCanvasClipboard(JNIEnv *, jobject)
+{
+    return core()->pasteCanvasClipboard();
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_layerIsStroke(JNIEnv *, jobject, jint index)
 {

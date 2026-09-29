@@ -37,6 +37,7 @@ ReverieCore::~ReverieCore()
 {
     endStrokeBatch();
     m_layers.clear();
+    m_canvasClipboard = nullptr;
     m_document.clear(); // KisImageSP releases the image
 }
 
@@ -50,6 +51,7 @@ bool ReverieCore::newDocument(int width, int height, bool infiniteCanvas)
 
     // Release any previous document. KisImage destructor frees its owned undo store,
     // so m_undoStore must be reset to nullptr to prevent dangling pointer access.
+    m_canvasClipboard = nullptr;
     m_document.clear();
     m_undoStore = nullptr;
     m_macroDepth = 0;
@@ -174,6 +176,7 @@ void ReverieCore::closeDocument()
 
     // Document + undo history. KisImage owns the node tree: clearing the SP
     // frees all layers and their tiles.
+    m_canvasClipboard = nullptr;
     m_document.clear();
     m_undoStore = nullptr;
     m_macroDepth = 0;

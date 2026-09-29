@@ -510,6 +510,22 @@ internal fun SettingsTabPage(
                         }
 
                         SettingsInnerDivider()
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(stringResource(R.string.settings_three_finger_edit_title), color = Morandi.text, fontSize = 13.sp)
+                                Text(stringResource(R.string.settings_three_finger_edit_desc), color = Morandi.subText, fontSize = 11.sp)
+                            }
+                            ReSwitch(
+                                checked = vm.gestureThreeFingerEditMenu,
+                                onChecked = { vm.updateGestureThreeFingerEditMenu(it) },
+                            )
+                        }
+
+                        SettingsInnerDivider()
 
                         Row(
                             modifier = Modifier
