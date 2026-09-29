@@ -43,31 +43,33 @@
 - `:app:compileDebugKotlin :app:testDebugUnitTest` 最终完整运行通过，320 个测试、0 失败、0 错误，包含新增的 11 个手势测试
 - 中英文字符串 XML 有效，新增键无重复
 - `git diff --check` 通过
+- C++ arm64-v8a 编译、链接通过；旧导出符号保留，三个新增 JNI 符号存在，运行时依赖不变
+- `:app:assembleDebug` 通过；解包核对 APK 内 JNI 库与重编库 SHA-256 一致
 - 通过英文目录 junction 指向原项目解决 Windows 中文路径下测试类找不到的问题；最终使用 `-Pkotlin.incremental=false` 排除切换路径造成的增量缓存问题，不修改工程全局配置
 - 无已连接 ADB 设备，未进行界面截图、触控操作及 C++ 真机回归
 
 
-**原生构建与真机验收尚未完成，当前不应视为可发布实现。**
+**原生库已重编并同步，真机验收尚未完成，当前不应视为已验收的发布版本。**
 
-本次使用 Android SDK 与 JDK 17 完成 Kotlin 验证，未配置项目需要的 NDK/CMake、Qt 6.6.3 / Krita / KF6 原生开发环境。仓库自带 `libreverie_jni.so` 不包含三个新增 JNI 符号，本分支未伪造或刷新该二进制
+原生验证使用 Linux 容器、NDK r25c、Qt 6.6.3（含 Core5Compat）、Krita 源码和 KF6 6.6.0 头文件环境，直接调用 CMake/Ninja 构建 arm64-v8a 引擎。实际编译发现剪切操作的 `const auto srcDev` 不允许修改 Krita 像素设备，已改为可写的 `KisPaintDeviceSP`。
 
-使用旧预编译库时，能力查询失败会禁用编辑操作并提示此版本不支持画布剪贴板，避免点击崩溃。必须用完整工具链重编并同步预编译库后，剪切/复制/粘贴才可用
+环境参照 XuanTree 的 `dev/native-tools` 脚本搭建，没有合入该分支。补装 Qt 的 `qt5compat` 模块；生成的 `KoConfig.h` 需要禁用 `HAVE_OPENEXR`，以匹配仓库预编译库没有 OpenEXR half 类型符号的配置。否则会在链接阶段出现 Imath half 未定义符号。依赖头文件来自脚本下载和生成，导出/依赖检查不等同于完整运行时 ABI 或行为验证。
 
-原生环境接续顺序：
+重编产物已 strip 并同步到 `third_party/android-native-libs/libreverie_jni.so` 和打包目录。原有导出符号全部保留，新增三个 JNI 接口均存在；56 项运行时依赖与旧库一致。旧库缺少接口时的禁用提示仍保留，避免混用二进制导致点击崩溃。
 
-1. 按项目构建规范配置 Qt/Krita/KF6/NDK，使用 `-PbuildNative` 编译
-2. 同步 `third_party/android-native-libs/libreverie_jni.so` 和打包副本，核对三个 JNI 导出符号
-3. 在设备上验证三指轻点、按住、下滑、分批抬手、第四指/笔混入及关闭开关
-4. 验证空图层、羽化选区、锁定/Alpha 锁定/锁定父组、复制后修改源层、重复粘贴、剪切/粘贴撤销重做
-5. 验证保存与重开、录制回放、切换画作后剪贴板为空，以及浅色/深色/窄屏菜单布局
+剩余设备验收：
 
-不包含预编译库更新，也未进行真机安装或版本发布
+1. 三指轻点、按住、下滑、分批抬手、第四指/笔混入及关闭开关
+2. 空图层、羽化选区、锁定/Alpha 锁定/锁定父组、复制后修改源层、重复粘贴、剪切/粘贴撤销重做
+3. 保存与重开、录制回放、切换画作后剪贴板为空，以及浅色/深色/窄屏菜单布局
+
+未进行真机安装或版本发布。
 
 ## 与其他进行中的工作
 
 XuanTree 的 [enhance/rotate 分支](https://github.com/XuanTree/ReveriePaint/tree/enhance/rotate) 已有画布旋转吸附实现（`ff70fb9`），截至此次核对尚未合入上游。本功能不包含旋转吸附，两者都修改手势与设置入口，后合入的一方需要复核手势状态和合并位置
 
-同一 fork 的 [dev/native-tools 分支](https://github.com/XuanTree/ReveriePaint/tree/dev/native-tools) 提供 Linux/WSL 原生构建环境脚本，可作为后续原生验证的参考；本次没有合入该分支
+同一 fork 的 [dev/native-tools 分支](https://github.com/XuanTree/ReveriePaint/tree/dev/native-tools) 提供 Linux/WSL 原生构建环境脚本，本次使用其副本搭建隔离环境；没有合入该分支
 
 ## 手势漏检修复
 

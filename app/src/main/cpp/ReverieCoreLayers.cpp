@@ -446,7 +446,7 @@ int ReverieCore::canvasClipboardCapabilities() const
 bool ReverieCore::copyCanvasToClipboard(bool cut)
 {
     if (!(canvasClipboardCapabilities() & (cut ? 2 : 1))) return false;
-    const auto srcDev = dynamic_cast<KisPaintLayer *>(m_layers[m_currentLayer].node)->paintDevice();
+    KisPaintDeviceSP srcDev = dynamic_cast<KisPaintLayer *>(m_layers[m_currentLayer].node)->paintDevice();
     QRect bounds = srcDev->exactBounds().intersected(QRect(0, 0, m_document->width(), m_document->height()));
     const KisSelectionSP selection = hasSelection() ? m_selection : KisSelectionSP();
     if (selection) bounds = bounds.intersected(selection->selectedExactRect());
