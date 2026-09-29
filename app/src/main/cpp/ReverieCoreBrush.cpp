@@ -737,15 +737,20 @@ bool ReverieCore::loadBrushPreset(int index)
         KisBrushBasedPaintOpSettings *bs = dynamic_cast<KisBrushBasedPaintOpSettings *>(s.data());
         if (bs) {
             const double sp = bs->spacing();
-            if (sp > 0.0 && sp == sp) m_brushSpacing = sp;
+            if (sp > 0.0 && sp == sp && sp < 0.75) {
+                m_brushSpacing = sp;
+            } else if (sp >= 0.75) {
+                m_brushSpacing = 0.1;
+            }
         }
     }
-    // Apply size / opacity / flow to the newly loaded preset.
+    // Apply size / opacity / flow / spacing to the newly loaded preset.
     // If the caller (ViewModel) has user-customized saved parameters,
     // it will immediately follow with setBrush* to override these defaults.
     setBrushSize(m_brushSize);
     setBrushOpacity(m_brushOpacity);
     setBrushFlow(m_brushFlow);
+    setBrushSpacing(m_brushSpacing);
     m_brushTipAsset.clear();
     m_tipOverridden = false; // 刚重新解析预设, 出厂笔尖天然在场
     // Diagnostics: is the preset's brush resolved to a real brush resource
@@ -841,26 +846,20 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
     double spacing = 0.15;
     KisBrushBasedPaintOpSettings *bs = dynamic_cast<KisBrushBasedPaintOpSettings *>(s.data());
     if (bs) {
-        if (bs->autoSpacingActive()) {
-            // 自动间距开启时 spacing 属性被引擎忽略, 生效值是
-            // calcAutoSpacing(尺寸, 系数)。换算成与手动间距同语义的"尺寸占比"
-            // 再报给 UI, 否则面板显示的是一个完全无效的数字。
-            KisBrushSP b = bs->brush();
-            const qreal dim = b ? qMax<qreal>(b->width(), b->height()) : 0.0;
-            const qreal effectiveDim = (dim > 1.0) ? dim : ((size > 1.0) ? size : 20.0);
-            const qreal autoPx = KisPaintOpUtils::calcAutoSpacing(effectiveDim, bs->autoSpacingCoeff());
-            spacing = (effectiveDim > 0.0) ? (autoPx / effectiveDim) : 0.1;
-            spacing = qBound(0.02, spacing, 0.3);
-        } else {
-            spacing = bs->spacing();
+        const double sp = bs->spacing();
+        if (sp > 0.0 && sp == sp && sp < 0.75) {
+            spacing = sp;
+        } else if (sp >= 0.75) {
+            spacing = 0.1;
         }
     }
     if (!(spacing > 0.0) || spacing != spacing || spacing >= 0.75) {
-        spacing = bs ? bs->spacing() : s->getDouble("spacing", 0.15);
+        spacing = s->getDouble("spacing", 0.15);
     }
     if (!(spacing > 0.0) || spacing != spacing || spacing >= 0.75) {
         spacing = 0.15;
     }
+    spacing = qBound(0.01, spacing, 2.5);
 
     // Airbrush
     const bool isAirbrush = s->getBool("PaintOpSettings/isAirbrushing",
