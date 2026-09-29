@@ -111,6 +111,31 @@ internal class WebDavSyncClient(
         }
     }
 
+    override fun getText(remotePath: String): String {
+        val request = auth(Request.Builder().url(urlFor(remotePath)).get()).build()
+        return try {
+            executeFollowingRedirects(request).use { response ->
+                if (response.code == 404) throw SyncException(SyncException.Kind.NOT_FOUND, "GET $remotePath")
+                if (response.code !in 200..299) throw mapError(response.code, "GET $remotePath")
+                response.body?.string().orEmpty()
+            }
+        } catch (e: SyncException) {
+            throw e
+        } catch (e: IOException) {
+            throw SyncException(SyncException.Kind.NETWORK, "GET $remotePath 失败", e)
+        }
+    }
+
+    override fun putText(
+        remotePath: String,
+        text: String,
+    ) {
+        val request = auth(Request.Builder().url(urlFor(remotePath)).put(text.toRequestBody(TEXT))).build()
+        executeFollowingRedirects(request).use { response ->
+            if (response.code !in 200..299) throw mapError(response.code, "PUT $remotePath")
+        }
+    }
+
     override fun delete(remotePath: String) {
         val request = auth(Request.Builder().url(urlFor(remotePath)).delete()).build()
         executeFollowingRedirects(request).use { response ->
@@ -223,6 +248,7 @@ internal class WebDavSyncClient(
         private const val MAX_REDIRECTS = 5
         private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
         private val XML = "application/xml; charset=utf-8".toMediaType()
+        private val TEXT = "text/plain; charset=utf-8".toMediaType()
         private val OCTET_STREAM = "application/octet-stream".toMediaType()
 
         private val PROPFIND_BODY =

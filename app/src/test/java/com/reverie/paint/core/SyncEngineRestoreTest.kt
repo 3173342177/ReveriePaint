@@ -364,6 +364,18 @@ class SyncEngineRestoreTest {
             target.writeBytes(data)
         }
 
+        override fun getText(remotePath: String): String {
+            val data = files[remotePath] ?: throw SyncException(SyncException.Kind.NOT_FOUND, "missing")
+            return String(data)
+        }
+
+        override fun putText(
+            remotePath: String,
+            text: String,
+        ) {
+            files[remotePath] = text.toByteArray()
+        }
+
         override fun delete(remotePath: String) {
             files.remove(remotePath)
         }

@@ -320,6 +320,78 @@ class SyncEngineTest {
         }
     }
 
+    @Test
+    fun `backup writes a tombstone when a local file is deleted`() {
+        val root = Files.createTempDirectory("revp-tomb-write").toFile()
+        try {
+            root.resolve("a.revp").writeText("v1")
+            val client = FakeClient()
+            val src = sources(root)
+            val first =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src), suffix)
+
+            root.resolve("a.revp").delete()
+            val second =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), first.manifest, SyncEngine.listRemoteAll(client, src), suffix)
+            assertEquals(1, second.deleted)
+            assertFalse(client.files.containsKey("a.revp"))
+            assertFalse(second.manifest.containsKey("a.revp"))
+            val tomb = String(client.files[SyncEngine.TOMBSTONES_FILE] ?: ByteArray(0))
+            assertTrue(tomb.startsWith("a.revp\t"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `backup removes a local file tombstoned by another device`() {
+        val root = Files.createTempDirectory("revp-tomb-apply").toFile()
+        try {
+            root.resolve("a.revp").writeText("v1")
+            val client = FakeClient()
+            val src = sources(root)
+            val first =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src), suffix)
+
+            client.delete("a.revp")
+            client.putText(SyncEngine.TOMBSTONES_FILE, "a.revp\t123")
+            val second =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), first.manifest, SyncEngine.listRemoteAll(client, src), suffix)
+
+            assertEquals(1, second.removedLocal)
+            assertEquals(0, second.uploaded)
+            assertFalse(root.resolve("a.revp").exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `backup keeps local edits over a remote tombstone`() {
+        val root = Files.createTempDirectory("revp-tomb-edit").toFile()
+        try {
+            root.resolve("a.revp").writeText("v1")
+            val client = FakeClient()
+            val src = sources(root)
+            val first =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src), suffix)
+
+            root.resolve("a.revp").writeText("v2-edited")
+            client.delete("a.revp")
+            client.putText(SyncEngine.TOMBSTONES_FILE, "a.revp\t123")
+            val second =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), first.manifest, SyncEngine.listRemoteAll(client, src), suffix)
+
+            assertEquals(1, second.uploaded)
+            assertEquals(0, second.removedLocal)
+            assertTrue(root.resolve("a.revp").exists())
+            assertEquals("v2-edited", String(client.files["a.revp"]!!))
+            assertFalse(client.files.containsKey(SyncEngine.TOMBSTONES_FILE))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     private class FakeClient : SyncClient {
         val files = LinkedHashMap<String, ByteArray>()
         val dirs = LinkedHashSet<String>()
@@ -380,6 +452,19 @@ class SyncEngineTest {
             val data = files[remotePath] ?: throw SyncException(SyncException.Kind.NOT_FOUND, "missing")
             target.parentFile?.mkdirs()
             target.writeBytes(data)
+        }
+
+        override fun getText(remotePath: String): String {
+            val data = files[remotePath] ?: throw SyncException(SyncException.Kind.NOT_FOUND, "missing")
+            return String(data)
+        }
+
+        override fun putText(
+            remotePath: String,
+            text: String,
+        ) {
+            files[remotePath] = text.toByteArray()
+            etags[remotePath] = "e${++seq}"
         }
 
         override fun delete(remotePath: String) {

@@ -23,6 +23,13 @@ internal interface SyncClient {
         target: File,
     )
 
+    fun getText(remotePath: String): String
+
+    fun putText(
+        remotePath: String,
+        text: String,
+    )
+
     fun delete(remotePath: String)
 
     fun conflictRename(

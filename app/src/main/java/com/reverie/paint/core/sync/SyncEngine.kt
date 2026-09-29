@@ -25,6 +25,7 @@ internal data class BackupOutcome(
     val remoteNewer: Int,
     val conflicts: Int,
     val deleted: Int,
+    val removedLocal: Int,
     val failed: Int,
     val bytes: Long,
     val errors: List<String>,
@@ -61,6 +62,7 @@ internal data class SyncSource(
 
 internal object SyncEngine {
     private const val EXT = ".revp"
+    const val TOMBSTONES_FILE = "tombstones.txt"
 
     fun isSyncable(relativePath: String): Boolean {
         val normalized = relativePath.replace('\\', '/')
@@ -149,6 +151,44 @@ internal object SyncEngine {
     }
 
     private fun sanitize(token: String): String = token.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+
+    fun encodeTombstones(tombstones: Map<String, Long>): String =
+        tombstones.entries.sortedBy { it.key }.joinToString("\n") { "${it.key}\t${it.value}" }
+
+    fun decodeTombstones(text: String): Map<String, Long> {
+        val out = LinkedHashMap<String, Long>()
+        for (line in text.lineSequence()) {
+            if (line.isBlank()) continue
+            val tab = line.indexOf('\t')
+            if (tab <= 0) continue
+            val at = line.substring(tab + 1).trim().toLongOrNull() ?: continue
+            out[line.substring(0, tab)] = at
+        }
+        return out
+    }
+
+    fun readTombstones(client: SyncClient): Map<String, Long> =
+        try {
+            decodeTombstones(client.getText(TOMBSTONES_FILE))
+        } catch (e: SyncException) {
+            if (e.kind == SyncException.Kind.NOT_FOUND) emptyMap() else throw e
+        } catch (_: Exception) {
+            emptyMap()
+        }
+
+    fun writeTombstones(
+        client: SyncClient,
+        tombstones: Map<String, Long>,
+    ) {
+        if (tombstones.isEmpty()) {
+            try {
+                client.delete(TOMBSTONES_FILE)
+            } catch (_: Exception) {
+            }
+            return
+        }
+        client.putText(TOMBSTONES_FILE, encodeTombstones(tombstones))
+    }
 
     fun requiredRemoteDirs(paths: List<String>): List<String> {
         val dirs = LinkedHashSet<String>()
@@ -339,12 +379,38 @@ internal object SyncEngine {
         conflictSuffix: String,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BackupOutcome {
-        val remoteTokens = remoteEntries.associate { it.path to versionToken(it) }
-        val plan = planBackup(local, manifest, remoteTokens)
-        val deletions = planDeletions(sources, local, manifest, remoteTokens)
-        val newManifest = LinkedHashMap(manifest)
+        val tombstones = readTombstones(client)
+        val newTombstones = LinkedHashMap(tombstones)
+        val effectiveManifest = LinkedHashMap(manifest)
+        val effectiveLocal = ArrayList<LocalProject>()
         val errors = ArrayList<String>()
         val notices = ArrayList<String>()
+        var removedLocal = 0
+
+        for (project in local) {
+            val path = project.relativePath
+            if (!tombstones.containsKey(path)) {
+                effectiveLocal.add(project)
+                continue
+            }
+            val recorded = manifest[path]
+            if (recorded != null && project.sha256 == recorded.hash) {
+                if (project.file.delete()) {
+                    effectiveManifest.remove(path)
+                    removedLocal++
+                } else {
+                    errors.add("$path: failed to remove local copy")
+                }
+            } else {
+                newTombstones.remove(path)
+                effectiveLocal.add(project)
+            }
+        }
+
+        val remoteTokens = remoteEntries.associate { it.path to versionToken(it) }
+        val plan = planBackup(effectiveLocal, effectiveManifest, remoteTokens)
+        val deletions = planDeletions(sources, effectiveLocal, effectiveManifest, remoteTokens)
+        val newManifest = LinkedHashMap(effectiveManifest)
         var uploaded = 0
         var skipped = 0
         var remoteNewer = 0
@@ -352,7 +418,7 @@ internal object SyncEngine {
         var deleted = 0
         var bytes = 0L
 
-        for (dir in requiredRemoteDirs(local.map { it.relativePath })) {
+        for (dir in requiredRemoteDirs(effectiveLocal.map { it.relativePath })) {
             try {
                 client.mkdir(dir)
             } catch (_: Exception) {
@@ -365,7 +431,7 @@ internal object SyncEngine {
 
         for (planned in plan) {
             val project = planned.project
-            val recorded = manifest[project.relativePath]
+            val recorded = effectiveManifest[project.relativePath]
             when (planned.decision) {
                 BackupDecision.SKIP -> skipped++
 
@@ -429,17 +495,19 @@ internal object SyncEngine {
             }
         }
 
+        val deletedAt = System.currentTimeMillis()
         for (path in deletions) {
             try {
                 client.delete(path)
                 newManifest.remove(path)
+                newTombstones[path] = deletedAt
                 deleted++
             } catch (e: Exception) {
                 errors.add("$path: ${e.message ?: e.javaClass.simpleName}")
             }
         }
 
-        val keepDirs = requiredRemoteDirs(local.map { it.relativePath }).toSet()
+        val keepDirs = requiredRemoteDirs(effectiveLocal.map { it.relativePath }).toSet()
         val staleDirs = requiredRemoteDirs(deletions).filter { it !in keepDirs }.sortedByDescending { it.length }
         for (dir in staleDirs) {
             try {
@@ -448,12 +516,25 @@ internal object SyncEngine {
             }
         }
 
+        if (newTombstones != tombstones) {
+            try {
+                writeTombstones(client, newTombstones)
+            } catch (e: Exception) {
+                errors.add("$TOMBSTONES_FILE: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+
+        if (removedLocal > 0) {
+            notices.add("$removedLocal file(s) deleted on another device were removed locally")
+        }
+
         return BackupOutcome(
             uploaded = uploaded,
             skipped = skipped,
             remoteNewer = remoteNewer,
             conflicts = conflicts,
             deleted = deleted,
+            removedLocal = removedLocal,
             failed = errors.size,
             bytes = bytes,
             errors = errors,
