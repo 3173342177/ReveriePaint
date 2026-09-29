@@ -77,7 +77,8 @@ import java.nio.ByteOrder
 import kotlin.math.*
 
 enum class StudioTab(val titleRes: Int, val subtitle: String, val iconRes: Int) {
-    TIP(R.string.brush_studio_tab_tip, "Tip & Mask", R.drawable.ic_pencil),
+    TIP(R.string.brush_studio_tab_tip, "Tip & Shape", R.drawable.ic_pencil),
+    MASKING(R.string.brush_studio_tab_masking, "Masking Brush", R.drawable.ic_layers),
     STROKE(R.string.brush_studio_tab_stroke, "Dynamics", R.drawable.ic_line),
     COLOR(R.string.brush_studio_tab_color, "Color & Smudge", R.drawable.ic_palette),
     GEOMETRY(R.string.brush_studio_tab_geometry, "Geometry", R.drawable.ic_rotate_cw),
@@ -187,6 +188,7 @@ fun BrushStudioPage(
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showTipPickerModal by remember { mutableStateOf(false) }
+    var showMaskingTipPickerModal by remember { mutableStateOf(false) }
 
     // SAF Import Launcher for brush preset (.kpp, .bundle, .gbr, .png)
     val importBrushLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -517,7 +519,29 @@ fun BrushStudioPage(
                             }
                         }
 
-                        // Bottom Actions: Clear button & Draw Hint
+                        // Bottom Actions: Set Thumbnail & Clear button & Draw Hint
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(6.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Morandi.panelHi.copy(alpha = 0.9f))
+                                .clickable {
+                                    val allStrokes = if (currentScratchStroke.isNotEmpty()) {
+                                        scratchStrokes + listOf(currentScratchStroke)
+                                    } else {
+                                        scratchStrokes.toList()
+                                    }
+                                    captureScratchpadAsThumbnail(context, vm, allStrokes)
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(painterResource(R.drawable.ic_pencil), contentDescription = null, tint = textSub, modifier = Modifier.size(12.dp))
+                            Text(stringResource(R.string.brush_studio_scratchpad_set_icon), color = textSub, fontSize = 11.sp)
+                        }
+
                         if (scratchStrokes.isNotEmpty() || currentScratchStroke.isNotEmpty()) {
                             Row(
                                 modifier = Modifier
@@ -583,6 +607,16 @@ fun BrushStudioPage(
                                         textMain = textMain,
                                         textSub = textSub,
                                     )
+                                    StudioTab.MASKING -> MaskingTabContent(
+                                        vm = vm,
+                                        preset = preset,
+                                        allTips = allTipItems,
+                                        onOpenMaskingTipPicker = { showMaskingTipPickerModal = true },
+                                        cardBg = cardBg,
+                                        borderCol = borderCol,
+                                        textMain = textMain,
+                                        textSub = textSub,
+                                    )
                                     StudioTab.STROKE -> StrokeTabContent(vm = vm, cardBg = cardBg, borderCol = borderCol, textMain = textMain, textSub = textSub)
                                     StudioTab.COLOR -> ColorTabContent(vm = vm, cardBg = cardBg, borderCol = borderCol, textMain = textMain, textSub = textSub)
                                     StudioTab.GEOMETRY -> GeometryTabContent(
@@ -639,6 +673,25 @@ fun BrushStudioPage(
                     importTipLauncher.launch(arrayOf("*/*"))
                 },
                 onDismiss = { showTipPickerModal = false },
+                cardBg = cardBg,
+                borderCol = borderCol,
+                textMain = textMain,
+                textSub = textSub,
+            )
+        }
+
+        if (showMaskingTipPickerModal) {
+            BrushTipPickerModal(
+                allTips = allTipItems,
+                currentAsset = vm.brushMaskingTipAsset,
+                onSelectTip = { asset ->
+                    vm.updateBrushMaskingTipAsset(asset)
+                    showMaskingTipPickerModal = false
+                },
+                onImportTip = {
+                    importTipLauncher.launch(arrayOf("*/*"))
+                },
+                onDismiss = { showMaskingTipPickerModal = false },
                 cardBg = cardBg,
                 borderCol = borderCol,
                 textMain = textMain,
@@ -996,14 +1049,320 @@ private fun BrushTipPickerModal(
     }
 }
 
+private fun captureScratchpadAsThumbnail(
+    context: Context,
+    vm: PaintViewModel,
+    strokes: List<List<ScratchPoint>>,
+) {
+    val size = 200
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    canvas.drawColor(android.graphics.Color.rgb(240, 239, 238))
+
+    val brushColorInt = runCatching { android.graphics.Color.parseColor(vm.brushColor) }.getOrDefault(android.graphics.Color.DKGRAY)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = brushColorInt
+        style = android.graphics.Paint.Style.STROKE
+        strokeCap = android.graphics.Paint.Cap.ROUND
+        strokeJoin = android.graphics.Paint.Join.ROUND
+    }
+
+    if (strokes.isNotEmpty()) {
+        var minX = Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxX = Float.MIN_VALUE
+        var maxY = Float.MIN_VALUE
+        strokes.forEach { stroke ->
+            stroke.forEach { p ->
+                if (p.x < minX) minX = p.x
+                if (p.y < minY) minY = p.y
+                if (p.x > maxX) maxX = p.x
+                if (p.y > maxY) maxY = p.y
+            }
+        }
+        val strokeW = (maxX - minX).coerceAtLeast(10f)
+        val strokeH = (maxY - minY).coerceAtLeast(10f)
+        val padding = 28f
+        val targetBox = size - padding * 2f
+        val scale = minOf(targetBox / strokeW, targetBox / strokeH).coerceIn(0.1f, 5.0f)
+        val offsetX = padding + (targetBox - strokeW * scale) / 2f - minX * scale
+        val offsetY = padding + (targetBox - strokeH * scale) / 2f - minY * scale
+
+        val baseWidth = (vm.brushSize.toFloat() * scale).coerceIn(4f, 48f)
+
+        strokes.forEach { stroke ->
+            if (stroke.size >= 2) {
+                val path = android.graphics.Path()
+                for (i in stroke.indices) {
+                    val p = stroke[i]
+                    val sx = p.x * scale + offsetX
+                    val sy = p.y * scale + offsetY
+                    if (i == 0) path.moveTo(sx, sy) else path.lineTo(sx, sy)
+                }
+                paint.strokeWidth = baseWidth
+                paint.alpha = (vm.brushOpacity * 255).toInt().coerceIn(10, 255)
+                canvas.drawPath(path, paint)
+            } else if (stroke.size == 1) {
+                val p = stroke[0]
+                paint.style = android.graphics.Paint.Style.FILL
+                canvas.drawCircle(p.x * scale + offsetX, p.y * scale + offsetY, baseWidth / 2f, paint)
+                paint.style = android.graphics.Paint.Style.STROKE
+            }
+        }
+    } else {
+        val path = android.graphics.Path()
+        path.moveTo(35f, 165f)
+        path.cubicTo(65f, 120f, 135f, 80f, 165f, 35f)
+        paint.strokeWidth = (vm.brushSize.toFloat()).coerceIn(12f, 38f)
+        paint.alpha = (vm.brushOpacity * 255).toInt().coerceIn(10, 255)
+        canvas.drawPath(path, paint)
+    }
+
+    vm.capturePresetThumbnail(bitmap)
+}
+
+@Composable
+private fun StudioSensorChips(
+    title: String,
+    selectedSensor: String,
+    sensors: List<Pair<String, Int>>,
+    onSelectSensor: (String) -> Unit,
+    cardBg: Color,
+    textMain: Color,
+    textSub: Color,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(cardBg)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(title, color = textSub, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            sensors.forEach { (sensorId, nameRes) ->
+                val sel = (selectedSensor == sensorId) || (sensorId == "pressure" && selectedSensor.isBlank())
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (sel) Morandi.accent.copy(alpha = 0.22f) else Morandi.panel)
+                        .clickable { onSelectSensor(sensorId) }
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        stringResource(nameRes),
+                        color = if (sel) Morandi.accent else textMain,
+                        fontSize = 11.sp,
+                        fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StudioCurvePreview(
+    curveType: Int,
+    cardBg: Color,
+    borderCol: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(96.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(cardBg)
+            .padding(10.dp)
+    ) {
+        val w = size.width
+        val h = size.height
+        val gridLines = 4
+        for (i in 1 until gridLines) {
+            val x = w * (i.toFloat() / gridLines)
+            val y = h * (i.toFloat() / gridLines)
+            drawLine(
+                color = borderCol.copy(alpha = 0.35f),
+                start = Offset(x, 0f),
+                end = Offset(x, h),
+                strokeWidth = 1f,
+            )
+            drawLine(
+                color = borderCol.copy(alpha = 0.35f),
+                start = Offset(0f, y),
+                end = Offset(w, y),
+                strokeWidth = 1f,
+            )
+        }
+
+        val path = androidx.compose.ui.graphics.Path()
+        val steps = 50
+        for (step in 0..steps) {
+            val t = step.toFloat() / steps
+            val v = when (curveType) {
+                1 -> t.toDouble().pow(0.5).toFloat()
+                2 -> t.toDouble().pow(2.0).toFloat()
+                3 -> t * t * (3f - 2f * t)
+                else -> t
+            }
+            val px = t * w
+            val py = h - v * h
+            if (step == 0) path.moveTo(px, py) else path.lineTo(px, py)
+        }
+        drawPath(
+            path = path,
+            color = Morandi.accent,
+            style = Stroke(width = 2.5f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
+    }
+}
+
+// ==========================================
+// Tab: 蒙版画笔 (Masking Brush / Dual Brush)
+// ==========================================
+@Composable
+private fun MaskingTabContent(
+    vm: PaintViewModel,
+    preset: BrushPresetInfo?,
+    allTips: List<BrushTipItem>,
+    onOpenMaskingTipPicker: () -> Unit,
+    cardBg: Color,
+    borderCol: Color,
+    textMain: Color,
+    textSub: Color,
+) {
+    StudioSectionHeader(stringResource(R.string.brush_studio_masking_title), textSub)
+    StudioSwitchItem(stringResource(R.string.brush_studio_masking_enable), vm.brushMaskingEnabled, textMain = textMain) { vm.updateBrushMaskingEnabled(it) }
+
+    if (vm.brushMaskingEnabled) {
+        StudioSectionHeader(stringResource(R.string.brush_studio_masking_tip), textSub)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(cardBg)
+                .clickable { onOpenMaskingTipPicker() }
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            val maskTip = allTips.firstOrNull { it.filename == vm.brushMaskingTipAsset }
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Morandi.panel),
+                contentAlignment = Alignment.Center,
+            ) {
+                CheckerboardBackground(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)))
+                if (maskTip?.bitmap != null) {
+                    Image(
+                        bitmap = maskTip.bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().padding(2.dp),
+                    )
+                } else {
+                    Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White))
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = maskTip?.name ?: stringResource(R.string.brush_studio_masking_tip_default),
+                    color = textMain,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+                Text(
+                    text = if (vm.brushMaskingTipAsset.isNotBlank()) vm.brushMaskingTipAsset else stringResource(R.string.brush_studio_tip_preset_default),
+                    color = textSub,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                )
+            }
+            ReTextButton(
+                stringResource(R.string.brush_studio_masking_tip_choose),
+                onClick = onOpenMaskingTipPicker,
+                fontSize = 11.sp,
+                textColor = textMain,
+            )
+        }
+
+        StudioSectionHeader(stringResource(R.string.brush_studio_masking_mode), textSub)
+        val maskingModes = listOf(
+            "multiply" to R.string.brush_studio_blend_multiply,
+            "screen" to R.string.brush_studio_blend_screen,
+            "overlay" to R.string.brush_studio_blend_overlay,
+            "darken" to R.string.brush_studio_blend_darken,
+            "lighten" to R.string.brush_studio_blend_lighten,
+            "dodge" to R.string.brush_studio_blend_dodge,
+            "burn" to R.string.brush_studio_blend_burn,
+            "addition" to R.string.brush_studio_blend_hard_light,
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(cardBg)
+                .padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            maskingModes.chunked(4).forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    row.forEach { (opId, nameRes) ->
+                        val sel = vm.brushMaskingCompositeOp == opId
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(30.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (sel) Morandi.accent.copy(alpha = 0.18f) else Morandi.panel)
+                                .clickable { vm.updateBrushMaskingCompositeOp(opId) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                stringResource(nameRes),
+                                color = if (sel) textMain else textSub,
+                                fontSize = 11.sp,
+                                fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        StudioSliderItem(stringResource(R.string.brush_studio_masking_ratio), vm.brushMaskingSizeRatio, 0.1, 3.0, unit = "x", textMain = textMain, textSub = textSub) { vm.updateBrushMaskingSizeRatio(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_masking_spacing), vm.brushMaskingSpacing, 0.02, 1.5, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushMaskingSpacing(it) }
+
+        if (vm.brushMaskingTipAsset.isBlank()) {
+            StudioSliderItem(stringResource(R.string.brush_studio_masking_fade), vm.brushMaskingFade, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushMaskingFade(it) }
+            StudioSliderItem(stringResource(R.string.brush_studio_masking_softness), vm.brushMaskingSoftness, 0.1, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushMaskingSoftness(it) }
+        }
+    }
+}
+
 // ==========================================
 // Tab 1: 笔画动态 (Dynamics)
 // ==========================================
 @Composable
 private fun StrokeTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color, textMain: Color, textSub: Color) {
+    val scatterSensors = listOf(
+        "fuzzy" to R.string.brush_studio_sensor_fuzzy,
+        "pressure" to R.string.brush_studio_sensor_pressure,
+        "speed" to R.string.brush_studio_sensor_speed,
+    )
+
     StudioSectionHeader(stringResource(R.string.brush_studio_dynamics_spacing_scatter), textSub)
     StudioSliderItem(stringResource(R.string.brush_studio_dynamics_spacing), vm.brushSpacing, 0.01, 2.5, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSpacing(it) }
     StudioSliderItem(stringResource(R.string.brush_studio_dynamics_scatter), vm.brushScatter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushScatter(it) }
+    StudioSensorChips(stringResource(R.string.brush_studio_scatter_sensor), vm.brushScatterSensor, scatterSensors, { vm.updateBrushScatterSensor(it) }, cardBg, textMain, textSub)
     StudioSliderItem(stringResource(R.string.brush_studio_dynamics_fade), vm.brushFade, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushFade(it) }
 
     StudioSectionHeader(stringResource(R.string.brush_studio_dynamics_airbrush_mode), textSub)
@@ -1045,6 +1404,13 @@ private fun GeometryTabContent(
     textMain: Color,
     textSub: Color,
 ) {
+    val rotationSensors = listOf(
+        "drawingangle" to R.string.brush_studio_sensor_drawingangle,
+        "fuzzy" to R.string.brush_studio_sensor_fuzzy,
+        "pressure" to R.string.brush_studio_sensor_pressure,
+        "speed" to R.string.brush_studio_sensor_speed,
+    )
+
     StudioSectionHeader(stringResource(R.string.brush_studio_geo_title), textSub)
     Box(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -1065,6 +1431,7 @@ private fun GeometryTabContent(
     StudioSliderItem(stringResource(R.string.brush_studio_geo_offset_angle), vm.brushRotation, 0.0, 360.0, unit = "°", textMain = textMain, textSub = textSub) { vm.updateBrushRotation(it) }
     StudioSliderItem(stringResource(R.string.brush_studio_geo_angle_jitter), vm.brushJitterAngle, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushJitterAngle(it) }
     StudioSwitchItem(stringResource(R.string.brush_studio_geo_auto_rotate), vm.brushFollowDirection, textMain = textMain) { vm.updateBrushFollowDirection(it) }
+    StudioSensorChips(stringResource(R.string.brush_studio_rotation_sensor), vm.brushRotationSensor, rotationSensors, { vm.updateBrushRotationSensor(it) }, cardBg, textMain, textSub)
 }
 
 // ==========================================
@@ -1107,16 +1474,32 @@ private fun TextureTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Colo
 // ==========================================
 @Composable
 private fun PressureTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color, textMain: Color, textSub: Color) {
+    val standardSensors = listOf(
+        "pressure" to R.string.brush_studio_sensor_pressure,
+        "speed" to R.string.brush_studio_sensor_speed,
+        "drawingangle" to R.string.brush_studio_sensor_drawingangle,
+        "fuzzy" to R.string.brush_studio_sensor_fuzzy,
+        "fade" to R.string.brush_studio_sensor_fade,
+    )
+
     StudioSwitchItem(stringResource(R.string.brush_studio_press_enable), vm.brushPressureEnabled, textMain = textMain) { vm.updateBrushPressureEnabled(it) }
 
     if (vm.brushPressureEnabled) {
         StudioSectionHeader(stringResource(R.string.brush_studio_press_dynamics), textSub)
+        StudioSensorChips(stringResource(R.string.brush_studio_size_sensor), vm.brushSizeSensor, standardSensors, { vm.updateBrushSizeSensor(it) }, cardBg, textMain, textSub)
         StudioSliderItem(stringResource(R.string.brush_studio_press_size), vm.brushPressureSize, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureSize(it) }
+
+        StudioSensorChips(stringResource(R.string.brush_studio_opacity_sensor), vm.brushOpacitySensor, standardSensors, { vm.updateBrushOpacitySensor(it) }, cardBg, textMain, textSub)
         StudioSliderItem(stringResource(R.string.brush_studio_press_opacity), vm.brushPressureOpacity, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureOpacity(it) }
+
+        StudioSensorChips(stringResource(R.string.brush_studio_flow_sensor), vm.brushFlowSensor, standardSensors, { vm.updateBrushFlowSensor(it) }, cardBg, textMain, textSub)
         StudioSliderItem(stringResource(R.string.brush_studio_press_flow), vm.brushPressureFlow, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureFlow(it) }
+
         StudioSliderItem(stringResource(R.string.brush_studio_press_speed), vm.brushSpeedSize, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSpeedSize(it) }
 
         StudioSectionHeader(stringResource(R.string.brush_studio_press_curve), textSub)
+        StudioCurvePreview(vm.brushPressureCurve, cardBg, borderCol)
+
         val curves = listOf(
             R.string.brush_studio_press_linear,
             R.string.brush_studio_press_soft,

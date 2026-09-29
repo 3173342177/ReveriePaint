@@ -570,6 +570,23 @@ class PaintViewModel : ViewModel() {
     var brushJitterAngle by mutableDoubleStateOf(0.0)
     var brushJitterSize by mutableDoubleStateOf(0.0)
 
+    // Masking Brush (双重画笔/蒙版画笔)
+    var brushMaskingEnabled by mutableStateOf(false)
+    var brushMaskingCompositeOp by mutableStateOf("multiply")
+    var brushMaskingSizeRatio by mutableDoubleStateOf(1.0)
+    var brushMaskingSpacing by mutableDoubleStateOf(0.1)
+    var brushMaskingTipAsset by mutableStateOf("")
+    var brushMaskingTipShape by mutableIntStateOf(0) // 0: 圆形, 1: 矩形
+    var brushMaskingFade by mutableDoubleStateOf(0.0)
+    var brushMaskingSoftness by mutableDoubleStateOf(1.0)
+
+    // Sensor dynamics
+    var brushRotationSensor by mutableStateOf("drawingangle")
+    var brushScatterSensor by mutableStateOf("fuzzy")
+    var brushSizeSensor by mutableStateOf("pressure")
+    var brushOpacitySensor by mutableStateOf("pressure")
+    var brushFlowSensor by mutableStateOf("pressure")
+
     // Metadata properties
     var brushAuthor by mutableStateOf("ReveriePaint")
     var brushIsAuthorLocked by mutableStateOf(false)
@@ -3819,6 +3836,19 @@ data class BrushParams(
     val isCustomized: Boolean = false,
     val dynamicsCustomized: Boolean = false,
     val smudgeCustomized: Boolean = false,
+    val maskingEnabled: Boolean = false,
+    val maskingCompositeOp: String = "multiply",
+    val maskingSizeRatio: Double = 1.0,
+    val maskingSpacing: Double = 0.1,
+    val maskingTipAsset: String = "",
+    val maskingTipShape: Int = 0,
+    val maskingFade: Double = 0.0,
+    val maskingSoftness: Double = 1.0,
+    val rotationSensor: String = "drawingangle",
+    val scatterSensor: String = "fuzzy",
+    val sizeSensor: String = "pressure",
+    val opacitySensor: String = "pressure",
+    val flowSensor: String = "pressure",
 )
 
 /** A bundled Krita brush preset (.kpp) with its PNG thumbnail. */

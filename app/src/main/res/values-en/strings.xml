@@ -1037,6 +1037,7 @@
 
     <!-- Brush Studio Tabs -->
     <string name="brush_studio_tab_tip">Tip Shape</string>
+    <string name="brush_studio_tab_masking">Masking Brush</string>
     <string name="brush_studio_tab_stroke">Stroke</string>
     <string name="brush_studio_tab_color">Color</string>
     <string name="brush_studio_tab_geometry">Geometry</string>
@@ -1201,6 +1202,32 @@
     <string name="brush_studio_prop_smudge_mode">Smudge Mode</string>
     <string name="brush_studio_prop_builtin_tag">(Krita Built-in · Read Only)</string>
     <string name="brush_studio_prop_shared_tag">(Shared · Read Only)</string>
+
+    <!-- Brush Studio Masking, Sensors & Thumbnail -->
+    <string name="brush_studio_masking_title">Masking Brush (Dual Brush)</string>
+    <string name="brush_studio_masking_enable">Enable Masking Brush</string>
+    <string name="brush_studio_masking_tip">Mask Tip Texture</string>
+    <string name="brush_studio_masking_tip_default">Default Round Tip</string>
+    <string name="brush_studio_masking_tip_choose">Choose Mask Tip</string>
+    <string name="brush_studio_masking_mode">Masking Composite Mode</string>
+    <string name="brush_studio_masking_ratio">Size Ratio</string>
+    <string name="brush_studio_masking_spacing">Spacing</string>
+    <string name="brush_studio_masking_fade">Solid Core</string>
+    <string name="brush_studio_masking_softness">Softness</string>
+    <string name="brush_studio_scratchpad_set_icon">Set as Preset Icon</string>
+    <string name="brush_studio_toast_thumbnail_updated">Preset icon updated</string>
+    <string name="brush_studio_sensor_title">Driver Sensor</string>
+    <string name="brush_studio_sensor_pressure">Pressure</string>
+    <string name="brush_studio_sensor_speed">Speed</string>
+    <string name="brush_studio_sensor_drawingangle">Drawing Angle</string>
+    <string name="brush_studio_sensor_fuzzy">Fuzzy / Random</string>
+    <string name="brush_studio_sensor_fade">Fade</string>
+    <string name="brush_studio_rotation_sensor">Rotation Sensor</string>
+    <string name="brush_studio_scatter_sensor">Scatter Sensor</string>
+    <string name="brush_studio_size_sensor">Size Driver Sensor</string>
+    <string name="brush_studio_opacity_sensor">Opacity Driver Sensor</string>
+    <string name="brush_studio_flow_sensor">Flow Driver Sensor</string>
+    <string name="brush_studio_press_curve_preview">Curve Response Preview</string>
 
     <!-- Color Components & Sliders -->
     <string name="color_num_dialog_range">Range: %1$s ~ %2$s%3$s</string>

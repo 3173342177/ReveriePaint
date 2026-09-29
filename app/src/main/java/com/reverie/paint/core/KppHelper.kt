@@ -106,6 +106,24 @@ object KppHelper {
     }
 
     /**
+     * Updates the PNG image raster of a .kpp file while preserving its preset XML metadata.
+     * [newPngBytes] must be a valid PNG (e.g. from Bitmap.compress(PNG)).
+     */
+    fun updateKppThumbnail(kppFile: File, newPngBytes: ByteArray): Boolean {
+        return try {
+            if (!kppFile.exists()) return false
+            val currentBytes = kppFile.readBytes()
+            val xml = readPresetXml(currentBytes) ?: return false
+            val updated = replacePresetXml(newPngBytes, xml)
+            kppFile.writeBytes(updated)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("KppHelper", "Failed to update thumbnail for: ${kppFile.name}", e)
+            false
+        }
+    }
+
+    /**
      * Updates an existing .kpp file (or bytes) by modifying parameters in its preset XML.
      * Returns a new byte array with the updated zTXt chunk.
      */
@@ -303,6 +321,16 @@ object KppHelper {
         val satJitter: Double? = null,
         val valJitter: Double? = null,
         val secondaryMix: Double? = null,
+        val maskingEnabled: Boolean? = null,
+        val maskingCompositeOp: String? = null,
+        val maskingSizeRatio: Double? = null,
+        val maskingSpacing: Double? = null,
+        val maskingTipAsset: String? = null,
+        val rotationSensor: String? = null,
+        val scatterSensor: String? = null,
+        val sizeSensor: String? = null,
+        val opacitySensor: String? = null,
+        val flowSensor: String? = null,
     )
 
     /**
@@ -368,6 +396,21 @@ object KppHelper {
         val valJitter = if (hasPressureV) Regex("""<param[^>]*name="vValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull() else 0.0
         val secondaryMix = if (hasPressureMix) Regex("""<param[^>]*name="MixValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull() else 0.0
 
+        // Masking Brush attributes
+        val maskingEnabled = Regex("""<param[^>]*name="MaskingBrush/Enabled"[^>]*>(?:<!\[CDATA\[)?(true|false)""").find(xml)?.groupValues?.getOrNull(1)?.toBoolean()
+        val maskingCompositeOp = Regex("""<param[^>]*name="MaskingBrush/MaskingCompositeOp"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.trim()
+        val maskingSizeRatio = Regex("""<param[^>]*name="MaskingBrush/MasterSizeCoeff"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val maskingSpacing = Regex("""<param[^>]*name="MaskingBrush/Preset/Spacing"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val maskingBrushDef = Regex("""<param[^>]*name="MaskingBrush/Preset/brush_definition"[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?\s*</param>""", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.getOrNull(1)
+        val maskingTipAsset = maskingBrushDef?.let { Regex("""filename="([^"]+)"""").find(it)?.groupValues?.getOrNull(1) }
+
+        // Sensor attributes
+        val rotationSensor = Regex("""<param[^>]*name="RotationSensor"[^>]*>.*?<params\b[^>]*\bid="([^"]+)"""", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.getOrNull(1)
+        val scatterSensor = Regex("""<param[^>]*name="ScatterSensor"[^>]*>.*?<params\b[^>]*\bid="([^"]+)"""", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.getOrNull(1)
+        val sizeSensor = Regex("""<param[^>]*name="SizeSensor"[^>]*>.*?<params\b[^>]*\bid="([^"]+)"""", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.getOrNull(1)
+        val opacitySensor = Regex("""<param[^>]*name="OpacitySensor"[^>]*>.*?<params\b[^>]*\bid="([^"]+)"""", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.getOrNull(1)
+        val flowSensor = Regex("""<param[^>]*name="FlowSensor"[^>]*>.*?<params\b[^>]*\bid="([^"]+)"""", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.getOrNull(1)
+
         return KppParsedAttributes(
             fade = fade,
             softness = softness,
@@ -383,6 +426,16 @@ object KppHelper {
             satJitter = satJitter,
             valJitter = valJitter,
             secondaryMix = secondaryMix,
+            maskingEnabled = maskingEnabled,
+            maskingCompositeOp = maskingCompositeOp,
+            maskingSizeRatio = maskingSizeRatio,
+            maskingSpacing = maskingSpacing,
+            maskingTipAsset = maskingTipAsset,
+            rotationSensor = rotationSensor,
+            scatterSensor = scatterSensor,
+            sizeSensor = sizeSensor,
+            opacitySensor = opacitySensor,
+            flowSensor = flowSensor,
         )
     }
 
@@ -462,16 +515,21 @@ object KppHelper {
                 else -> "0,0;1,1;"
             }
             val sensorXml = """<!DOCTYPE params><params id="pressure"><curve>$curveStr</curve></params>"""
+            val sizeSensorId = params.sizeSensor.ifBlank { "pressure" }
+            val opacitySensorId = params.opacitySensor.ifBlank { "pressure" }
+            val flowSensorId = params.flowSensor.ifBlank { "pressure" }
+
             val useSize = params.pressureEnabled && (params.pressureSize > 0.001)
             xml = updateParam(xml, "PressureSize", useSize.toString())
             xml = updateParam(xml, "SizeUseCurve", useSize.toString())
             xml = updateParam(xml, "SizeValue", params.pressureSize.toString())
             if (useSize) {
-                if (params.speedSize > 0.001) {
+                if (params.speedSize > 0.001 && sizeSensorId == "pressure") {
                     val multiSensorXml = """<!DOCTYPE params><params id="sensorslist"><ChildSensor id="pressure"><curve>$curveStr</curve></ChildSensor><ChildSensor id="speed"/></params>"""
                     xml = updateParam(xml, "SizeSensor", multiSensorXml)
                 } else {
-                    xml = updateParam(xml, "SizeSensor", sensorXml)
+                    val sizeSensorXml = """<!DOCTYPE params><params id="$sizeSensorId"><curve>$curveStr</curve></params>"""
+                    xml = updateParam(xml, "SizeSensor", sizeSensorXml)
                 }
             }
 
@@ -479,13 +537,19 @@ object KppHelper {
             xml = updateParam(xml, "PressureOpacity", useOpacity.toString())
             xml = updateParam(xml, "OpacityUseCurve", useOpacity.toString())
             xml = updateParam(xml, "OpacityValue", params.pressureOpacity.toString())
-            if (useOpacity) xml = updateParam(xml, "OpacitySensor", sensorXml)
+            if (useOpacity) {
+                val opacitySensorXml = """<!DOCTYPE params><params id="$opacitySensorId"><curve>$curveStr</curve></params>"""
+                xml = updateParam(xml, "OpacitySensor", opacitySensorXml)
+            }
 
             val useFlow = params.pressureEnabled && (params.pressureFlow > 0.001)
             xml = updateParam(xml, "PressureFlow", useFlow.toString())
             xml = updateParam(xml, "FlowUseCurve", useFlow.toString())
             xml = updateParam(xml, "FlowValue", params.pressureFlow.toString())
-            if (useFlow) xml = updateParam(xml, "FlowSensor", sensorXml)
+            if (useFlow) {
+                val flowSensorXml = """<!DOCTYPE params><params id="$flowSensorId"><curve>$curveStr</curve></params>"""
+                xml = updateParam(xml, "FlowSensor", flowSensorXml)
+            }
         }
 
         // 12. Update Texture
@@ -547,13 +611,19 @@ object KppHelper {
             xml = updateParam(xml, "MixSensor", """<!DOCTYPE params><params id="$mixSensorId"><curve>0,0;1,1;</curve></params>""")
         }
 
-        // 14. Update Mirror & Rotation dynamics
+        // 14. Update Mirror & Rotation dynamics & Scatter sensor
         xml = updateParam(xml, "HorizontalMirrorEnabled", params.randomFlipX.toString())
         xml = updateParam(xml, "VerticalMirrorEnabled", params.randomFlipY.toString())
         xml = updateParam(xml, "PressureMirror", (params.randomFlipX || params.randomFlipY).toString())
-        xml = updateParam(xml, "PressureRotation", params.followDirection.toString())
-        if (params.followDirection) {
-            xml = updateParam(xml, "RotationSensor", """<!DOCTYPE params><params id="drawingangle"><curve>0,0;1,1;</curve></params>""")
+        val useRotation = params.followDirection || params.rotationSensor.isNotBlank()
+        xml = updateParam(xml, "PressureRotation", useRotation.toString())
+        if (useRotation) {
+            val rotSensorId = if (params.followDirection) "drawingangle" else params.rotationSensor.ifBlank { "drawingangle" }
+            xml = updateParam(xml, "RotationSensor", """<!DOCTYPE params><params id="$rotSensorId"><curve>0,0;1,1;</curve></params>""")
+        }
+        if (hasScatter) {
+            val scatSensorId = params.scatterSensor.ifBlank { "fuzzy" }
+            xml = updateParam(xml, "ScatterSensor", """<!DOCTYPE params><params id="$scatSensorId"><curve>0,0;1,1;</curve></params>""")
         }
 
         // 15. Fade 没有独立参数键: Krita 的 Fade 就是 brush_definition 里 MaskGenerator 的
@@ -609,6 +679,31 @@ object KppHelper {
             // No brush_definition at all, insert auto_brush
             val autoDef = """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" BrushVersion="2" spacing="${params.spacing}" angle="${params.angle}"> <MaskGenerator diameter="${params.size}" hfade="$fadeVal" vfade="$fadeVal" id="default" spikes="$spikesVal" type="$tipTypeAttr" ratio="${params.ratio}" antialiasEdges="$aaVal"/> </Brush> ]]></param>"""
             xml = xml.replace("</Preset>", " $autoDef\n</Preset>")
+        }
+
+        // 17. Masking Brush (双重画笔/蒙版画笔)
+        xml = updateParam(xml, "MaskingBrush/Enabled", params.maskingEnabled.toString())
+        if (params.maskingEnabled) {
+            xml = updateParam(xml, "MaskingBrush/MaskingCompositeOp", params.maskingCompositeOp)
+            xml = updateParam(xml, "MaskingBrush/UseMasterSize", "true")
+            xml = updateParam(xml, "MaskingBrush/MasterSizeCoeff", params.maskingSizeRatio.toString())
+            xml = updateParam(xml, "MaskingBrush/Preset/Spacing", params.maskingSpacing.toString())
+            xml = updateParam(xml, "MaskingBrush/Preset/paintopSize", (params.size * params.maskingSizeRatio).toString())
+
+            val maskTipDef = if (params.maskingTipAsset.isNotBlank()) {
+                val ext = params.maskingTipAsset.substringAfterLast(".").lowercase()
+                val tipType = when (ext) {
+                    "gbr" -> "gbr_brush"
+                    "gih" -> "image_pipe_brush"
+                    else -> "png_brush"
+                }
+                """<Brush scale="1" type="$tipType" useAutoSpacing="0" BrushVersion="2" filename="${params.maskingTipAsset}" spacing="${params.maskingSpacing}" angle="0.0" brushApplication="0"/>"""
+            } else {
+                val maskTipShape = if (params.maskingTipShape == 1) "rect" else "circle"
+                val maskFade = params.maskingFade.coerceIn(0.0, 1.0)
+                """<Brush scale="1" type="auto_brush" BrushVersion="2" spacing="${params.maskingSpacing}" angle="0.0"> <MaskGenerator diameter="${params.size * params.maskingSizeRatio}" hfade="$maskFade" vfade="$maskFade" id="default" spikes="2" type="$maskTipShape" ratio="1.0" antialiasEdges="1"/> </Brush>"""
+            }
+            xml = updateParam(xml, "MaskingBrush/Preset/brush_definition", maskTipDef)
         }
 
         return xml

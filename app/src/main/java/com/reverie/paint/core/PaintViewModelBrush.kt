@@ -465,6 +465,110 @@ import kotlinx.coroutines.withContext
         saveBrushParam()
     }
 
+    internal fun PaintViewModel.updateBrushMaskingEnabled(v: Boolean) {
+        brushMaskingEnabled = v
+        saveBrushParam(reloadEngine = true, immediateReload = true)
+    }
+
+    internal fun PaintViewModel.updateBrushMaskingCompositeOp(v: String) {
+        brushMaskingCompositeOp = v
+        saveBrushParam(reloadEngine = true, immediateReload = true)
+    }
+
+    internal fun PaintViewModel.updateBrushMaskingSizeRatio(v: Double) {
+        brushMaskingSizeRatio = v
+        saveBrushParam(reloadEngine = true)
+    }
+
+    internal fun PaintViewModel.updateBrushMaskingSpacing(v: Double) {
+        brushMaskingSpacing = v
+        saveBrushParam(reloadEngine = true)
+    }
+
+    internal fun PaintViewModel.updateBrushMaskingTipAsset(asset: String) {
+        brushMaskingTipAsset = asset
+        saveBrushParam(reloadEngine = true, immediateReload = true)
+    }
+
+    internal fun PaintViewModel.updateBrushMaskingTipShape(v: Int) {
+        brushMaskingTipShape = v
+        saveBrushParam(reloadEngine = true, immediateReload = true)
+    }
+
+    internal fun PaintViewModel.updateBrushMaskingFade(v: Double) {
+        brushMaskingFade = v
+        saveBrushParam(reloadEngine = true)
+    }
+
+    internal fun PaintViewModel.updateBrushMaskingSoftness(v: Double) {
+        brushMaskingSoftness = v
+        saveBrushParam(reloadEngine = true)
+    }
+
+    internal fun PaintViewModel.updateBrushRotationSensor(v: String) {
+        brushRotationSensor = v
+        saveBrushParam(reloadEngine = true, immediateReload = true)
+    }
+
+    internal fun PaintViewModel.updateBrushScatterSensor(v: String) {
+        brushScatterSensor = v
+        saveBrushParam(reloadEngine = true, immediateReload = true)
+    }
+
+    internal fun PaintViewModel.updateBrushSizeSensor(v: String) {
+        brushSizeSensor = v
+        saveBrushParam(dynamicsChanged = true, reloadEngine = true, immediateReload = true)
+    }
+
+    internal fun PaintViewModel.updateBrushOpacitySensor(v: String) {
+        brushOpacitySensor = v
+        saveBrushParam(dynamicsChanged = true, reloadEngine = true, immediateReload = true)
+    }
+
+    internal fun PaintViewModel.updateBrushFlowSensor(v: String) {
+        brushFlowSensor = v
+        saveBrushParam(dynamicsChanged = true, reloadEngine = true, immediateReload = true)
+    }
+
+    /** Capture scratchpad raster as the preset's official PNG thumbnail */
+    fun PaintViewModel.capturePresetThumbnail(bitmap: Bitmap): Boolean {
+        val preset = brushPresets.firstOrNull { it.index == brushPresetIndex } ?: return false
+        val dir = File(appContext.filesDir, "paintoppresets")
+        val kppFile = File(dir, "${preset.name}.kpp")
+        if (!kppFile.exists()) {
+            try {
+                appContext.assets.open("paintoppresets/${preset.name}.kpp").use { input ->
+                    kppFile.outputStream().use { output -> input.copyTo(output) }
+                }
+            } catch (_: Exception) {}
+        }
+        if (!kppFile.exists()) return false
+
+        val targetSize = 256
+        val thumbBmp = if (bitmap.width == targetSize && bitmap.height == targetSize) {
+            bitmap
+        } else {
+            Bitmap.createScaledBitmap(bitmap, targetSize, targetSize, true)
+        }
+        val stream = java.io.ByteArrayOutputStream()
+        thumbBmp.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        val pngBytes = stream.toByteArray()
+
+        val success = KppHelper.updateKppThumbnail(kppFile, pngBytes)
+        if (success) {
+            BrushThumbCache.put(preset.name, thumbBmp)
+            brushPresets = brushPresets.map {
+                if (it.index == preset.index) it.copy(thumbBytes = pngBytes) else it
+            }
+            android.widget.Toast.makeText(
+                appContext,
+                appContext.getString(R.string.brush_studio_toast_thumbnail_updated),
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+        return success
+    }
+
     private var pendingKppReloadJob: Job? = null
 
     internal fun PaintViewModel.saveBrushParam(
@@ -532,6 +636,19 @@ import kotlinx.coroutines.withContext
             isCustomized = true,
             dynamicsCustomized = dc,
             smudgeCustomized = sc,
+            maskingEnabled = brushMaskingEnabled,
+            maskingCompositeOp = brushMaskingCompositeOp,
+            maskingSizeRatio = brushMaskingSizeRatio,
+            maskingSpacing = brushMaskingSpacing,
+            maskingTipAsset = brushMaskingTipAsset,
+            maskingTipShape = brushMaskingTipShape,
+            maskingFade = brushMaskingFade,
+            maskingSoftness = brushMaskingSoftness,
+            rotationSensor = brushRotationSensor,
+            scatterSensor = brushScatterSensor,
+            sizeSensor = brushSizeSensor,
+            opacitySensor = brushOpacitySensor,
+            flowSensor = brushFlowSensor,
         )
         brushParams[name] = p
         schedulePersistBrushParams()
@@ -642,6 +759,19 @@ import kotlinx.coroutines.withContext
                 o.put("cus", p.isCustomized)
                 o.put("dc", p.dynamicsCustomized)
                 o.put("scus", p.smudgeCustomized)
+                o.put("m_en", p.maskingEnabled)
+                o.put("m_op", p.maskingCompositeOp)
+                o.put("m_sr", p.maskingSizeRatio)
+                o.put("m_sp", p.maskingSpacing)
+                o.put("m_ta", p.maskingTipAsset)
+                o.put("m_ts", p.maskingTipShape)
+                o.put("m_fa", p.maskingFade)
+                o.put("m_so", p.maskingSoftness)
+                o.put("r_se", p.rotationSensor)
+                o.put("sc_se", p.scatterSensor)
+                o.put("sz_se", p.sizeSensor)
+                o.put("op_se", p.opacitySensor)
+                o.put("fl_se", p.flowSensor)
                 json.put(o)
             }
             prefs().edit().putString("brush_params", json.toString()).apply()
@@ -807,6 +937,19 @@ import kotlinx.coroutines.withContext
                     },
                     dynamicsCustomized = o.optBoolean("dc", false),
                     smudgeCustomized = o.optBoolean("scus", false),
+                    maskingEnabled = o.optBoolean("m_en", false),
+                    maskingCompositeOp = o.optString("m_op", "multiply"),
+                    maskingSizeRatio = o.optDouble("m_sr", 1.0),
+                    maskingSpacing = o.optDouble("m_sp", 0.1),
+                    maskingTipAsset = o.optString("m_ta", ""),
+                    maskingTipShape = o.optInt("m_ts", 0),
+                    maskingFade = o.optDouble("m_fa", 0.0),
+                    maskingSoftness = o.optDouble("m_so", 1.0),
+                    rotationSensor = o.optString("r_se", "drawingangle"),
+                    scatterSensor = o.optString("sc_se", "fuzzy"),
+                    sizeSensor = o.optString("sz_se", "pressure"),
+                    opacitySensor = o.optString("op_se", "pressure"),
+                    flowSensor = o.optString("fl_se", "pressure"),
                 )
             }
             if (resetLegacySoftness || resetLegacyFade || resetLegacyJitter) {
@@ -926,6 +1069,19 @@ import kotlinx.coroutines.withContext
         brushSpikes = 2
         brushJitterAngle = 0.0
         brushJitterSize = 0.0
+        brushMaskingEnabled = false
+        brushMaskingCompositeOp = "multiply"
+        brushMaskingSizeRatio = 1.0
+        brushMaskingSpacing = 0.1
+        brushMaskingTipAsset = ""
+        brushMaskingTipShape = 0
+        brushMaskingFade = 0.0
+        brushMaskingSoftness = 1.0
+        brushRotationSensor = if (brushFollowDirection) "drawingangle" else ""
+        brushScatterSensor = "fuzzy"
+        brushSizeSensor = "pressure"
+        brushOpacitySensor = "pressure"
+        brushFlowSensor = "pressure"
         brushDescription = ""
         brushVersion = "1.0"
         val preset = brushPresets.firstOrNull { it.index == index }
@@ -1230,6 +1386,19 @@ import kotlinx.coroutines.withContext
                 brushSpikes = saved.spikes
                 brushJitterAngle = saved.jitterAngle
                 brushJitterSize = saved.jitterSize
+                brushMaskingEnabled = saved.maskingEnabled
+                brushMaskingCompositeOp = saved.maskingCompositeOp
+                brushMaskingSizeRatio = saved.maskingSizeRatio
+                brushMaskingSpacing = saved.maskingSpacing
+                brushMaskingTipAsset = saved.maskingTipAsset
+                brushMaskingTipShape = saved.maskingTipShape
+                brushMaskingFade = saved.maskingFade
+                brushMaskingSoftness = saved.maskingSoftness
+                brushRotationSensor = saved.rotationSensor
+                brushScatterSensor = saved.scatterSensor
+                brushSizeSensor = saved.sizeSensor
+                brushOpacitySensor = saved.opacitySensor
+                brushFlowSensor = saved.flowSensor
                 brushAuthor = if (isBuiltIn) "Krita" else saved.author
                 brushIsAuthorLocked = if (isBuiltIn) true else saved.isAuthorLocked
                 brushDescription = saved.description
@@ -1299,6 +1468,22 @@ import kotlinx.coroutines.withContext
                 brushSpikes = parsed.spikes ?: 2
                 brushJitterAngle = 0.0
                 brushJitterSize = 0.0
+
+                brushMaskingEnabled = parsed.maskingEnabled ?: false
+                brushMaskingCompositeOp = parsed.maskingCompositeOp ?: "multiply"
+                brushMaskingSizeRatio = parsed.maskingSizeRatio ?: 1.0
+                brushMaskingSpacing = parsed.maskingSpacing ?: 0.1
+                brushMaskingTipAsset = parsed.maskingTipAsset ?: ""
+                brushMaskingTipShape = 0
+                brushMaskingFade = 0.0
+                brushMaskingSoftness = 1.0
+
+                brushRotationSensor = parsed.rotationSensor ?: (if (brushFollowDirection) "drawingangle" else "")
+                brushScatterSensor = parsed.scatterSensor ?: "fuzzy"
+                brushSizeSensor = parsed.sizeSensor ?: "pressure"
+                brushOpacitySensor = parsed.opacitySensor ?: "pressure"
+                brushFlowSensor = parsed.flowSensor ?: "pressure"
+
                 brushDescription = saved?.description ?: ""
                 brushVersion = saved?.version ?: "1.0"
             }

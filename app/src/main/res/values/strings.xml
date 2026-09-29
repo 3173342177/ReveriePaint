@@ -1037,6 +1037,7 @@
 
     <!-- Brush Studio Tabs -->
     <string name="brush_studio_tab_tip">笔尖形状</string>
+    <string name="brush_studio_tab_masking">蒙版画笔</string>
     <string name="brush_studio_tab_stroke">笔画动态</string>
     <string name="brush_studio_tab_color">色彩涂抹</string>
     <string name="brush_studio_tab_geometry">几何罗盘</string>
@@ -1201,6 +1202,32 @@
     <string name="brush_studio_prop_smudge_mode">混色模式</string>
     <string name="brush_studio_prop_builtin_tag">(Krita 内置 · 固定只读)</string>
     <string name="brush_studio_prop_shared_tag">(分享导入 · 只读锁定)</string>
+
+    <!-- Brush Studio Masking, Sensors & Thumbnail -->
+    <string name="brush_studio_masking_title">双重蒙版画笔 (Masking Brush)</string>
+    <string name="brush_studio_masking_enable">启用蒙版画笔</string>
+    <string name="brush_studio_masking_tip">掩膜笔尖贴图</string>
+    <string name="brush_studio_masking_tip_default">默认圆形笔尖</string>
+    <string name="brush_studio_masking_tip_choose">更换掩膜笔尖</string>
+    <string name="brush_studio_masking_mode">掩膜混合模式 (Composite Mode)</string>
+    <string name="brush_studio_masking_ratio">尺寸比例 (Size Ratio)</string>
+    <string name="brush_studio_masking_spacing">间距 (Spacing)</string>
+    <string name="brush_studio_masking_fade">实心率 (Solid Core)</string>
+    <string name="brush_studio_masking_softness">柔和度 (Softness)</string>
+    <string name="brush_studio_scratchpad_set_icon">设为预设图标</string>
+    <string name="brush_studio_toast_thumbnail_updated">预设图标已更新</string>
+    <string name="brush_studio_sensor_title">驱动传感器 (Sensor)</string>
+    <string name="brush_studio_sensor_pressure">压力 (Pressure)</string>
+    <string name="brush_studio_sensor_speed">速度 (Speed)</string>
+    <string name="brush_studio_sensor_drawingangle">运笔方向 (Drawing Angle)</string>
+    <string name="brush_studio_sensor_fuzzy">随机抖动 (Fuzzy)</string>
+    <string name="brush_studio_sensor_fade">衰减 (Fade)</string>
+    <string name="brush_studio_rotation_sensor">旋转驱动传感器</string>
+    <string name="brush_studio_scatter_sensor">散布驱动传感器</string>
+    <string name="brush_studio_size_sensor">大小驱动传感器</string>
+    <string name="brush_studio_opacity_sensor">不透明度驱动传感器</string>
+    <string name="brush_studio_flow_sensor">流量驱动传感器</string>
+    <string name="brush_studio_press_curve_preview">曲线响应预览</string>
 
     <!-- Color Components & Sliders -->
     <string name="color_num_dialog_range">有效范围: %1$s ~ %2$s%3$s</string>
