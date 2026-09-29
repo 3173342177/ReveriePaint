@@ -807,6 +807,10 @@ fun PaintingPage(
             )
         }
 
+        vm.brushImportProgress?.let { progress ->
+            BrushImportProgressDialog(progress = progress)
+        }
+
         com.reverie.paint.ui.components.DragHoverOverlay(
             visible = vm.isDraggingExternal,
             hint = stringResource(R.string.drag_drop_import_hint),

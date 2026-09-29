@@ -548,4 +548,56 @@ internal fun ToolbarSqueezedDialog(
     }
 }
 
+/**
+ * Clean, borderless Morandi progress dialog shown while unpacking brush packs (.abr / .bundle).
+ */
+@Composable
+internal fun BrushImportProgressDialog(
+    progress: Pair<Int, Int>,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .noRippleClickable { /* block clicks */ },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(280.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Morandi.panel)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = stringResource(R.string.brush_importing_title),
+                color = Morandi.text,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Spacer(Modifier.height(14.dp))
+            val current = progress.first
+            val total = maxOf(1, progress.second)
+            val fraction = (current.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = Morandi.accent,
+                trackColor = Morandi.panelHi,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = stringResource(R.string.brush_importing_progress, current, total),
+                color = Morandi.subText,
+                fontSize = 13.sp,
+            )
+        }
+    }
+}
+
+
 

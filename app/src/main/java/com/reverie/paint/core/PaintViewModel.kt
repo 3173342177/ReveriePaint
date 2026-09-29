@@ -495,6 +495,8 @@ class PaintViewModel : ViewModel() {
     // custom group names the user created (persisted in SharedPreferences)
     var userBrushGroups by mutableStateOf<Map<String, String>>(emptyMap())
     var customBrushGroups by mutableStateOf<List<String>>(emptyList())
+    /** 笔刷导入进度: Pair(当前处理数, 总数), 非导入状态时为 null */
+    var brushImportProgress by mutableStateOf<Pair<Int, Int>?>(null)
 
     // Custom display order of presets (persisted); empty = default (sorted)
     var brushOrder by mutableStateOf<List<String>>(emptyList())
@@ -503,8 +505,8 @@ class PaintViewModel : ViewModel() {
     var brushSpacing by mutableDoubleStateOf(0.1)
     var brushAngle by mutableDoubleStateOf(0.0)
     var brushScatter by mutableDoubleStateOf(0.0)
-    var brushFade by mutableDoubleStateOf(0.0)
-    var brushSoftness by mutableDoubleStateOf(0.5)
+    var brushFade by mutableDoubleStateOf(KppHelper.FADE_SOLID)
+    var brushSoftness by mutableDoubleStateOf(KppHelper.SOFTNESS_NEUTRAL)
     var brushRatio by mutableDoubleStateOf(1.0)
     var brushSharpness by mutableDoubleStateOf(0.0)
     var brushRotation by mutableDoubleStateOf(0.0)
@@ -3767,8 +3769,8 @@ data class BrushParams(
     val spacing: Double = 0.1,
     val angle: Double = 0.0,
     val scatter: Double = 0.0,
-    val fade: Double = 0.0,
-    val softness: Double = 0.5,
+    val fade: Double = KppHelper.FADE_SOLID,
+    val softness: Double = KppHelper.SOFTNESS_NEUTRAL,
     val ratio: Double = 1.0,
     val sharpness: Double = 0.0,
     val rotation: Double = 0.0,

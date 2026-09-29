@@ -110,6 +110,54 @@ object KppHelper {
             buildMinimalPresetXml(presetName, params)
         }
 
+        return replacePresetXml(kppBytes, newXml)
+    }
+
+    /**
+     * 清除历史版本追加产生的重复参数键, 每个键只保留首次出现（Krita 原生写出的那一行）。
+     *
+     * 背景: 旧版 updateParam 的正则把属性顺序写死成 `type` 在前, 而 Krita 写出的是
+     * `<param name="X" type="string">`（name 在前）, 导致一条都匹配不上、所有参数修改
+     * 都被追加成重复键。引擎按文档序"后者覆盖前者"解析, 于是文件里新旧两套值谁生效
+     * 全看追加顺序。这里把污染清掉。
+     *
+     * Returns true if the file was rewritten.
+     */
+    fun dedupePresetFile(kppFile: File): Boolean {
+        return try {
+            if (!kppFile.exists()) return false
+            val bytes = kppFile.readBytes()
+            val xml = readPresetXml(bytes) ?: return false
+            val deduped = dedupeParamsXml(xml)
+            if (deduped == xml) return false
+            kppFile.writeBytes(replacePresetXml(bytes, deduped))
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("KppHelper", "dedupe failed: ${kppFile.name}", e)
+            false
+        }
+    }
+
+    internal fun dedupeParamsXml(xml: String): String {
+        val paramRegex = Regex("""<param\b[^>]*\bname="([^"]+)"[^>]*>.*?</param>""", RegexOption.DOT_MATCHES_ALL)
+        val seen = HashSet<String>()
+        var changed = false
+        val out = StringBuilder(xml.length)
+        var last = 0
+        for (m in paramRegex.findAll(xml)) {
+            if (!seen.add(m.groupValues[1])) {
+                out.append(xml, last, m.range.first)
+                last = m.range.last + 1
+                changed = true
+            }
+        }
+        if (!changed) return xml
+        out.append(xml, last, xml.length)
+        return out.toString()
+    }
+
+    /** 用新的 preset XML 替换 .kpp 里的 zTXt preset 块, PNG 其余 chunk 原样保留。 */
+    private fun replacePresetXml(kppBytes: ByteArray, newXml: String): ByteArray {
         // Recompress XML
         val deflater = Deflater(Deflater.DEFAULT_COMPRESSION)
         val xmlBytes = newXml.toByteArray(Charsets.UTF_8)
@@ -194,6 +242,128 @@ object KppHelper {
     }
 
     /**
+     * Fade / Softness 语义（2026-09-29 按 248 个预设实测校准，勿再反）：
+     * - hfade/vfade 是**实心率**：Eraser_hard/Pencil_2B 等 hfade=1.0，Eraser_Soft/Airbrush_Soft 等 hfade=0.0。
+     *   实心核半径 = fade × softness × 笔刷半径（kis_circle_mask_generator.cpp:51-91，nf=n/(fade·s)²）。
+     *   所以 fade=1 最锐利，fade=0 全羽化；softness=1 不改动，越小越糊。
+     * - MaskGenerator 的属性必须读写**主 `brush_definition`**；`MaskingBrush/Preset/brush_definition`
+     *   是掩膜子预设的副本且在文档序里靠前，改它引擎完全无感。
+     */
+    const val SOFTNESS_MIN = 0.1
+    const val SOFTNESS_NEUTRAL = 1.0
+
+    /** fade(实心率) 的"锐利"端值，也是未自定义笔刷的默认落点 */
+    const val FADE_SOLID = 1.0
+
+    private val mainBrushDefPattern =
+        Regex("""<param\b[^>]*\bname="brush_definition"[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?\s*</param>""", RegexOption.DOT_MATCHES_ALL)
+
+    /** 主 brush_definition 的 CDATA 内容; 没有则退回整个 XML（兼容极老的生成文件） */
+    private fun mainBrushDefinition(xml: String): String =
+        mainBrushDefPattern.find(xml)?.groupValues?.get(1) ?: xml
+
+    /**
+     * Data class holding parsed native attributes from preset XML.
+     *
+     * [fade] 与 [softness] 是两个不同的属性，不要混：
+     * - [fade]      = brush_definition 里 MaskGenerator 的 hfade/vfade，**实心率**（1=锐利硬边，
+     *                 0=全羽化），也是 Krita `KisPaintOpSettings::setPaintOpFade()` 写入的位置（取 max）。
+     * - [softness]  = `SoftnessValue` curve option，绘制期的柔度乘数（1.0 = 不改动，越小越糊）。
+     */
+    data class KppParsedAttributes(
+        val fade: Double? = null,
+        val softness: Double? = null,
+        val tipShape: Int? = null,
+        val ratio: Double? = null,
+        val spikes: Int? = null,
+        val antiAliasing: Int? = null,
+        val textureEnabled: Boolean? = null,
+        val textureScale: Double? = null,
+        val textureStrength: Double? = null,
+        val textureMode: String? = null,
+        val hueJitter: Double? = null,
+        val satJitter: Double? = null,
+        val valJitter: Double? = null,
+        val secondaryMix: Double? = null,
+    )
+
+    /**
+     * Parses native preset attributes directly from a .kpp file.
+     */
+    fun parseKppFile(kppFile: File): KppParsedAttributes {
+        if (!kppFile.exists()) return KppParsedAttributes()
+        return try {
+            val xml = readPresetXml(kppFile.readBytes()) ?: return KppParsedAttributes()
+            parseKppAttributes(xml)
+        } catch (_: Exception) {
+            KppParsedAttributes()
+        }
+    }
+
+    /**
+     * Parses native preset attributes directly from preset XML.
+     */
+    fun parseKppAttributes(xml: String): KppParsedAttributes {
+        // MaskGenerator 属性只认主 brush_definition；MaskingBrush/Preset/brush_definition
+        // 是掩膜副本且文档序靠前，先读它会把副本值当成笔尖真值
+        val tipXml = mainBrushDefinition(xml)
+        val hfade = Regex("""<MaskGenerator\b[^>]*\bhfade="([^"]+)"""").find(tipXml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val vfade = Regex("""<MaskGenerator\b[^>]*\bvfade="([^"]+)"""").find(tipXml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        // Krita 的 paintOpFade() 取 hfade/vfade 的较大者，这里保持一致
+        val fade = when {
+            hfade != null && vfade != null -> maxOf(hfade, vfade)
+            else -> hfade ?: vfade
+        }
+        val softness = Regex("""<param[^>]*name="SoftnessValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+
+        val typeMatch = Regex("""<MaskGenerator\b[^>]*\btype="([^"]+)"""").find(tipXml)
+        val tipShape = typeMatch?.groupValues?.getOrNull(1)?.let { if (it.equals("rect", ignoreCase = true)) 1 else 0 }
+
+        val spikes = Regex("""<MaskGenerator\b[^>]*\bspikes="([^"]+)"""").find(tipXml)?.groupValues?.getOrNull(1)?.toIntOrNull()
+
+        val ratio = Regex("""<MaskGenerator\b[^>]*\bratio="([^"]+)"""").find(tipXml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+            ?: Regex("""<param[^>]*name="RatioValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+
+        val aaMatch = Regex("""<MaskGenerator\b[^>]*\bantialiasEdges="([^"]+)"""").find(tipXml)?.groupValues?.getOrNull(1)
+        val antiAliasing = aaMatch?.let { if (it == "0") 0 else 1 }
+
+        val texMatch = Regex("""<param[^>]*name="Texture/Pattern/Enabled"[^>]*>(?:<!\[CDATA\[)?(true|false)""").find(xml)?.groupValues?.getOrNull(1)
+        val textureEnabled = texMatch?.toBoolean()
+
+        val texScale = Regex("""<param[^>]*name="Texture/Pattern/Scale"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val texStrength = Regex("""<param[^>]*name="Texture/Pattern/Strength"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val texModeRaw = Regex("""<param[^>]*name="Texture/Pattern/TexturingMode"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.trim()
+        val textureMode = when (texModeRaw) {
+            "1" -> "screen"
+            "4" -> "overlay"
+            "5" -> "dodge"
+            else -> if (texModeRaw != null) "multiply" else null
+        }
+
+        val hueJitter = Regex("""<param[^>]*name="hValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val satJitter = Regex("""<param[^>]*name="sValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val valJitter = Regex("""<param[^>]*name="vValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        val secondaryMix = Regex("""<param[^>]*name="MixValue"[^>]*>(?:<!\[CDATA\[)?([^<\]]+)""").find(xml)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+
+        return KppParsedAttributes(
+            fade = fade,
+            softness = softness,
+            tipShape = tipShape,
+            ratio = ratio,
+            spikes = spikes,
+            antiAliasing = antiAliasing,
+            textureEnabled = textureEnabled,
+            textureScale = texScale,
+            textureStrength = texStrength,
+            textureMode = textureMode,
+            hueJitter = hueJitter,
+            satJitter = satJitter,
+            valJitter = valJitter,
+            secondaryMix = secondaryMix,
+        )
+    }
+
+    /**
      * Injects or updates parameter tags in Krita preset XML.
      */
     fun injectParamsIntoXml(originalXml: String, presetName: String, params: BrushParams): String {
@@ -229,7 +399,12 @@ object KppHelper {
         xml = updateParam(xml, "Scatter/isChecked", hasScatter.toString())
 
         // 6. Update Softness, Ratio, Sharpness, Rotation
-        xml = updateParam(xml, "SoftnessValue", params.softness.toString())
+        // Softness 是 curve option: `KisStandardOption::apply()` 在 isChecked 为 false 时恒返回
+        // 1.0(neutral)，只写 SoftnessValue 而不写 PressureSoftness 等于完全没写。
+        // 量程 0.1~1.0，1.0 表示不改动笔尖羽化。写法与下方 Scatter 保持一致。
+        val softness = params.softness.coerceIn(SOFTNESS_MIN, SOFTNESS_NEUTRAL)
+        xml = updateParam(xml, "SoftnessValue", softness.toString())
+        xml = updateParam(xml, "PressureSoftness", (softness < SOFTNESS_NEUTRAL - 0.001).toString())
         xml = updateParam(xml, "RatioValue", params.ratio.toString())
         xml = updateParam(xml, "SharpnessValue", params.sharpness.toString())
         xml = updateParam(xml, "RotationValue", params.rotation.toString())
@@ -268,7 +443,14 @@ object KppHelper {
             xml = updateParam(xml, "PressureSize", useSize.toString())
             xml = updateParam(xml, "SizeUseCurve", useSize.toString())
             xml = updateParam(xml, "SizeValue", params.pressureSize.toString())
-            if (useSize) xml = updateParam(xml, "SizeSensor", sensorXml)
+            if (useSize) {
+                if (params.speedSize > 0.001) {
+                    val multiSensorXml = """<!DOCTYPE params><params id="sensorslist"><ChildSensor id="pressure"><curve>$curveStr</curve></ChildSensor><ChildSensor id="speed"/></params>"""
+                    xml = updateParam(xml, "SizeSensor", multiSensorXml)
+                } else {
+                    xml = updateParam(xml, "SizeSensor", sensorXml)
+                }
+            }
 
             val useOpacity = params.pressureEnabled && (params.pressureOpacity > 0.001)
             xml = updateParam(xml, "PressureOpacity", useOpacity.toString())
@@ -283,7 +465,84 @@ object KppHelper {
             if (useFlow) xml = updateParam(xml, "FlowSensor", sensorXml)
         }
 
-        // 12. Update tipAsset & brush_definition
+        // 12. Update Texture
+        xml = updateParam(xml, "Texture/Pattern/Enabled", params.textureEnabled.toString())
+        xml = updateParam(xml, "PressureTexture/Strength/", params.textureEnabled.toString())
+        xml = updateParam(xml, "Texture/Pattern/Scale", params.textureScale.toString())
+        xml = updateParam(xml, "Texture/Pattern/Strength", params.textureStrength.toString())
+        val texModeCode = when (params.textureMode.lowercase()) {
+            "screen" -> "1"
+            "overlay" -> "4"
+            "dodge" -> "5"
+            else -> "0"
+        }
+        xml = updateParam(xml, "Texture/Pattern/TexturingMode", texModeCode)
+
+        // 13. Update Color Dynamics (HSV Jitters & Mix)
+        val hasHue = params.hueJitter > 0.001
+        xml = updateParam(xml, "Pressureh", hasHue.toString())
+        xml = updateParam(xml, "hValue", params.hueJitter.toString())
+        xml = updateParam(xml, "Customh", "true")
+        xml = updateParam(xml, "Curveh", "0,0;1,1;")
+        xml = updateParam(xml, "hUseCurve", "true")
+        xml = updateParam(xml, "hUseSameCurve", "true")
+        if (hasHue) {
+            xml = updateParam(xml, "hSensor", """<!DOCTYPE params><params id="fuzzy"><curve>0,0;1,1;</curve></params>""")
+        }
+
+        val hasSat = params.satJitter > 0.001
+        xml = updateParam(xml, "Pressures", hasSat.toString())
+        xml = updateParam(xml, "sValue", params.satJitter.toString())
+        xml = updateParam(xml, "Customs", "true")
+        xml = updateParam(xml, "Curves", "0,0;1,1;")
+        xml = updateParam(xml, "sUseCurve", "true")
+        xml = updateParam(xml, "sUseSameCurve", "true")
+        if (hasSat) {
+            xml = updateParam(xml, "sSensor", """<!DOCTYPE params><params id="fuzzy"><curve>0,0;1,1;</curve></params>""")
+        }
+
+        val hasVal = params.valJitter > 0.001
+        xml = updateParam(xml, "Pressurev", hasVal.toString())
+        xml = updateParam(xml, "vValue", params.valJitter.toString())
+        xml = updateParam(xml, "Customv", "true")
+        xml = updateParam(xml, "Curvev", "0,0;1,1;")
+        xml = updateParam(xml, "vUseCurve", "true")
+        xml = updateParam(xml, "vUseSameCurve", "true")
+        if (hasVal) {
+            xml = updateParam(xml, "vSensor", """<!DOCTYPE params><params id="fuzzy"><curve>0,0;1,1;</curve></params>""")
+        }
+
+        val hasMix = params.secondaryMix > 0.001 || params.pressureColorMix
+        xml = updateParam(xml, "PressureMix", hasMix.toString())
+        xml = updateParam(xml, "MixValue", params.secondaryMix.toString())
+        xml = updateParam(xml, "CurveMix", "0,0;1,1;")
+        xml = updateParam(xml, "CustomMix", "true")
+        xml = updateParam(xml, "MixUseCurve", "true")
+        xml = updateParam(xml, "MixUseSameCurve", "true")
+        if (hasMix) {
+            val mixSensorId = if (params.pressureColorMix) "pressure" else "fuzzy"
+            xml = updateParam(xml, "MixSensor", """<!DOCTYPE params><params id="$mixSensorId"><curve>0,0;1,1;</curve></params>""")
+        }
+
+        // 14. Update Mirror & Rotation dynamics
+        xml = updateParam(xml, "HorizontalMirrorEnabled", params.randomFlipX.toString())
+        xml = updateParam(xml, "VerticalMirrorEnabled", params.randomFlipY.toString())
+        xml = updateParam(xml, "PressureMirror", (params.randomFlipX || params.randomFlipY).toString())
+        xml = updateParam(xml, "PressureRotation", params.followDirection.toString())
+        if (params.followDirection) {
+            xml = updateParam(xml, "RotationSensor", """<!DOCTYPE params><params id="drawingangle"><curve>0,0;1,1;</curve></params>""")
+        }
+
+        // 15. Fade 没有独立参数键: Krita 的 Fade 就是 brush_definition 里 MaskGenerator 的
+        //     hfade/vfade（KisPaintOpSettings::setPaintOpFade 写的就是它们），
+        //     在第 16 步随笔尖定义一起同步，这里不再写 PressureFade / FadeValue 这类不存在的键。
+
+        // 16. Update tipAsset & brush_definition (including MaskGenerator attributes)
+        val tipTypeAttr = if (params.tipShape == 1) "rect" else "circle"
+        val fadeVal = params.fade.coerceIn(0.0, 1.0)
+        val aaVal = if (params.antiAliasing > 0) 1 else 0
+        val spikesVal = params.spikes.coerceAtLeast(2)
+
         if (params.tipAsset.isNotBlank()) {
             val tipFile = params.tipAsset
             val ext = tipFile.substringAfterLast(".").lowercase()
@@ -294,15 +553,19 @@ object KppHelper {
                 else -> "png_brush"
             }
             val brushDef = """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="$tipType" useAutoSpacing="0" BrushVersion="2" filename="$tipFile" spacing="${params.spacing}" angle="${params.angle}"/> ]]></param>"""
-            if (xml.contains("""name="brush_definition"""")) {
-                xml = xml.replace(Regex("""<param[^>]*name="brush_definition".*?</param>""", RegexOption.DOT_MATCHES_ALL), brushDef)
+            if (mainBrushDefPattern.containsMatchIn(xml)) {
+                xml = mainBrushDefPattern.replace(xml, brushDef)
             } else {
                 xml = xml.replace("</Preset>", " $brushDef\n</Preset>")
             }
-        } else if (xml.contains("""name="brush_definition"""")) {
-            // Retain original tip asset, but sync spacing and angle attributes within the existing <Brush ... /> tag
-            xml = xml.replace(Regex("""<Brush\b([^>]*)>""")) { m ->
-                var attrs = m.groupValues[1]
+        } else if (mainBrushDefPattern.containsMatchIn(xml)) {
+            // Retain original tip or auto_brush, and sync spacing/angle/MaskGenerator attrs.
+            // 只动主 brush_definition 的 CDATA —— 文档序里排在它前面的
+            // MaskingBrush/Preset/brush_definition 是掩膜子预设副本，改它引擎完全无感。
+            val m = mainBrushDefPattern.find(xml)!!
+            val inner = m.groupValues[1]
+            var newInner = inner.replace(Regex("""<Brush\b([^>]*)>""")) { bm ->
+                var attrs = bm.groupValues[1]
                 attrs = if (attrs.contains("spacing=")) {
                     attrs.replace(Regex("""spacing="[^"]*""""), """spacing="${params.spacing}"""")
                 } else {
@@ -315,32 +578,97 @@ object KppHelper {
                 }
                 "<Brush$attrs>"
             }
+            if (newInner.contains("<MaskGenerator") || newInner.contains("""type="auto_brush"""")) {
+                newInner = updateOrInsertMaskGenerator(newInner, params)
+            }
+            xml = xml.replaceRange(m.range, """<param type="string" name="brush_definition"><![CDATA[$newInner]]></param>""")
+        } else {
+            // No brush_definition at all, insert auto_brush
+            val autoDef = """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" BrushVersion="2" spacing="${params.spacing}" angle="${params.angle}"> <MaskGenerator diameter="${params.size}" hfade="$fadeVal" vfade="$fadeVal" id="default" spikes="$spikesVal" type="$tipTypeAttr" ratio="${params.ratio}" antialiasEdges="$aaVal"/> </Brush> ]]></param>"""
+            xml = xml.replace("</Preset>", " $autoDef\n</Preset>")
         }
 
         return xml
     }
 
-    private fun updateParam(xml: String, paramName: String, value: String): String {
-        val pattern = Regex("""<param\s+type="[^"]*"\s+name="$paramName">.*?</param>""", RegexOption.DOT_MATCHES_ALL)
-        val replacement = """<param type="string" name="$paramName"><![CDATA[$value]]></param>"""
-        return if (pattern.containsMatchIn(xml)) {
-            xml.replace(pattern, replacement)
+    private fun updateOrInsertMaskGenerator(xml: String, params: BrushParams): String {
+        val tipType = if (params.tipShape == 1) "rect" else "circle"
+        val fadeVal = params.fade.coerceIn(0.0, 1.0).toString()
+        val aaVal = if (params.antiAliasing > 0) "1" else "0"
+        val spikesVal = params.spikes.coerceAtLeast(2).toString()
+        val ratioVal = params.ratio.toString()
+        val sizeVal = params.size.toString()
+
+        // MaskGenerator/@id 是笔尖类型（default / soft / gauss），由预设自身决定；
+        // 这里刻意不按羽化数值去改写它，否则拖动 Fade 会把用户选的笔尖类型换掉。
+        val maskGenRegex = Regex("""<MaskGenerator\b([^>]*)/>""")
+        val m = maskGenRegex.find(xml)
+        if (m != null) {
+            var attrs = m.groupValues[1]
+            fun replAttr(text: String, name: String, value: String): String {
+                val p = Regex("""\b$name="[^"]*"""")
+                return if (p.containsMatchIn(text)) {
+                    text.replace(p, """$name="$value"""")
+                } else {
+                    """$text $name="$value""""
+                }
+            }
+            attrs = replAttr(attrs, "type", tipType)
+            attrs = replAttr(attrs, "hfade", fadeVal)
+            attrs = replAttr(attrs, "vfade", fadeVal)
+            attrs = replAttr(attrs, "ratio", ratioVal)
+            attrs = replAttr(attrs, "spikes", spikesVal)
+            attrs = replAttr(attrs, "antialiasEdges", aaVal)
+            attrs = replAttr(attrs, "diameter", sizeVal)
+            return xml.replaceRange(m.range, "<MaskGenerator$attrs/>")
         } else {
-            xml.replace("</Preset>", " $replacement\n</Preset>")
+            val brushClose = "</Brush>"
+            if (xml.contains(brushClose)) {
+                val newGen = """ <MaskGenerator diameter="$sizeVal" hfade="$fadeVal" vfade="$fadeVal" id="default" spikes="$spikesVal" type="$tipType" ratio="$ratioVal" antialiasEdges="$aaVal"/> $brushClose"""
+                return xml.replaceFirst(brushClose, newGen)
+            }
+            return xml
         }
     }
+
+    private fun updateParam(xml: String, paramName: String, value: String): String {
+        // Krita 写出的参数是 <param name="X" type="string">（name 在前），旧版本甚至没有 type。
+        // 这里绝不能假设属性顺序：正则一旦匹配不上，修改就会被追加成重复键写到文件尾部，
+        // 而引擎按文档序"后者覆盖前者"解析，谁生效完全看追加顺序 —— 表现就是"改了没反应"。
+        val canonical = """<param type="string" name="$paramName"><![CDATA[$value]]></param>"""
+        val pattern = paramPattern(paramName)
+        val matches = pattern.findAll(xml).toList()
+        if (matches.isEmpty()) {
+            return xml.replace("</Preset>", " $canonical\n</Preset>")
+        }
+        val sb = StringBuilder(xml)
+        // 从后往前替换：第一个同名参数就地收敛为规范写法，其余重复键全部删除
+        for (i in matches.indices.reversed()) {
+            val range = matches[i].range
+            sb.replace(range.first, range.last + 1, if (i == 0) canonical else "")
+        }
+        return sb.toString()
+    }
+
+    private fun paramPattern(paramName: String): Regex =
+        Regex("""<param\b[^>]*\bname="${Regex.escape(paramName)}"[^>]*>.*?</param>""", RegexOption.DOT_MATCHES_ALL)
 
     private fun buildMinimalPresetXml(presetName: String, params: BrushParams): String {
         val resolvedOpId = when {
             params.paintOpId.isBlank() || params.paintOpId == "defaultpaintop" -> "paintbrush"
             else -> params.paintOpId
         }
+        val tipShapeType = if (params.tipShape == 1) "rect" else "circle"
+        val fadeVal = params.fade.coerceIn(0.0, 1.0)
+        val aaVal = if (params.antiAliasing > 0) 1 else 0
+        val spikesVal = params.spikes.coerceAtLeast(2)
+
         val tipDef = if (params.tipAsset.isNotBlank()) {
             val ext = params.tipAsset.substringAfterLast(".").lowercase()
             val tipType = if (ext == "gbr") "gbr_brush" else "png_brush"
             """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="$tipType" useAutoSpacing="0" BrushVersion="2" filename="${params.tipAsset}" spacing="${params.spacing}" angle="${params.angle}"/> ]]></param>"""
         } else {
-            """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" spacing="${params.spacing}" angle="${params.angle}"/> ]]></param>"""
+            """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" BrushVersion="2" spacing="${params.spacing}" angle="${params.angle}"> <MaskGenerator diameter="${params.size}" hfade="$fadeVal" vfade="$fadeVal" id="default" spikes="$spikesVal" type="$tipShapeType" ratio="${params.ratio}" antialiasEdges="$aaVal"/> </Brush> ]]></param>"""
         }
 
         return """<?xml version="1.0" encoding="UTF-8"?>
@@ -352,7 +680,8 @@ object KppHelper {
   <param type="string" name="paintopAngle"><![CDATA[${params.angle}]]></param>
   <param type="string" name="AngleValue"><![CDATA[${params.angle}]]></param>
   <param type="string" name="ScatterValue"><![CDATA[${params.scatter}]]></param>
-  <param type="string" name="SoftnessValue"><![CDATA[${params.softness}]]></param>
+  <param type="string" name="SoftnessValue"><![CDATA[${params.softness.coerceIn(SOFTNESS_MIN, SOFTNESS_NEUTRAL)}]]></param>
+  <param type="string" name="PressureSoftness"><![CDATA[${params.softness.coerceIn(SOFTNESS_MIN, SOFTNESS_NEUTRAL) < SOFTNESS_NEUTRAL - 0.001}]]></param>
   <param type="string" name="RatioValue"><![CDATA[${params.ratio}]]></param>
   <param type="string" name="SharpnessValue"><![CDATA[${params.sharpness}]]></param>
   <param type="string" name="RotationValue"><![CDATA[${params.rotation}]]></param>
