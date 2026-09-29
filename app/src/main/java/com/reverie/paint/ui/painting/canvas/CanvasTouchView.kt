@@ -3362,18 +3362,6 @@ class CanvasTouchView(context: Context) : View(context) {
         }
     }
 
-    /** 回放一条镜像分支: [buf] 为扁平的 [x, y, pressure] 三元组, 共 [count] 个点 */
-    private fun replaySymmetricBranch(buf: FloatArray, count: Int) {
-        val v = vm ?: return
-        if (count < 2 || buf.size < count * 3) return
-
-        v.touchStart(buf[0], buf[1], buf[2].toDouble())
-        for (i in 1 until count) {
-            val base = i * 3
-            v.touchMove(buf[base], buf[base + 1], buf[base + 2].toDouble())
-        }
-        v.touchEnd()
-    }
 
     /**
      * 液化沿路径推进: 位移大于笔刷影响半径时拆成多个补点, 让相邻形变搭接,
@@ -3751,12 +3739,7 @@ class CanvasTouchView(context: Context) : View(context) {
                         // 仅当没有镜像分支重放时主笔才立即全量渲染；有分支则在镜像分支执行完毕后统一渲染
                         v.touchEnd(render = !hasBranchesToReplay)
                         if (hasBranchesToReplay) {
-                            // 回放期间只读缓冲 (抬笔后不再追加采样), 无需再拷贝一份。
-                            // 上游的 replaySymmetricBranches 会按分支重建 SymStrokeSample
-                            // 对象, 这里沿用本分支的零分配扁平缓冲版, 结果语义一致。
-                            for (b in 0 until mirroredSamples.size) {
-                                replaySymmetricBranch(mirroredSamples[b], mirroredSizes[b])
-                            }
+                            v.replaySymmetricBranches(mirroredSamples, mirroredSizes, mirroredSamples.size)
                             safeEndSymmetryUndoMacro()
                         }
                     }
