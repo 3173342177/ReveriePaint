@@ -2031,10 +2031,18 @@
     <string name="sync_error_not_configured">Enter a valid server address and username first</string>
     <string name="sync_info_title">About</string>
     <string name="sync_info_text">Sync is account-free and keeps projects on your own server. The password is encrypted with the system keystore and never leaves this device</string>
-    <string name="sync_category_backup">Backup</string>
-    <string name="sync_backup_now">Back up to cloud now</string>
-    <string name="sync_backup_running">Uploading %1$d/%2$d</string>
-    <string name="sync_backup_result">Uploaded %1$d, skipped %2$d, cleaned %3$d, cloud newer %4$d, conflicts %5$d, failed %6$d</string>
+    <string name="sync_category_backup">Sync &amp; Backup</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_running">Syncing</string>
+    <string name="sync_running_progress">Syncing %1$d/%2$d</string>
+    <string name="sync_result_none">Up to date</string>
+    <string name="sync_result_uploaded">Uploaded %1$d</string>
+    <string name="sync_result_downloaded">Downloaded %1$d</string>
+    <string name="sync_result_updated">Updated %1$d</string>
+    <string name="sync_result_deleted">Cleaned %1$d</string>
+    <string name="sync_result_remote_newer">Cloud newer %1$d</string>
+    <string name="sync_result_conflicts">Conflicts %1$d</string>
+    <string name="sync_result_failed">Failed %1$d</string>
     <string name="sync_backup_info_title">Backup notes</string>
     <string name="sync_backup_info_text">Backs up artworks (including autosave drafts) and your own brushes; bundled brushes are not uploaded. Files you deleted locally are removed from the cloud; files changed by another device are not overwritten, and when both sides changed the local file wins with the cloud version saved as a copy</string>
     <string name="sync_auto_backup">Auto-backup after save</string>
@@ -2057,14 +2065,6 @@
     <string name="sync_trust_self_signed_summary">Only for your own server; skips HTTPS certificate validation</string>
     <string name="sync_periodic_backup">Scheduled backup</string>
     <string name="sync_periodic_backup_summary">Back up automatically every 30 minutes while the app is open</string>
-    <string name="sync_category_restore">Restore</string>
-    <string name="sync_restore_artworks">Restore artworks</string>
-    <string name="sync_restore_brushes">Restore brushes</string>
-    <string name="sync_artworks">Artworks</string>
-    <string name="sync_brushes">Brushes</string>
-    <string name="sync_restore_hint">Adds only artworks and brushes missing locally; never overwrites or deletes local files</string>
-    <string name="sync_restore_running">Restoring %1$d/%2$d</string>
-    <string name="sync_restore_result">Restored %1$d, updated %2$d, skipped %3$d, conflicts %4$d, failed %5$d</string>
     <string name="sync_conflict_suffix"> (cloud)</string>
 
     <string name="settings_three_finger_edit_title">Three-finger swipe down to edit</string>

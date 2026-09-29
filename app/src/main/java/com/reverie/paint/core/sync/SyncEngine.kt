@@ -25,6 +25,7 @@ internal data class BackupOutcome(
     val remoteNewer: Int,
     val conflicts: Int,
     val deleted: Int,
+    val removedLocal: Int,
     val failed: Int,
     val bytes: Long,
     val errors: List<String>,
@@ -61,6 +62,7 @@ internal data class SyncSource(
 
 internal object SyncEngine {
     private const val EXT = ".revp"
+    const val TOMBSTONES_FILE = "tombstones.txt"
 
     fun isSyncable(relativePath: String): Boolean {
         val normalized = relativePath.replace('\\', '/')
@@ -150,6 +152,44 @@ internal object SyncEngine {
 
     private fun sanitize(token: String): String = token.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
 
+    fun encodeTombstones(tombstones: Map<String, Long>): String =
+        tombstones.entries.sortedBy { it.key }.joinToString("\n") { "${it.key}\t${it.value}" }
+
+    fun decodeTombstones(text: String): Map<String, Long> {
+        val out = LinkedHashMap<String, Long>()
+        for (line in text.lineSequence()) {
+            if (line.isBlank()) continue
+            val tab = line.indexOf('\t')
+            if (tab <= 0) continue
+            val at = line.substring(tab + 1).trim().toLongOrNull() ?: continue
+            out[line.substring(0, tab)] = at
+        }
+        return out
+    }
+
+    fun readTombstones(client: SyncClient): Map<String, Long> =
+        try {
+            decodeTombstones(client.getText(TOMBSTONES_FILE))
+        } catch (e: SyncException) {
+            if (e.kind == SyncException.Kind.NOT_FOUND) emptyMap() else throw e
+        } catch (_: Exception) {
+            emptyMap()
+        }
+
+    fun writeTombstones(
+        client: SyncClient,
+        tombstones: Map<String, Long>,
+    ) {
+        if (tombstones.isEmpty()) {
+            try {
+                client.delete(TOMBSTONES_FILE)
+            } catch (_: Exception) {
+            }
+            return
+        }
+        client.putText(TOMBSTONES_FILE, encodeTombstones(tombstones))
+    }
+
     fun requiredRemoteDirs(paths: List<String>): List<String> {
         val dirs = LinkedHashSet<String>()
         for (path in paths) {
@@ -162,23 +202,49 @@ internal object SyncEngine {
         return dirs.sorted()
     }
 
+    fun moveInto(
+        temp: File,
+        target: File,
+    ) {
+        target.parentFile?.mkdirs()
+        if (!temp.renameTo(target)) {
+            temp.copyTo(target, overwrite = true)
+            temp.delete()
+        }
+    }
+
+    fun partFile(target: File): File = File(target.parentFile, "${target.name}.part")
+
+    fun downloadToTemp(
+        client: SyncClient,
+        remotePath: String,
+        target: File,
+    ): Pair<File, String> {
+        val temp = partFile(target)
+        temp.parentFile?.mkdirs()
+        temp.delete()
+        try {
+            client.getToFile(remotePath, temp)
+            return temp to sha256(temp)
+        } catch (e: Exception) {
+            temp.delete()
+            throw e
+        }
+    }
+
     fun writeAtomically(
         target: File,
         data: ByteArray,
     ) {
-        val parent = target.parentFile
-        parent?.mkdirs()
-        val temp = File(parent, "${target.name}.part")
+        val temp = partFile(target)
+        temp.parentFile?.mkdirs()
         try {
             temp.outputStream().use { out ->
                 out.write(data)
                 out.flush()
-                (out as? java.io.FileOutputStream)?.fd?.sync()
+                out.fd.sync()
             }
-            if (!temp.renameTo(target)) {
-                temp.copyTo(target, overwrite = true)
-                temp.delete()
-            }
+            moveInto(temp, target)
         } catch (e: Exception) {
             temp.delete()
             throw e
@@ -189,6 +255,21 @@ internal object SyncEngine {
         target: File,
         text: String,
     ) = writeAtomically(target, text.toByteArray(Charsets.UTF_8))
+
+    fun remotePathForLocal(
+        sources: List<SyncSource>,
+        file: File,
+    ): String? {
+        val target = file.absoluteFile.path
+        for (source in sources) {
+            val dir = source.localDir.absoluteFile.path
+            if (!target.startsWith("$dir${File.separator}")) continue
+            val rel = target.substring(dir.length + 1).replace(File.separatorChar, '/')
+            if (!isSafeRelativePath(rel) || !source.accept(rel)) continue
+            return source.remotePrefix + rel
+        }
+        return null
+    }
 
     fun assignSource(
         sources: List<SyncSource>,
@@ -311,14 +392,43 @@ internal object SyncEngine {
         manifest: Map<String, ManifestEntry>,
         remoteEntries: List<RemoteEntry>,
         conflictSuffix: String,
+        protectedPaths: Set<String> = emptySet(),
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BackupOutcome {
-        val remoteTokens = remoteEntries.associate { it.path to versionToken(it) }
-        val plan = planBackup(local, manifest, remoteTokens)
-        val deletions = planDeletions(sources, local, manifest, remoteTokens)
-        val newManifest = LinkedHashMap(manifest)
+        val tombstones = readTombstones(client)
+        val newTombstones = LinkedHashMap(tombstones)
+        val effectiveManifest = LinkedHashMap(manifest)
+        val effectiveLocal = ArrayList<LocalProject>()
         val errors = ArrayList<String>()
         val notices = ArrayList<String>()
+        var removedLocal = 0
+
+        for (project in local) {
+            val path = project.relativePath
+            if (!tombstones.containsKey(path)) {
+                effectiveLocal.add(project)
+                continue
+            }
+            val recorded = manifest[path]
+            if (recorded != null && project.sha256 == recorded.hash) {
+                if (path in protectedPaths) {
+                    notices.add("$path: deletion from another device deferred (file is open)")
+                } else if (project.file.delete()) {
+                    effectiveManifest.remove(path)
+                    removedLocal++
+                } else {
+                    errors.add("$path: failed to remove local copy")
+                }
+            } else {
+                newTombstones.remove(path)
+                effectiveLocal.add(project)
+            }
+        }
+
+        val remoteTokens = remoteEntries.associate { it.path to versionToken(it) }
+        val plan = planBackup(effectiveLocal, effectiveManifest, remoteTokens)
+        val deletions = planDeletions(sources, effectiveLocal, effectiveManifest, remoteTokens)
+        val newManifest = LinkedHashMap(effectiveManifest)
         var uploaded = 0
         var skipped = 0
         var remoteNewer = 0
@@ -326,7 +436,7 @@ internal object SyncEngine {
         var deleted = 0
         var bytes = 0L
 
-        for (dir in requiredRemoteDirs(local.map { it.relativePath })) {
+        for (dir in requiredRemoteDirs(effectiveLocal.map { it.relativePath })) {
             try {
                 client.mkdir(dir)
             } catch (_: Exception) {
@@ -339,7 +449,7 @@ internal object SyncEngine {
 
         for (planned in plan) {
             val project = planned.project
-            val recorded = manifest[project.relativePath]
+            val recorded = effectiveManifest[project.relativePath]
             when (planned.decision) {
                 BackupDecision.SKIP -> skipped++
 
@@ -347,8 +457,8 @@ internal object SyncEngine {
                     done++
                     onProgress(done, total)
                     try {
-                        val data = client.get(project.relativePath)
-                        val hash = sha256(data)
+                        val (temp, hash) = downloadToTemp(client, project.relativePath, project.file)
+                        temp.delete()
                         if (recorded != null && hash == recorded.hash) {
                             newManifest[project.relativePath] =
                                 ManifestEntry(hash, remoteTokens[project.relativePath] ?: "")
@@ -366,17 +476,18 @@ internal object SyncEngine {
                     done++
                     onProgress(done, total)
                     try {
-                        val data = client.get(project.relativePath)
-                        writeAtomically(File(project.file.parentFile, conflictName(project.file.name, conflictSuffix)), data)
-                        client.put(project.relativePath, project.file.readBytes())
+                        val copyFile = File(project.file.parentFile, conflictName(project.file.name, conflictSuffix))
+                        val (temp, copyHash) = downloadToTemp(client, project.relativePath, copyFile)
+                        moveInto(temp, copyFile)
+                        client.putFile(project.relativePath, project.file)
                         newManifest[project.relativePath] =
                             ManifestEntry(project.sha256, tokenAfterUpload(client, project.relativePath))
                         uploaded++
                         bytes += project.size
                         val copyPath = conflictName(project.relativePath, conflictSuffix)
                         try {
-                            client.put(copyPath, data)
-                            newManifest[copyPath] = ManifestEntry(sha256(data), tokenAfterUpload(client, copyPath))
+                            client.putFile(copyPath, copyFile)
+                            newManifest[copyPath] = ManifestEntry(copyHash, tokenAfterUpload(client, copyPath))
                         } catch (_: Exception) {
                         }
                         conflicts++
@@ -390,7 +501,7 @@ internal object SyncEngine {
                     done++
                     onProgress(done, total)
                     try {
-                        client.put(project.relativePath, project.file.readBytes())
+                        client.putFile(project.relativePath, project.file)
                         newManifest[project.relativePath] =
                             ManifestEntry(project.sha256, tokenAfterUpload(client, project.relativePath))
                         uploaded++
@@ -402,17 +513,19 @@ internal object SyncEngine {
             }
         }
 
+        val deletedAt = System.currentTimeMillis()
         for (path in deletions) {
             try {
                 client.delete(path)
                 newManifest.remove(path)
+                newTombstones[path] = deletedAt
                 deleted++
             } catch (e: Exception) {
                 errors.add("$path: ${e.message ?: e.javaClass.simpleName}")
             }
         }
 
-        val keepDirs = requiredRemoteDirs(local.map { it.relativePath }).toSet()
+        val keepDirs = requiredRemoteDirs(effectiveLocal.map { it.relativePath }).toSet()
         val staleDirs = requiredRemoteDirs(deletions).filter { it !in keepDirs }.sortedByDescending { it.length }
         for (dir in staleDirs) {
             try {
@@ -421,12 +534,25 @@ internal object SyncEngine {
             }
         }
 
+        if (newTombstones != tombstones) {
+            try {
+                writeTombstones(client, newTombstones)
+            } catch (e: Exception) {
+                errors.add("$TOMBSTONES_FILE: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+
+        if (removedLocal > 0) {
+            notices.add("$removedLocal file(s) deleted on another device were removed locally")
+        }
+
         return BackupOutcome(
             uploaded = uploaded,
             skipped = skipped,
             remoteNewer = remoteNewer,
             conflicts = conflicts,
             deleted = deleted,
+            removedLocal = removedLocal,
             failed = errors.size,
             bytes = bytes,
             errors = errors,
@@ -474,30 +600,33 @@ internal object SyncEngine {
                 continue
             }
             try {
-                val data = client.get(entry.path)
-                val hash = sha256(data)
+                val (temp, hash) = downloadToTemp(client, entry.path, target)
+                val size = temp.length()
                 if (recorded != null && !remoteChanged && recorded.hash.isNotEmpty() && hash != recorded.hash) {
+                    temp.delete()
                     errors.add("${entry.path}: checksum mismatch")
                 } else if (existingHash == null) {
-                    writeAtomically(target, data)
+                    moveInto(temp, target)
                     newManifest[entry.path] = ManifestEntry(hash, token)
                     downloaded++
-                    bytes += data.size.toLong()
+                    bytes += size
                 } else if (localUnchanged) {
-                    writeAtomically(target, data)
+                    moveInto(temp, target)
                     newManifest[entry.path] = ManifestEntry(hash, token)
                     updated++
-                    bytes += data.size.toLong()
+                    bytes += size
                 } else if (hash == existingHash) {
+                    temp.delete()
                     newManifest[entry.path] = ManifestEntry(hash, token)
                     skipped++
                 } else {
                     val copy = File(target.parentFile, conflictName(target.name, conflictSuffix))
                     if (isSafeRelativePath(copy.name)) {
-                        writeAtomically(copy, data)
+                        moveInto(temp, copy)
                         conflicts++
-                        bytes += data.size.toLong()
+                        bytes += size
                     } else {
+                        temp.delete()
                         errors.add("${entry.path}: invalid conflict path")
                     }
                 }

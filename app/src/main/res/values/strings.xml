@@ -2031,10 +2031,18 @@
     <string name="sync_error_not_configured">请先填写有效的服务器地址与用户名</string>
     <string name="sync_info_title">说明</string>
     <string name="sync_info_text">同步采用无账号设计, 工程保存在你自有的服务器。密码经系统密钥库加密后仅存于本机, 不会上传</string>
-    <string name="sync_category_backup">备份</string>
-    <string name="sync_backup_now">立即备份到云端</string>
-    <string name="sync_backup_running">正在上传 %1$d/%2$d</string>
-    <string name="sync_backup_result">上传 %1$d 个, 跳过 %2$d 个, 清理 %3$d 个, 云端较新 %4$d 个, 冲突 %5$d 个, 失败 %6$d 个</string>
+    <string name="sync_category_backup">同步与备份</string>
+    <string name="sync_now">立即同步</string>
+    <string name="sync_running">正在同步</string>
+    <string name="sync_running_progress">正在同步 %1$d/%2$d</string>
+    <string name="sync_result_none">已是最新</string>
+    <string name="sync_result_uploaded">上传 %1$d</string>
+    <string name="sync_result_downloaded">下载 %1$d</string>
+    <string name="sync_result_updated">覆盖 %1$d</string>
+    <string name="sync_result_deleted">清理 %1$d</string>
+    <string name="sync_result_remote_newer">云端较新 %1$d</string>
+    <string name="sync_result_conflicts">冲突 %1$d</string>
+    <string name="sync_result_failed">失败 %1$d</string>
     <string name="sync_backup_info_title">备份说明</string>
     <string name="sync_backup_info_text">备份画作 (含自动保存草稿) 与你自己添加的笔刷, 内置笔刷不上传。本地已删除的文件会从云端一并清理; 别的设备改过而本地没改的文件不会被覆盖, 两边都改过时保留本地并把云端那份另存为副本</string>
     <string name="sync_auto_backup">保存后自动备份</string>
@@ -2057,14 +2065,6 @@
     <string name="sync_trust_self_signed_summary">仅用于你自己的服务器, 开启后将跳过 HTTPS 证书校验</string>
     <string name="sync_periodic_backup">定时自动备份</string>
     <string name="sync_periodic_backup_summary">应用打开期间每 30 分钟自动备份一次</string>
-    <string name="sync_category_restore">恢复</string>
-    <string name="sync_restore_artworks">恢复画作</string>
-    <string name="sync_restore_brushes">恢复笔刷</string>
-    <string name="sync_artworks">画作</string>
-    <string name="sync_brushes">笔刷</string>
-    <string name="sync_restore_hint">只补齐本地缺少的画作与笔刷, 不会覆盖或删除本地文件</string>
-    <string name="sync_restore_running">正在恢复 %1$d/%2$d</string>
-    <string name="sync_restore_result">恢复 %1$d 个, 覆盖 %2$d 个, 跳过 %3$d 个, 冲突 %4$d 个, 失败 %5$d 个</string>
     <string name="sync_conflict_suffix"> (云端)</string>
 
     <string name="settings_three_finger_edit_title">三指下滑打开编辑菜单</string>

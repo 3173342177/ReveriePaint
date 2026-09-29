@@ -4,6 +4,8 @@
 
 package com.reverie.paint.core.sync
 
+import java.io.File
+
 internal interface SyncClient {
     fun list(remotePath: String): List<RemoteEntry>
 
@@ -11,12 +13,22 @@ internal interface SyncClient {
 
     fun mkdir(remotePath: String)
 
-    fun put(
+    fun putFile(
         remotePath: String,
-        data: ByteArray,
+        file: File,
     )
 
-    fun get(remotePath: String): ByteArray
+    fun getToFile(
+        remotePath: String,
+        target: File,
+    )
+
+    fun getText(remotePath: String): String
+
+    fun putText(
+        remotePath: String,
+        text: String,
+    )
 
     fun delete(remotePath: String)
 
@@ -41,11 +53,8 @@ internal class SyncException(
 ) : Exception(message, cause) {
     enum class Kind {
         NETWORK,
-
         AUTH,
-
         NOT_FOUND,
-
         PROTOCOL,
     }
 }
