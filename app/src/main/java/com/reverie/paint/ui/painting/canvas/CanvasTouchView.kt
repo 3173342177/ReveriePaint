@@ -444,6 +444,10 @@ class CanvasTouchView(context: Context) : View(context) {
     // 防抖撤销任务与 Procreate 风格连续撤销/重做
     private var pendingUndoRunnable: Runnable? = null
     private var isContinuousUndoing = false
+    private val editMenuSwipe = com.reverie.paint.model.ThreeFingerSwipe()
+    private val editMenuPointerIds = IntArray(3)
+    private var editMenuGestureActive = false
+    private var editMenuPointersReleased = false
 
     private val continuousUndoRunnable = object : Runnable {
         override fun run() {
@@ -1006,6 +1010,10 @@ class CanvasTouchView(context: Context) : View(context) {
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        removeCallbacks(continuousUndoRunnable)
+        removeCallbacks(continuousRedoRunnable)
+        editMenuGestureActive = false
+        isContinuousUndoing = false
         removeCallbacks(longPressRunnable)
         isPendingLongPress = false
         isLongPressPickerActive = false
@@ -1964,6 +1972,14 @@ class CanvasTouchView(context: Context) : View(context) {
     // -------------------------------------------------------------
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val v = vm ?: return super.onTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && editMenuGestureActive) {
+            removeCallbacks(continuousRedoRunnable)
+            editMenuGestureActive = false
+            isContinuousUndoing = false
+            isTransformActive = false
+            isPinchMotion = false
+            maxTouchPointers = 0
+        }
 
         // 空格键长按临时抓手平移 (Spacebar Hold-to-Pan)
         if (v.isSpacePanning) {
@@ -2033,7 +2049,7 @@ class CanvasTouchView(context: Context) : View(context) {
 
         // 手写笔触控判定：存在手写笔 Pointer 且未处于双指画布手势导航中
         // (只要当前未处于双指手势，任何手指接触均视为手掌接触，优先保证手写笔落笔防误触)
-        val isStylusTouch = stylusPointerIndex >= 0 && (!isTransformActive || fingerCount < 2)
+        val isStylusTouch = !editMenuGestureActive && stylusPointerIndex >= 0 && (!isTransformActive || fingerCount < 2)
 
         // 侧键按住=临时橡皮 (Samsung Notes 语义): 每个笔接触事件重判, 纯手指路径清残留
         if (isStylusTouch) {
@@ -2287,6 +2303,74 @@ class CanvasTouchView(context: Context) : View(context) {
         val numFingers = fingerCount
         maxTouchPointers = maxOf(maxTouchPointers, numFingers)
         isInteracting = true
+
+        // Reserve a fresh three-finger gesture before viewport navigation sees it.
+        // Keep ownership through staggered pointer-up events: neither redo nor a stray stroke
+        // may run after a swipe. Existing two-finger navigation remains untouched.
+        if (!editMenuGestureActive && v.gestureThreeFingerEditMenu && numFingers == 3 &&
+            event.actionMasked == MotionEvent.ACTION_POINTER_DOWN && !isPinchMotion &&
+            !isContinuousUndoing && !filterSessionActive && !isLiquifyGestureActive &&
+            !v.anim.shiftTraceActive && tool != Tool.TRANSFORM && tool != Tool.CROP
+        ) {
+            editMenuGestureActive = true
+            editMenuPointersReleased = false
+            editMenuSwipe.begin(event.eventTime, density)
+            for (i in 0..2) {
+                val index = fingerIndices[i]
+                editMenuPointerIds[i] = event.getPointerId(index)
+                editMenuSwipe.setStart(i, event.getX(index), event.getY(index))
+            }
+            removeCallbacks(longPressRunnable)
+            longPressToken++
+            isPendingLongPress = false
+            removeCallbacks(continuousUndoRunnable)
+            removeCallbacks(continuousRedoRunnable)
+            if (strokeStarted) {
+                v.touchCancel()
+                strokeStarted = false
+                safeEndSymmetryUndoMacro()
+                resetMirrorBranches()
+            }
+            if (v.gestureThreeFingerRedo) postDelayed(continuousRedoRunnable, 420L)
+        }
+        if (editMenuGestureActive) {
+            if (numFingers > 3 || stylusPointerIndex >= 0 || !v.gestureThreeFingerEditMenu ||
+                event.actionMasked == MotionEvent.ACTION_CANCEL ||
+                (editMenuPointersReleased && event.actionMasked == MotionEvent.ACTION_POINTER_DOWN)
+            ) editMenuSwipe.reject()
+            if (event.actionMasked == MotionEvent.ACTION_MOVE || event.actionMasked == MotionEvent.ACTION_POINTER_UP) {
+                for (i in 0..2) {
+                    val index = event.findPointerIndex(editMenuPointerIds[i])
+                    if (index < 0 && !editMenuPointersReleased) editMenuSwipe.reject()
+                    else if (index < 0) continue
+                    else editMenuSwipe.update(i, event.getX(index), event.getY(index))
+                }
+                // After the first lift, remaining fingers may still move: suppress tap redo,
+                // but never recognize a new swipe from fewer than three fingers.
+                if (!editMenuPointersReleased && numFingers == 3) editMenuSwipe.evaluate(event.eventTime)
+            }
+            if (editMenuSwipe.moved || editMenuSwipe.rejected || event.actionMasked == MotionEvent.ACTION_POINTER_UP) {
+                removeCallbacks(continuousRedoRunnable)
+            }
+            if (event.actionMasked == MotionEvent.ACTION_POINTER_UP) editMenuPointersReleased = true
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                removeCallbacks(continuousRedoRunnable)
+                if (event.actionMasked == MotionEvent.ACTION_UP && !isContinuousUndoing) {
+                    if (editMenuSwipe.swiped && !editMenuSwipe.rejected) v.requestUiCommand("open_edit_menu")
+                    else if (editMenuSwipe.isTap(event.eventTime) && v.gestureThreeFingerRedo) v.redo()
+                }
+                editMenuGestureActive = false
+                isContinuousUndoing = false
+                isTransformActive = false
+                isInteracting = false
+                isPinchMotion = false
+                maxTouchPointers = 0
+                lastPos0 = Offset.Zero
+                lastPos1 = Offset.Zero
+                invalidate()
+            }
+            return true
+        }
 
         // 1. 多指手势 (双指捏合缩放/旋转/平移 + 碎片期融合)
         if (numFingers >= 2 || (isTransformActive && (nowMs - lastTransformTimestamp) < 150)) {

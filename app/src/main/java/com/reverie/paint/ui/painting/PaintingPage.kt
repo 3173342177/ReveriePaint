@@ -188,6 +188,8 @@ fun PaintingPage(
     var canvasW by remember { mutableStateOf(1) }
     var canvasH by remember { mutableStateOf(1) }
 
+    var canvasEditMenuOpen by remember { mutableStateOf(false) }
+
     // Popup panels
     var showIndicator by remember { mutableStateOf(false) }
     var indicatorTick by remember { mutableStateOf(0) }
@@ -273,6 +275,10 @@ fun PaintingPage(
                 panX = 0f
                 panY = 0f
                 flashIndicator()
+            }
+            "open_edit_menu" -> {
+                vm.refreshCanvasEditCapabilities()
+                canvasEditMenuOpen = true
             }
             "open_color" -> colorPanelOpen = true
             else -> {
@@ -1322,6 +1328,10 @@ fun PaintingPage(
                     vm.setLiquifyBrushSize(it.toDouble())
                 },
             )
+        }
+
+        if (canvasEditMenuOpen) {
+            CanvasEditMenu(vm = vm, onDismiss = { canvasEditMenuOpen = false })
         }
 
         // ---- Floating selection panel (Krita tool-options style) ----

@@ -2029,6 +2029,21 @@
     <string name="sync_restore_running">正在恢复 %1$d/%2$d</string>
     <string name="sync_restore_result">恢复 %1$d 个, 跳过 %2$d 个, 冲突 %3$d 个, 失败 %4$d 个</string>
     <string name="sync_conflict_suffix"> (云端)</string>
-</resources>
 
+    <string name="settings_three_finger_edit_title">三指下滑打开编辑菜单</string>
+    <string name="settings_three_finger_edit_desc">三指一起向下滑动可剪切、复制或粘贴；轻点仍可重做</string>
+    <string name="canvas_edit_title">剪切与复制</string>
+    <string name="canvas_edit_no_pixels">当前图层没有可复制的像素，或不是普通像素图层</string>
+    <string name="canvas_edit_cut">剪切</string>
+    <string name="canvas_edit_loading">正在读取可用操作…</string>
+    <string name="canvas_edit_unavailable">此版本暂不支持画布剪贴板</string>
+    <string name="canvas_edit_selection_hint">剪切与复制当前图层的选区内容</string>
+    <string name="canvas_edit_layer_hint">剪切与复制当前图层的画布内内容</string>
+    <string name="canvas_edit_clipboard_hint">仅限当前画作内粘贴，每次粘贴生成新图层</string>
+    <string name="canvas_edit_pasted_layer">粘贴的图层</string>
+    <string name="canvas_edit_pasted">已粘贴到新图层</string>
+    <string name="canvas_edit_cut_done">已剪切，可撤销</string>
+    <string name="canvas_edit_copied">已复制</string>
+    <string name="canvas_edit_failed">操作未完成，请检查当前图层与选区</string>
+</resources>
 

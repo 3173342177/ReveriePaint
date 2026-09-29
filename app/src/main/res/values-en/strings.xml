@@ -2029,6 +2029,21 @@
     <string name="sync_restore_running">Restoring %1$d/%2$d</string>
     <string name="sync_restore_result">Restored %1$d, skipped %2$d, conflicts %3$d, failed %4$d</string>
     <string name="sync_conflict_suffix"> (cloud)</string>
-</resources>
 
+    <string name="settings_three_finger_edit_title">Three-finger swipe down to edit</string>
+    <string name="settings_three_finger_edit_desc">Swipe down with three fingers to cut, copy or paste; tap to redo</string>
+    <string name="canvas_edit_title">Copy and paste</string>
+    <string name="canvas_edit_no_pixels">No pixels to copy, or the current layer is not a regular paint layer</string>
+    <string name="canvas_edit_cut">Cut</string>
+    <string name="canvas_edit_loading">Checking available actions…</string>
+    <string name="canvas_edit_unavailable">Canvas clipboard is unavailable in this build</string>
+    <string name="canvas_edit_selection_hint">Cut or copy the selection on the current layer</string>
+    <string name="canvas_edit_layer_hint">Cut or copy the current layer inside the canvas</string>
+    <string name="canvas_edit_clipboard_hint">Clipboard stays in this artwork; paste creates a new layer</string>
+    <string name="canvas_edit_pasted_layer">Pasted layer</string>
+    <string name="canvas_edit_pasted">Pasted into a new layer</string>
+    <string name="canvas_edit_cut_done">Cut; use Undo to restore</string>
+    <string name="canvas_edit_copied">Copied</string>
+    <string name="canvas_edit_failed">Action failed; check the current layer and selection</string>
+</resources>
 

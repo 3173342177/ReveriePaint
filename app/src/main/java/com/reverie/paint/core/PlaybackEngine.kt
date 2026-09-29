@@ -74,6 +74,9 @@ import com.reverie.paint.model.RecordingEvents.T_FILL_V3
 import com.reverie.paint.model.RecordingEvents.T_GRADIENT
 import com.reverie.paint.model.RecordingEvents.T_GRADIENT_V2
 import com.reverie.paint.model.RecordingEvents.T_REDO
+import com.reverie.paint.model.RecordingEvents.T_CANVAS_COPY
+import com.reverie.paint.model.RecordingEvents.T_CANVAS_CUT
+import com.reverie.paint.model.RecordingEvents.T_CANVAS_PASTE
 import com.reverie.paint.model.RecordingEvents.T_PRESET_SELECT
 import com.reverie.paint.model.RecordingEvents.T_UNDO
 import com.reverie.paint.model.RecordingEvents.T_INVERT_SELECTION
@@ -839,6 +842,9 @@ private fun PaintViewModel.dispatchToolOpLocked(
             }
         }
 
+        T_CANVAS_COPY -> ReverieCoreBridge.copyCanvasToClipboard(false)
+        T_CANVAS_CUT -> ReverieCoreBridge.copyCanvasToClipboard(true)
+        T_CANVAS_PASTE -> ReverieCoreBridge.pasteCanvasClipboard()
         T_REDO -> {
             ReverieCoreBridge.redo()
             val nw = ReverieCoreBridge.docWidth()
