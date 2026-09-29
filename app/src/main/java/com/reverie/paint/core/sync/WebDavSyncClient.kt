@@ -4,6 +4,8 @@
 
 package com.reverie.paint.core.sync
 
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import okhttp3.Credentials
 import okhttp3.HttpUrl
@@ -11,6 +13,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
@@ -73,24 +76,33 @@ internal class WebDavSyncClient(
         }
     }
 
-    override fun put(
+    override fun putFile(
         remotePath: String,
-        data: ByteArray,
+        file: File,
     ) {
-        val body = data.toRequestBody(OCTET_STREAM)
-        val request = auth(Request.Builder().url(urlFor(remotePath)).put(body)).build()
+        val request =
+            auth(Request.Builder().url(urlFor(remotePath)).put(file.asRequestBody(OCTET_STREAM))).build()
         executeFollowingRedirects(request).use { response ->
             if (response.code !in 200..299) throw mapError(response.code, "PUT $remotePath")
         }
     }
 
-    override fun get(remotePath: String): ByteArray {
+    override fun getToFile(
+        remotePath: String,
+        target: File,
+    ) {
         val request = auth(Request.Builder().url(urlFor(remotePath)).get()).build()
-        return try {
+        try {
             executeFollowingRedirects(request).use { response ->
                 if (response.code == 404) throw SyncException(SyncException.Kind.NOT_FOUND, "GET $remotePath")
                 if (response.code !in 200..299) throw mapError(response.code, "GET $remotePath")
-                response.body?.bytes() ?: ByteArray(0)
+                val body = response.body ?: throw SyncException(SyncException.Kind.PROTOCOL, "GET $remotePath 空响应")
+                target.parentFile?.mkdirs()
+                FileOutputStream(target).use { output ->
+                    body.byteStream().use { input -> input.copyTo(output, 64 * 1024) }
+                    output.flush()
+                    output.fd.sync()
+                }
             }
         } catch (e: SyncException) {
             throw e

@@ -365,16 +365,22 @@ class SyncEngineTest {
             dirs.add(remotePath)
         }
 
-        override fun put(
+        override fun putFile(
             remotePath: String,
-            data: ByteArray,
+            file: File,
         ) {
-            files[remotePath] = data
+            files[remotePath] = file.readBytes()
             etags[remotePath] = "e${++seq}"
         }
 
-        override fun get(remotePath: String): ByteArray =
-            files[remotePath] ?: throw SyncException(SyncException.Kind.NOT_FOUND, "missing")
+        override fun getToFile(
+            remotePath: String,
+            target: File,
+        ) {
+            val data = files[remotePath] ?: throw SyncException(SyncException.Kind.NOT_FOUND, "missing")
+            target.parentFile?.mkdirs()
+            target.writeBytes(data)
+        }
 
         override fun delete(remotePath: String) {
             files.remove(remotePath)

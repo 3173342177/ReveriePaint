@@ -162,23 +162,49 @@ internal object SyncEngine {
         return dirs.sorted()
     }
 
+    fun moveInto(
+        temp: File,
+        target: File,
+    ) {
+        target.parentFile?.mkdirs()
+        if (!temp.renameTo(target)) {
+            temp.copyTo(target, overwrite = true)
+            temp.delete()
+        }
+    }
+
+    fun partFile(target: File): File = File(target.parentFile, "${target.name}.part")
+
+    fun downloadToTemp(
+        client: SyncClient,
+        remotePath: String,
+        target: File,
+    ): Pair<File, String> {
+        val temp = partFile(target)
+        temp.parentFile?.mkdirs()
+        temp.delete()
+        try {
+            client.getToFile(remotePath, temp)
+            return temp to sha256(temp)
+        } catch (e: Exception) {
+            temp.delete()
+            throw e
+        }
+    }
+
     fun writeAtomically(
         target: File,
         data: ByteArray,
     ) {
-        val parent = target.parentFile
-        parent?.mkdirs()
-        val temp = File(parent, "${target.name}.part")
+        val temp = partFile(target)
+        temp.parentFile?.mkdirs()
         try {
             temp.outputStream().use { out ->
                 out.write(data)
                 out.flush()
-                (out as? java.io.FileOutputStream)?.fd?.sync()
+                out.fd.sync()
             }
-            if (!temp.renameTo(target)) {
-                temp.copyTo(target, overwrite = true)
-                temp.delete()
-            }
+            moveInto(temp, target)
         } catch (e: Exception) {
             temp.delete()
             throw e
@@ -347,8 +373,8 @@ internal object SyncEngine {
                     done++
                     onProgress(done, total)
                     try {
-                        val data = client.get(project.relativePath)
-                        val hash = sha256(data)
+                        val (temp, hash) = downloadToTemp(client, project.relativePath, project.file)
+                        temp.delete()
                         if (recorded != null && hash == recorded.hash) {
                             newManifest[project.relativePath] =
                                 ManifestEntry(hash, remoteTokens[project.relativePath] ?: "")
@@ -366,17 +392,18 @@ internal object SyncEngine {
                     done++
                     onProgress(done, total)
                     try {
-                        val data = client.get(project.relativePath)
-                        writeAtomically(File(project.file.parentFile, conflictName(project.file.name, conflictSuffix)), data)
-                        client.put(project.relativePath, project.file.readBytes())
+                        val copyFile = File(project.file.parentFile, conflictName(project.file.name, conflictSuffix))
+                        val (temp, copyHash) = downloadToTemp(client, project.relativePath, copyFile)
+                        moveInto(temp, copyFile)
+                        client.putFile(project.relativePath, project.file)
                         newManifest[project.relativePath] =
                             ManifestEntry(project.sha256, tokenAfterUpload(client, project.relativePath))
                         uploaded++
                         bytes += project.size
                         val copyPath = conflictName(project.relativePath, conflictSuffix)
                         try {
-                            client.put(copyPath, data)
-                            newManifest[copyPath] = ManifestEntry(sha256(data), tokenAfterUpload(client, copyPath))
+                            client.putFile(copyPath, copyFile)
+                            newManifest[copyPath] = ManifestEntry(copyHash, tokenAfterUpload(client, copyPath))
                         } catch (_: Exception) {
                         }
                         conflicts++
@@ -390,7 +417,7 @@ internal object SyncEngine {
                     done++
                     onProgress(done, total)
                     try {
-                        client.put(project.relativePath, project.file.readBytes())
+                        client.putFile(project.relativePath, project.file)
                         newManifest[project.relativePath] =
                             ManifestEntry(project.sha256, tokenAfterUpload(client, project.relativePath))
                         uploaded++
@@ -474,30 +501,33 @@ internal object SyncEngine {
                 continue
             }
             try {
-                val data = client.get(entry.path)
-                val hash = sha256(data)
+                val (temp, hash) = downloadToTemp(client, entry.path, target)
+                val size = temp.length()
                 if (recorded != null && !remoteChanged && recorded.hash.isNotEmpty() && hash != recorded.hash) {
+                    temp.delete()
                     errors.add("${entry.path}: checksum mismatch")
                 } else if (existingHash == null) {
-                    writeAtomically(target, data)
+                    moveInto(temp, target)
                     newManifest[entry.path] = ManifestEntry(hash, token)
                     downloaded++
-                    bytes += data.size.toLong()
+                    bytes += size
                 } else if (localUnchanged) {
-                    writeAtomically(target, data)
+                    moveInto(temp, target)
                     newManifest[entry.path] = ManifestEntry(hash, token)
                     updated++
-                    bytes += data.size.toLong()
+                    bytes += size
                 } else if (hash == existingHash) {
+                    temp.delete()
                     newManifest[entry.path] = ManifestEntry(hash, token)
                     skipped++
                 } else {
                     val copy = File(target.parentFile, conflictName(target.name, conflictSuffix))
                     if (isSafeRelativePath(copy.name)) {
-                        writeAtomically(copy, data)
+                        moveInto(temp, copy)
                         conflicts++
-                        bytes += data.size.toLong()
+                        bytes += size
                     } else {
+                        temp.delete()
                         errors.add("${entry.path}: invalid conflict path")
                     }
                 }

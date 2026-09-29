@@ -347,16 +347,21 @@ class SyncEngineRestoreTest {
 
         override fun mkdir(remotePath: String) = Unit
 
-        override fun put(
+        override fun putFile(
             remotePath: String,
-            data: ByteArray,
+            file: File,
         ) {
-            files[remotePath] = data
+            files[remotePath] = file.readBytes()
         }
 
-        override fun get(remotePath: String): ByteArray {
+        override fun getToFile(
+            remotePath: String,
+            target: File,
+        ) {
             if (remotePath == failOn) throw SyncException(SyncException.Kind.NETWORK, "boom")
-            return files[remotePath] ?: throw SyncException(SyncException.Kind.NOT_FOUND, "missing")
+            val data = files[remotePath] ?: throw SyncException(SyncException.Kind.NOT_FOUND, "missing")
+            target.parentFile?.mkdirs()
+            target.writeBytes(data)
         }
 
         override fun delete(remotePath: String) {
