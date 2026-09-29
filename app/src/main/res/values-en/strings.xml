@@ -951,8 +951,8 @@
     <string name="brush_param_angle">Angle</string>
     <string name="brush_param_rotation">Rotation</string>
     <string name="brush_param_scatter">Scatter</string>
-    <string name="brush_param_fade">Fade</string>
-    <string name="brush_param_softness">Softness</string>
+    <string name="brush_param_fade">Edge Sharpness</string>
+    <string name="brush_param_softness">Softness (100% = preset)</string>
     <string name="brush_param_ratio">Ratio</string>
     <string name="brush_param_sharpness">Sharpness</string>
     <string name="brush_settings_title">Brush Settings</string>
@@ -1088,7 +1088,7 @@
     <string name="brush_studio_tip_square">Square Tip</string>
     <string name="brush_studio_tip_spikes">Spikes</string>
     <string name="brush_studio_unit_spikes"> pts</string>
-    <string name="brush_studio_tip_feather_hardness">Fade Hardness</string>
+    <string name="brush_studio_tip_feather_hardness">Tip Softness (100% = preset)</string>
     <string name="brush_studio_tip_antialias">Antialiasing &amp; Flip</string>
     <string name="brush_studio_tip_aa_none">No Antialiasing</string>
     <string name="brush_studio_tip_aa_standard">Standard AA</string>
@@ -1110,7 +1110,7 @@
     <string name="brush_studio_dynamics_spacing">Spacing</string>
     <string name="brush_studio_dynamics_scatter">Scatter Jitter</string>
     <string name="brush_studio_dynamics_streamline">Streamline</string>
-    <string name="brush_studio_dynamics_fade">Fade</string>
+    <string name="brush_studio_dynamics_fade">Edge Sharpness (100% = sharp)</string>
     <string name="brush_studio_dynamics_taper">Taper</string>
     <string name="brush_studio_dynamics_airbrush_mode">Airbrush Mode</string>
     <string name="brush_studio_dynamics_airbrush_enable">Enable Continuous Airbrush Flow</string>

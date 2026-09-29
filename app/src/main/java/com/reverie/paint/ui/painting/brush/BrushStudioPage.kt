@@ -1690,9 +1690,15 @@ private fun ScratchpadCanvas(
     val brushColor = remember(vm.brushColor) {
         runCatching { Color(android.graphics.Color.parseColor(vm.brushColor)) }.getOrDefault(Color.White)
     }
+    val secColor = remember(vm.brushSecondaryColor) {
+        runCatching { Color(android.graphics.Color.parseColor(vm.brushSecondaryColor)) }.getOrDefault(Color.White)
+    }
     val opacity = vm.brushOpacity.toFloat().coerceIn(0.05f, 1f)
     val flow = vm.brushFlow.toFloat().coerceIn(0.05f, 1f)
-    val hardness = vm.brushSoftness.toFloat().coerceIn(0.05f, 1f)
+    // 与引擎口径一致：笔尖羽化来自 Fade（MaskGenerator 的 hfade/vfade），
+    // 柔度 Softness 是在其之上叠加的乘数（1.0 = 不改动），两者相乘才是最终边缘柔和程度。
+    val softness = (vm.brushFade.toFloat().coerceIn(0f, 1f) * vm.brushSoftness.toFloat().coerceIn(0f, 1f))
+        .coerceIn(0f, 1f)
     val ratio = vm.brushRatio.toFloat().coerceIn(0.05f, 1f)
     val baseRadius = (vm.brushSize.toFloat().coerceIn(8f, 56f) / 2f)
     val isSquare = vm.brushTipShape == 1
@@ -1735,6 +1741,17 @@ private fun ScratchpadCanvas(
                     } else 1f
                     val dabAlpha = (baseAlpha * texMod).coerceIn(0.01f, 1f)
 
+                    // Secondary color mix preview
+                    val effectiveColor = if (vm.brushSecondaryMix > 0.001) {
+                        val mixFactor = vm.brushSecondaryMix.toFloat().coerceIn(0f, 1f)
+                        Color(
+                            red = brushColor.red * (1f - mixFactor) + secColor.red * mixFactor,
+                            green = brushColor.green * (1f - mixFactor) + secColor.green * mixFactor,
+                            blue = brushColor.blue * (1f - mixFactor) + secColor.blue * mixFactor,
+                            alpha = brushColor.alpha,
+                        )
+                    } else brushColor
+
                     if (tipImageBitmap != null) {
                         val dabW = (rad * 2f).coerceAtLeast(2f)
                         val dabH = (rad * 2f * ratio).coerceAtLeast(2f)
@@ -1747,7 +1764,7 @@ private fun ScratchpadCanvas(
                                     dstOffset = IntOffset((curPos.x - dabW / 2f).toInt(), (curPos.y - dabH / 2f).toInt()),
                                     dstSize = IntSize(dabW.toInt(), dabH.toInt()),
                                     alpha = dabAlpha,
-                                    colorFilter = ColorFilter.tint(brushColor, BlendMode.SrcIn),
+                                    colorFilter = ColorFilter.tint(effectiveColor, BlendMode.SrcIn),
                                 )
                             }
                         } else {
@@ -1756,7 +1773,7 @@ private fun ScratchpadCanvas(
                                 dstOffset = IntOffset((curPos.x - dabW / 2f).toInt(), (curPos.y - dabH / 2f).toInt()),
                                 dstSize = IntSize(dabW.toInt(), dabH.toInt()),
                                 alpha = dabAlpha,
-                                colorFilter = ColorFilter.tint(brushColor, BlendMode.SrcIn),
+                                colorFilter = ColorFilter.tint(effectiveColor, BlendMode.SrcIn),
                             )
                         }
                     } else if (isSquare) {
@@ -1765,30 +1782,63 @@ private fun ScratchpadCanvas(
                                 rotate(angle, curPos)
                             }) {
                                 drawRect(
-                                    color = brushColor.copy(alpha = dabAlpha),
+                                    color = effectiveColor.copy(alpha = dabAlpha),
                                     topLeft = Offset(curPos.x - rad, curPos.y - rad * ratio),
                                     size = Size(rad * 2f, rad * 2f * ratio),
                                 )
                             }
                         } else {
                             drawRect(
-                                color = brushColor.copy(alpha = dabAlpha),
+                                color = effectiveColor.copy(alpha = dabAlpha),
                                 topLeft = Offset(curPos.x - rad, curPos.y - rad * ratio),
                                 size = Size(rad * 2f, rad * 2f * ratio),
                             )
                         }
                     } else {
+                        // Circle tip: when softness is close to 0, render razor sharp solid disc (no feathering)
                         if (ratio < 0.99f || angle != 0f) {
                             withTransform({
                                 if (angle != 0f) rotate(angle, curPos)
                                 scale(scaleX = 1f, scaleY = ratio, pivot = curPos)
                             }) {
+                                if (softness <= 0.02f) {
+                                    drawCircle(
+                                        color = effectiveColor.copy(alpha = dabAlpha),
+                                        radius = rad.coerceAtLeast(1.5f),
+                                        center = curPos,
+                                    )
+                                } else {
+                                    val solidStop = (1f - softness).coerceIn(0f, 0.98f)
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colorStops = arrayOf(
+                                                0f to effectiveColor.copy(alpha = dabAlpha),
+                                                solidStop to effectiveColor.copy(alpha = dabAlpha),
+                                                1f to effectiveColor.copy(alpha = 0f),
+                                            ),
+                                            center = curPos,
+                                            radius = rad.coerceAtLeast(1.5f),
+                                        ),
+                                        radius = rad.coerceAtLeast(1.5f),
+                                        center = curPos,
+                                    )
+                                }
+                            }
+                        } else {
+                            if (softness <= 0.02f) {
+                                drawCircle(
+                                    color = effectiveColor.copy(alpha = dabAlpha),
+                                    radius = rad.coerceAtLeast(1.5f),
+                                    center = curPos,
+                                )
+                            } else {
+                                val solidStop = (1f - softness).coerceIn(0f, 0.98f)
                                 drawCircle(
                                     brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            brushColor.copy(alpha = dabAlpha),
-                                            brushColor.copy(alpha = dabAlpha * hardness),
-                                            brushColor.copy(alpha = 0f),
+                                        colorStops = arrayOf(
+                                            0f to effectiveColor.copy(alpha = dabAlpha),
+                                            solidStop to effectiveColor.copy(alpha = dabAlpha),
+                                            1f to effectiveColor.copy(alpha = 0f),
                                         ),
                                         center = curPos,
                                         radius = rad.coerceAtLeast(1.5f),
@@ -1797,20 +1847,6 @@ private fun ScratchpadCanvas(
                                     center = curPos,
                                 )
                             }
-                        } else {
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        brushColor.copy(alpha = dabAlpha),
-                                        brushColor.copy(alpha = dabAlpha * hardness),
-                                        brushColor.copy(alpha = 0f),
-                                    ),
-                                    center = curPos,
-                                    radius = rad.coerceAtLeast(1.5f),
-                                ),
-                                radius = rad.coerceAtLeast(1.5f),
-                                center = curPos,
-                            )
                         }
                     }
                 }
