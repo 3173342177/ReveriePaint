@@ -838,13 +838,13 @@ import kotlinx.coroutines.withContext
         val dedupeDone = prefs().getBoolean("kpp_dedupe_migrated", false)
         val rollbackDone = prefs().getBoolean("kpp_edge_semantics_migrated", false)
         val jitterCleanDone = prefs().getBoolean("kpp_jitter_clean_migrated", false)
-        if (dedupeDone && rollbackDone && jitterCleanDone) return
+        val spacingCleanDone = prefs().getBoolean("kpp_spacing_clean_migrated", false)
+        if (dedupeDone && rollbackDone && jitterCleanDone && spacingCleanDone) return
         var fixed = 0
         try {
-            if (!rollbackDone || !jitterCleanDone) {
+            if (!rollbackDone || !jitterCleanDone || !spacingCleanDone) {
                 for (name in appContext.assets.list("paintoppresets") ?: emptyArray()) {
                     val target = File(dir, name)
-                    if (!target.exists()) continue
                     appContext.assets.open("paintoppresets/$name").use { input ->
                         target.outputStream().use { output -> input.copyTo(output) }
                     }
@@ -858,6 +858,7 @@ import kotlinx.coroutines.withContext
         prefs().edit().putBoolean("kpp_dedupe_migrated", true).apply()
         prefs().edit().putBoolean("kpp_edge_semantics_migrated", true).apply()
         prefs().edit().putBoolean("kpp_jitter_clean_migrated", true).apply()
+        prefs().edit().putBoolean("kpp_spacing_clean_migrated", true).apply()
         android.util.Log.d("ReveriePaint", "kpp migration: dedupe fixed=$fixed")
     }
 
@@ -1031,75 +1032,19 @@ import kotlinx.coroutines.withContext
     /** Reset all parameters for the current brush back to factory defaults */
     internal fun PaintViewModel.resetBrushParams() {
         val index = brushPresetIndex
-        val d = ReverieCoreBridge.brushPresetDefaults(index)
-        val kppFile = brushPresets.firstOrNull { it.index == index }?.name
-            ?.let { File(File(appContext.filesDir, "paintoppresets"), "$it.kpp") }
-        val parsed = if (kppFile?.exists() == true) KppHelper.parseKppFile(kppFile) else KppHelper.KppParsedAttributes()
-        brushSize = d?.getOrNull(0) ?: 20.0
-        brushOpacity = (d?.getOrNull(1) ?: 1.0).coerceIn(0.0, 1.0)
-        brushFlow = (d?.getOrNull(2) ?: 1.0).coerceIn(0.0, 1.0)
-        val rawSp = d?.getOrNull(3) ?: 0.15
-        brushSpacing = if (rawSp >= 0.75) 0.1 else rawSp.coerceIn(0.01, 2.5)
-        brushAirbrush = (d?.getOrNull(4) ?: 0.0) > 0.5
-        val defaultRate = d?.getOrNull(5) ?: 30.0
-        brushAirbrushRate = if (defaultRate >= 5.0) defaultRate else 30.0
-        brushSmudgeRate = d?.getOrNull(6) ?: 0.5
-        brushSmudgeLength = d?.getOrNull(7) ?: 0.5
-        brushAngle = d?.getOrNull(8) ?: 0.0
-        brushScatter = d?.getOrNull(9) ?: 0.0
-        brushSoftness = parsed.softness ?: KppHelper.SOFTNESS_NEUTRAL
-        brushRatio = d?.getOrNull(11) ?: 1.0
-        brushSharpness = d?.getOrNull(12) ?: 0.0
-        brushRotation = d?.getOrNull(13) ?: 0.0
-        brushPressureSize = d?.getOrNull(14) ?: 1.0
-        brushPressureOpacity = d?.getOrNull(15) ?: 0.0
-        brushPressureFlow = d?.getOrNull(16) ?: 0.0
-        brushFollowDirection = (d?.getOrNull(17) ?: 0.0) > 0.5
-        brushRandomFlipX = (d?.getOrNull(18) ?: 0.0) > 0.5
-        brushRandomFlipY = (d?.getOrNull(19) ?: 0.0) > 0.5
-        brushAntiAliasing = if ((d?.getOrNull(20) ?: 1.0) > 0.5) 1 else 0
-
-        brushFade = parsed.fade ?: KppHelper.FADE_SOLID
-        brushCompositeOp = "normal"
-        brushTipShape = 0
-        brushStreamline = 0.0
-        brushTaper = 0.0
-        brushTextureEnabled = false
-        brushTextureScale = 1.0
-        brushTextureStrength = 0.5
-        brushTextureMode = "multiply"
-        brushHueJitter = 0.0
-        brushSatJitter = 0.0
-        brushValJitter = 0.0
-        brushSecondaryMix = 0.0
-        brushPressureColorMix = false
-        brushPressureEnabled = true
-        brushSpeedSize = 0.0
-        brushPressureCurve = 0
-        brushMinSizeLimit = 1.0
-        brushMaxSizeLimit = 500.0
-        brushTipAsset = if (index >= 0) ReverieCoreBridge.brushPresetTipFilename(index) else ""
-        brushPaintOpId = if (index >= 0) ReverieCoreBridge.brushPresetPaintOpId(index) else "paintbrush"
-        brushSpikes = 2
-        brushJitterAngle = 0.0
-        brushJitterSize = 0.0
-        brushMaskingEnabled = false
-        brushMaskingCompositeOp = "multiply"
-        brushMaskingSizeRatio = 1.0
-        brushMaskingSpacing = 0.1
-        brushMaskingTipAsset = ""
-        brushMaskingTipShape = 0
-        brushMaskingFade = 0.0
-        brushMaskingSoftness = 1.0
-        brushRotationSensor = if (brushFollowDirection) "drawingangle" else ""
-        brushScatterSensor = "fuzzy"
-        brushSizeSensor = "pressure"
-        brushOpacitySensor = "pressure"
-        brushFlowSensor = "pressure"
-        brushDescription = ""
-        brushVersion = "1.0"
         val preset = brushPresets.firstOrNull { it.index == index }
         if (preset != null) {
+            val dir = File(appContext.filesDir, "paintoppresets")
+            val target = File(dir, "${preset.name}.kpp")
+            try {
+                val assetNames = appContext.assets.list("paintoppresets") ?: emptyArray()
+                if (assetNames.contains("${preset.name}.kpp")) {
+                    appContext.assets.open("paintoppresets/${preset.name}.kpp").use { input ->
+                        target.outputStream().use { output -> input.copyTo(output) }
+                    }
+                }
+            } catch (_: Exception) {}
+
             brushParams.remove(preset.name)
             persistBrushParams()
             toolBrushStates = toolBrushStates.mapValues { (_, s) ->
@@ -1107,16 +1052,14 @@ import kotlinx.coroutines.withContext
             }
             persistToolBrushStates()
         }
-        val isEraserPreset = preset?.group == "橡皮擦" || preset?.name?.startsWith("a)") == true || preset?.name?.contains("Eraser", ignoreCase = true) == true
-        val effectiveCompOp = if (currentToolId == "eraser" || isEraserPreset) "erase" else "normal"
-        runCore(render = false) {
-            if (index >= 0) {
-                ReverieCoreBridge.loadBrushPreset(index)
-                ReverieCoreBridge.setPresetIsEraser(currentToolId == "eraser" || isEraserPreset)
-                ReverieCoreBridge.setBrushCompositeOp(effectiveCompOp)
-                ReverieCoreBridge.setBrushColor(brushColor)
-            }
+        if (index >= 0) {
+            selectBrushPreset(index)
         }
+        android.widget.Toast.makeText(
+            appContext,
+            appContext.getString(R.string.brush_reset_toast),
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
     }
 
     /** Check if a brush preset has modified parameters */
@@ -1126,7 +1069,17 @@ import kotlinx.coroutines.withContext
 
     /** Reset a brush preset back to factory default parameters */
     internal fun PaintViewModel.resetBrushPresetToDefault(presetName: String) {
-        if (!brushParams.containsKey(presetName)) return
+        val dir = File(appContext.filesDir, "paintoppresets")
+        val target = File(dir, "$presetName.kpp")
+        try {
+            val assetNames = appContext.assets.list("paintoppresets") ?: emptyArray()
+            if (assetNames.contains("$presetName.kpp")) {
+                appContext.assets.open("paintoppresets/$presetName.kpp").use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+        } catch (_: Exception) {}
+
         brushParams.remove(presetName)
         persistBrushParams()
         toolBrushStates = toolBrushStates.mapValues { (_, s) ->
