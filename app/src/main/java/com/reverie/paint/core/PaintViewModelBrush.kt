@@ -203,7 +203,7 @@ import kotlinx.coroutines.withContext
 
     internal fun PaintViewModel.updateBrushSpacing(v: Double) {
         brushSpacing = v
-        saveBrushParam()
+        saveBrushParam(spacingChanged = true)
         runCore(render = false) { ReverieCoreBridge.setBrushSpacing(v) }
     }
 
@@ -574,6 +574,7 @@ import kotlinx.coroutines.withContext
     internal fun PaintViewModel.saveBrushParam(
         dynamicsChanged: Boolean = false,
         smudgeChanged: Boolean = false,
+        spacingChanged: Boolean = false,
         reloadEngine: Boolean = false,
         immediateReload: Boolean = false,
     ) {
@@ -583,6 +584,7 @@ import kotlinx.coroutines.withContext
         val existing = brushParams[name]
         val dc = dynamicsChanged || (existing?.dynamicsCustomized == true)
         val sc = smudgeChanged || (existing?.smudgeCustomized == true)
+        val spc = spacingChanged || (existing?.spacingCustomized == true)
         val p = BrushParams(
             size = brushSize,
             opacity = brushOpacity,
@@ -636,6 +638,7 @@ import kotlinx.coroutines.withContext
             isCustomized = true,
             dynamicsCustomized = dc,
             smudgeCustomized = sc,
+            spacingCustomized = spc,
             maskingEnabled = brushMaskingEnabled,
             maskingCompositeOp = brushMaskingCompositeOp,
             maskingSizeRatio = brushMaskingSizeRatio,
@@ -672,7 +675,9 @@ import kotlinx.coroutines.withContext
                             ReverieCoreBridge.setBrushSize(pSnapshot.size)
                             ReverieCoreBridge.setBrushOpacity(pSnapshot.opacity)
                             ReverieCoreBridge.setBrushFlow(pSnapshot.flow)
-                            ReverieCoreBridge.setBrushSpacing(pSnapshot.spacing)
+                            if (pSnapshot.spacingCustomized) {
+                                ReverieCoreBridge.setBrushSpacing(pSnapshot.spacing)
+                            }
                             ReverieCoreBridge.setBrushAngle(pSnapshot.angle)
                             ReverieCoreBridge.setBrushScatter(pSnapshot.scatter)
                             ReverieCoreBridge.setBrushFade(pSnapshot.fade)
@@ -759,6 +764,7 @@ import kotlinx.coroutines.withContext
                 o.put("cus", p.isCustomized)
                 o.put("dc", p.dynamicsCustomized)
                 o.put("scus", p.smudgeCustomized)
+                o.put("spc", p.spacingCustomized)
                 o.put("m_en", p.maskingEnabled)
                 o.put("m_op", p.maskingCompositeOp)
                 o.put("m_sr", p.maskingSizeRatio)
@@ -867,6 +873,8 @@ import kotlinx.coroutines.withContext
         val resetLegacyFade = !prefs().getBoolean("brush_fade_solidity_migrated", false)
         // 一次性迁移: 修复因未判断 Pressureh/PressureMix 开关导致的 100% 杂色抖动与副色混合残留
         val resetLegacyJitter = !prefs().getBoolean("brush_jitter_mix_migrated", false)
+        // 一次性迁移: 修复自动间距错误换算导致间距被锁定为 1.0(100%) 珠串点状的问题
+        val resetLegacySpacing = !prefs().getBoolean("brush_spacing_dotted_migrated", false)
         try {
             val raw = prefs().getString("brush_params", null) ?: return
             val json = org.json.JSONArray(raw)
@@ -875,11 +883,14 @@ import kotlinx.coroutines.withContext
                 val name = o.getString("n")
                 val isEraser = name.startsWith("a)_") || name.contains("Eraser", ignoreCase = true)
                 val rawCop = o.optString("cop", "normal")
+                val rawSp = o.optDouble("sp", 0.1)
+                val spc = o.optBoolean("spc", false)
+                val healedSpacing = if ((resetLegacySpacing || !spc) && rawSp >= 0.75) 0.1 else rawSp
                 brushParams[name] = BrushParams(
                     size = o.optDouble("s", 20.0),
                     opacity = o.optDouble("o", 1.0),
                     flow = o.optDouble("f", 1.0),
-                    spacing = o.optDouble("sp", 0.1),
+                    spacing = healedSpacing,
                     angle = o.optDouble("ang", 0.0),
                     scatter = o.optDouble("sc", 0.0),
                     fade = if (resetLegacyFade) KppHelper.FADE_SOLID else o.optDouble("fa", KppHelper.FADE_SOLID),
@@ -937,6 +948,7 @@ import kotlinx.coroutines.withContext
                     },
                     dynamicsCustomized = o.optBoolean("dc", false),
                     smudgeCustomized = o.optBoolean("scus", false),
+                    spacingCustomized = if (resetLegacySpacing && rawSp >= 0.75) false else spc,
                     maskingEnabled = o.optBoolean("m_en", false),
                     maskingCompositeOp = o.optString("m_op", "multiply"),
                     maskingSizeRatio = o.optDouble("m_sr", 1.0),
@@ -952,10 +964,11 @@ import kotlinx.coroutines.withContext
                     flowSensor = o.optString("fl_se", "pressure"),
                 )
             }
-            if (resetLegacySoftness || resetLegacyFade || resetLegacyJitter) {
+            if (resetLegacySoftness || resetLegacyFade || resetLegacyJitter || resetLegacySpacing) {
                 prefs().edit().putBoolean("brush_softness_neutral_migrated", true).apply()
                 prefs().edit().putBoolean("brush_fade_solidity_migrated", true).apply()
                 prefs().edit().putBoolean("brush_jitter_mix_migrated", true).apply()
+                prefs().edit().putBoolean("brush_spacing_dotted_migrated", true).apply()
                 persistBrushParams()
             }
         } catch (_: Exception) {
@@ -1025,7 +1038,8 @@ import kotlinx.coroutines.withContext
         brushSize = d?.getOrNull(0) ?: 20.0
         brushOpacity = (d?.getOrNull(1) ?: 1.0).coerceIn(0.0, 1.0)
         brushFlow = (d?.getOrNull(2) ?: 1.0).coerceIn(0.0, 1.0)
-        brushSpacing = d?.getOrNull(3) ?: 0.15
+        val rawSp = d?.getOrNull(3) ?: 0.15
+        brushSpacing = if (rawSp >= 0.75) 0.1 else rawSp.coerceIn(0.01, 2.5)
         brushAirbrush = (d?.getOrNull(4) ?: 0.0) > 0.5
         val defaultRate = d?.getOrNull(5) ?: 30.0
         brushAirbrushRate = if (defaultRate >= 5.0) defaultRate else 30.0
@@ -1088,27 +1102,20 @@ import kotlinx.coroutines.withContext
         if (preset != null) {
             brushParams.remove(preset.name)
             persistBrushParams()
+            toolBrushStates = toolBrushStates.mapValues { (_, s) ->
+                s.copy(paramMemory = s.paramMemory - preset.name)
+            }
+            persistToolBrushStates()
         }
+        val isEraserPreset = preset?.group == "橡皮擦" || preset?.name?.startsWith("a)") == true || preset?.name?.contains("Eraser", ignoreCase = true) == true
+        val effectiveCompOp = if (currentToolId == "eraser" || isEraserPreset) "erase" else "normal"
         runCore(render = false) {
             if (index >= 0) {
                 ReverieCoreBridge.loadBrushPreset(index)
+                ReverieCoreBridge.setPresetIsEraser(currentToolId == "eraser" || isEraserPreset)
+                ReverieCoreBridge.setBrushCompositeOp(effectiveCompOp)
+                ReverieCoreBridge.setBrushColor(brushColor)
             }
-            ReverieCoreBridge.setBrushSize(brushSize)
-            ReverieCoreBridge.setBrushOpacity(brushOpacity)
-            ReverieCoreBridge.setBrushFlow(brushFlow)
-            ReverieCoreBridge.setBrushSpacing(brushSpacing)
-            ReverieCoreBridge.setBrushAngle(brushAngle)
-            ReverieCoreBridge.setBrushScatter(brushScatter)
-            ReverieCoreBridge.setBrushFade(brushFade)
-            ReverieCoreBridge.setBrushSoftness(brushSoftness)
-            ReverieCoreBridge.setBrushRatio(brushRatio)
-            ReverieCoreBridge.setBrushSharpness(brushSharpness)
-            ReverieCoreBridge.setBrushRotation(brushRotation)
-            ReverieCoreBridge.setBrushCompositeOp(brushCompositeOp)
-            ReverieCoreBridge.setBrushSmudgeRate(brushSmudgeRate)
-            ReverieCoreBridge.setBrushSmudgeLength(brushSmudgeLength)
-            ReverieCoreBridge.setBrushAirbrush(brushAirbrush, brushAirbrushRate)
-            ReverieCoreBridge.setBrushTipAsset("")
         }
     }
 
@@ -1122,6 +1129,10 @@ import kotlinx.coroutines.withContext
         if (!brushParams.containsKey(presetName)) return
         brushParams.remove(presetName)
         persistBrushParams()
+        toolBrushStates = toolBrushStates.mapValues { (_, s) ->
+            s.copy(paramMemory = s.paramMemory - presetName)
+        }
+        persistToolBrushStates()
 
         val preset = brushPresets.firstOrNull { it.name == presetName }
         if (preset != null && preset.index == brushPresetIndex) {
@@ -1413,7 +1424,8 @@ import kotlinx.coroutines.withContext
                     brushSize = d[0]
                     brushOpacity = d[1].coerceIn(0.0, 1.0)
                     brushFlow = d[2].coerceIn(0.0, 1.0)
-                    brushSpacing = d[3]
+                    val rawSp = d[3]
+                    brushSpacing = if (rawSp >= 0.75) 0.1 else rawSp.coerceIn(0.01, 2.5)
                     brushAirbrush = d[4] > 0.5
                     val defaultRate = d[5]
                     brushAirbrushRate = if (defaultRate >= 5.0) defaultRate else 30.0
@@ -1423,6 +1435,7 @@ import kotlinx.coroutines.withContext
                     brushSize = d[0]
                     brushOpacity = d[1].coerceIn(0.0, 1.0)
                     brushFlow = d[2].coerceIn(0.0, 1.0)
+                    brushSpacing = 0.1
                 }
                 brushAngle = d.getOrNull(8) ?: 0.0
                 brushScatter = d.getOrNull(9) ?: 0.0
@@ -1506,7 +1519,9 @@ import kotlinx.coroutines.withContext
                 ReverieCoreBridge.setBrushSize(saved.size)
                 ReverieCoreBridge.setBrushOpacity(saved.opacity)
                 ReverieCoreBridge.setBrushFlow(saved.flow)
-                ReverieCoreBridge.setBrushSpacing(saved.spacing)
+                if (saved.spacingCustomized) {
+                    ReverieCoreBridge.setBrushSpacing(saved.spacing)
+                }
                 ReverieCoreBridge.setBrushAngle(saved.angle)
                 ReverieCoreBridge.setBrushScatter(saved.scatter)
                 ReverieCoreBridge.setBrushFade(saved.fade)

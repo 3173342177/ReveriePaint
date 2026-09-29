@@ -3836,6 +3836,7 @@ data class BrushParams(
     val isCustomized: Boolean = false,
     val dynamicsCustomized: Boolean = false,
     val smudgeCustomized: Boolean = false,
+    val spacingCustomized: Boolean = false,
     val maskingEnabled: Boolean = false,
     val maskingCompositeOp: String = "multiply",
     val maskingSizeRatio: Double = 1.0,

@@ -619,7 +619,6 @@ internal fun PaintViewModel.applyTool(toolId: String) {
     if (isPrevDrawing) {
         lastDrawingToolId = currentToolId
         rememberToolParamSnapshot()
-        saveBrushParam()
     }
     val mode =
         when (toolId) {

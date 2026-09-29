@@ -847,16 +847,18 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
             // 再报给 UI, 否则面板显示的是一个完全无效的数字。
             KisBrushSP b = bs->brush();
             const qreal dim = b ? qMax<qreal>(b->width(), b->height()) : 0.0;
-            const qreal autoPx = KisPaintOpUtils::calcAutoSpacing(dim, bs->autoSpacingCoeff());
-            spacing = dim > 1.0 ? autoPx / dim : bs->autoSpacingCoeff();
+            const qreal effectiveDim = (dim > 1.0) ? dim : ((size > 1.0) ? size : 20.0);
+            const qreal autoPx = KisPaintOpUtils::calcAutoSpacing(effectiveDim, bs->autoSpacingCoeff());
+            spacing = (effectiveDim > 0.0) ? (autoPx / effectiveDim) : 0.1;
+            spacing = qBound(0.02, spacing, 0.3);
         } else {
             spacing = bs->spacing();
         }
     }
-    if (!(spacing > 0.0) || spacing != spacing) {
-        spacing = s->getDouble("SpacingValue", s->getDouble("spacing", 0.15));
+    if (!(spacing > 0.0) || spacing != spacing || spacing >= 0.75) {
+        spacing = bs ? bs->spacing() : s->getDouble("spacing", 0.15);
     }
-    if (!(spacing > 0.0) || spacing != spacing) {
+    if (!(spacing > 0.0) || spacing != spacing || spacing >= 0.75) {
         spacing = 0.15;
     }
 
