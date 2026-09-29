@@ -282,12 +282,12 @@ fun BrushStudioPage(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(48.dp)
                     .background(panelBg)
-                    .padding(horizontal = 6.dp),
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ReIconButton(R.drawable.ic_arrow_left, stringResource(R.string.brush_studio_back_canvas), onBack, size = 36.dp, tint = textMain)
+                ReIconButton(R.drawable.ic_arrow_left, stringResource(R.string.brush_studio_back_canvas), onBack, size = 34.dp, tint = textMain)
 
                 Text(
                     stringResource(R.string.brush_studio_workbench),
@@ -300,8 +300,8 @@ fun BrushStudioPage(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(cardBg)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(cardBg.copy(alpha = 0.6f))
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 ) {
                     Text(
@@ -316,26 +316,28 @@ fun BrushStudioPage(
                 Spacer(Modifier.weight(1f))
 
                 // New Brush action
-                ReIconButton(R.drawable.ic_plus, stringResource(R.string.brush_studio_new_brush), { showNewBrushDialog = true }, tint = textSub, iconSize = 18.dp)
+                ReIconButton(R.drawable.ic_plus, stringResource(R.string.brush_studio_new_brush), { showNewBrushDialog = true }, tint = textSub, iconSize = 17.dp)
 
                 // Duplicate action
                 ReIconButton(R.drawable.ic_copy, stringResource(R.string.brush_studio_duplicate_brush), {
                     if (vm.brushPresets.any { it.index == presetIndex }) {
                         vm.duplicateBrushPreset(presetIndex)
                     }
-                }, tint = textSub, iconSize = 18.dp)
+                }, tint = textSub, iconSize = 17.dp)
 
                 // Import action
-                ReIconButton(R.drawable.ic_export_tab, stringResource(R.string.brush_studio_import_brush), { importBrushLauncher.launch(arrayOf("*/*")) }, tint = textSub, iconSize = 18.dp)
+                ReIconButton(R.drawable.ic_export_tab, stringResource(R.string.brush_studio_import_brush), { importBrushLauncher.launch(arrayOf("*/*")) }, tint = textSub, iconSize = 17.dp)
 
                 // Overflow Menu
                 Box {
-                    ReIconButton(R.drawable.ic_dots_vertical, stringResource(R.string.brush_studio_more_ops), { showMenu = true }, tint = textSub, iconSize = 18.dp)
+                    ReIconButton(R.drawable.ic_dots_vertical, stringResource(R.string.brush_studio_more_ops), { showMenu = true }, tint = textSub, iconSize = 17.dp)
 
                     DropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
-                        modifier = Modifier.background(panelBg),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(panelBg),
                     ) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.brush_studio_rename_brush), color = textMain, fontSize = 13.sp) },
@@ -378,29 +380,29 @@ fun BrushStudioPage(
                 }
             }
 
-            Box(Modifier.fillMaxWidth().height(1.dp).background(dividerCol))
+            Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.08f)))
 
             // ---- Master-Detail Split Workspace ----
             Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 // Left Navigation Rail (左侧功能导轨)
                 Column(
                     modifier = Modifier
-                        .width(108.dp)
+                        .width(116.dp)
                         .fillMaxHeight()
                         .background(panelBg)
                         .verticalScroll(rememberScrollState())
-                        .padding(vertical = 8.dp, horizontal = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                        .padding(vertical = 10.dp, horizontal = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     StudioTab.values().forEach { tab ->
                         val sel = tab == selectedTab
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (sel) Morandi.accent.copy(alpha = 0.16f) else Color.Transparent)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (sel) Morandi.accent.copy(alpha = 0.14f) else Color.Transparent)
                                 .clickable { selectedTab = tab }
-                                .padding(vertical = 10.dp, horizontal = 8.dp),
+                                .padding(vertical = 9.dp, horizontal = 10.dp),
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
@@ -435,7 +437,7 @@ fun BrushStudioPage(
                     }
                 }
 
-                Box(modifier = Modifier.width(1.dp).fillMaxHeight().background(dividerCol))
+                Box(modifier = Modifier.width(0.6.dp).fillMaxHeight().background(Morandi.border.copy(alpha = 0.08f)))
 
                 // Right Main Workspace (右侧工作区)
                 Column(modifier = Modifier.weight(1f).fillMaxHeight().background(pageBg)) {
@@ -451,7 +453,10 @@ fun BrushStudioPage(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(scratchpadHeight)
-                            .padding(10.dp)
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Morandi.panelHi.copy(alpha = 0.5f))
+                            .padding(4.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (scratchpadSolidBg) Morandi.panelHi else Morandi.panel),
                     ) {
@@ -478,16 +483,16 @@ fun BrushStudioPage(
                         Row(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // Background switcher
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Morandi.panelHi.copy(alpha = 0.85f))
+                                    .size(28.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Morandi.panel.copy(alpha = 0.85f))
                                     .clickable { scratchpadSolidBg = !scratchpadSolidBg },
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -495,16 +500,16 @@ fun BrushStudioPage(
                                     painterResource(if (scratchpadSolidBg) R.drawable.ic_layers else R.drawable.ic_circle),
                                     contentDescription = stringResource(if (scratchpadSolidBg) R.string.scratchpad_bg_checker else R.string.scratchpad_bg_solid),
                                     tint = textSub,
-                                    modifier = Modifier.size(13.dp),
+                                    modifier = Modifier.size(14.dp),
                                 )
                             }
 
                             // Height expand toggle
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Morandi.panelHi.copy(alpha = 0.85f))
+                                    .size(28.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Morandi.panel.copy(alpha = 0.85f))
                                     .clickable { scratchpadExpanded = !scratchpadExpanded },
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -513,7 +518,7 @@ fun BrushStudioPage(
                                     contentDescription = stringResource(if (scratchpadExpanded) R.string.scratchpad_collapse else R.string.scratchpad_expand),
                                     tint = if (scratchpadExpanded) Morandi.accent else textSub,
                                     modifier = Modifier
-                                        .size(14.dp)
+                                        .size(15.dp)
                                         .rotate(if (scratchpadExpanded) -90f else 90f),
                                 )
                             }
@@ -523,9 +528,9 @@ fun BrushStudioPage(
                         Row(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
-                                .padding(6.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Morandi.panelHi.copy(alpha = 0.9f))
+                                .padding(8.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Morandi.panel.copy(alpha = 0.9f))
                                 .clickable {
                                     val allStrokes = if (currentScratchStroke.isNotEmpty()) {
                                         scratchStrokes + listOf(currentScratchStroke)
@@ -534,11 +539,11 @@ fun BrushStudioPage(
                                     }
                                     captureScratchpadAsThumbnail(context, vm, allStrokes)
                                 }
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
                         ) {
-                            Icon(painterResource(R.drawable.ic_pencil), contentDescription = null, tint = textSub, modifier = Modifier.size(12.dp))
+                            Icon(painterResource(R.drawable.ic_pencil), contentDescription = null, tint = textSub, modifier = Modifier.size(13.dp))
                             Text(stringResource(R.string.brush_studio_scratchpad_set_icon), color = textSub, fontSize = 11.sp)
                         }
 
@@ -546,18 +551,18 @@ fun BrushStudioPage(
                             Row(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(6.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Morandi.panelHi.copy(alpha = 0.9f))
+                                    .padding(8.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Morandi.panel.copy(alpha = 0.9f))
                                     .clickable {
                                         scratchStrokes.clear()
                                         currentScratchStroke = emptyList()
                                     }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
                             ) {
-                                Icon(painterResource(R.drawable.ic_trash), contentDescription = null, tint = textSub, modifier = Modifier.size(12.dp))
+                                Icon(painterResource(R.drawable.ic_trash), contentDescription = null, tint = textSub, modifier = Modifier.size(13.dp))
                                 Text(stringResource(R.string.brush_studio_scratchpad_clear), color = textSub, fontSize = 11.sp)
                             }
                         } else {
@@ -570,7 +575,7 @@ fun BrushStudioPage(
                         }
                     }
 
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(dividerCol))
+                    Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.08f)))
 
                     // Parameter Cards Stack
                     Column(
@@ -776,128 +781,110 @@ private fun TipTabContent(
     textMain: Color,
     textSub: Color,
 ) {
-    StudioSectionHeader(stringResource(R.string.brush_studio_tip_section_title), textSub)
-
-    // Current active tip preview card with floating picker trigger
     val curTipItem = remember(vm.brushTipAsset, allTips) {
         allTips.firstOrNull { it.filename == vm.brushTipAsset } ?: allTips.firstOrNull()
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
+    StudioGroupCard(stringResource(R.string.brush_studio_tip_section_title)) {
+        Row(
             modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Morandi.panel)
-                .clickable { onOpenTipPicker() }
-                .padding(3.dp),
-            contentAlignment = Alignment.Center,
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            CheckerboardBackground(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)))
-            if (curTipItem?.bitmap != null) {
-                Image(
-                    bitmap = curTipItem.bitmap.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().padding(2.dp),
-                )
-            } else {
-                Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White))
-            }
-        }
-
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                curTipItem?.name ?: stringResource(R.string.brush_studio_tip_default),
-                color = textMain,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                if (curTipItem?.isCustom == true) stringResource(R.string.brush_studio_tip_custom_tag) else stringResource(R.string.brush_studio_tip_builtin_tag),
-                color = textSub,
-                fontSize = 11.sp,
-            )
-
-            Spacer(Modifier.height(2.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Morandi.panel)
-                        .clickable { onOpenTipPicker() }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                ) {
-                    Text(stringResource(R.string.brush_studio_tip_browse), color = textMain, fontSize = 11.sp)
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Morandi.panel)
+                    .clickable { onOpenTipPicker() }
+                    .padding(3.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                CheckerboardBackground(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)))
+                if (curTipItem?.bitmap != null) {
+                    Image(
+                        bitmap = curTipItem.bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().padding(2.dp),
+                    )
+                } else {
+                    Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White))
                 }
+            }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Morandi.panel)
-                        .clickable { onImportCustomTip() }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                ) {
-                    Text(stringResource(R.string.brush_studio_tip_import_custom), color = textMain, fontSize = 11.sp)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    curTipItem?.name ?: stringResource(R.string.brush_studio_tip_default),
+                    color = textMain,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    if (curTipItem?.isCustom == true) stringResource(R.string.brush_studio_tip_custom_tag) else stringResource(R.string.brush_studio_tip_builtin_tag),
+                    color = textSub,
+                    fontSize = 11.sp,
+                )
+
+                Spacer(Modifier.height(2.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Morandi.panel.copy(alpha = 0.8f))
+                            .clickable { onOpenTipPicker() }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text(stringResource(R.string.brush_studio_tip_browse), color = textMain, fontSize = 11.sp)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Morandi.panel.copy(alpha = 0.8f))
+                            .clickable { onImportCustomTip() }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text(stringResource(R.string.brush_studio_tip_import_custom), color = textMain, fontSize = 11.sp)
+                    }
                 }
             }
         }
     }
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_tip_auto_brush), textSub)
-    val tipTypes = listOf(stringResource(R.string.brush_studio_tip_round), stringResource(R.string.brush_studio_tip_square))
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg),
-    ) {
+    StudioGroupCard(stringResource(R.string.brush_studio_tip_auto_brush)) {
+        val tipTypes = listOf(stringResource(R.string.brush_studio_tip_round), stringResource(R.string.brush_studio_tip_square))
         tipTypes.forEachIndexed { idx, name ->
             val sel = vm.brushTipShape == idx
             StudioRadioRow(name = name, selected = sel, textMain = textMain, textSub = textSub) { vm.updateBrushTipShape(idx) }
-            if (idx < tipTypes.size - 1) {
-                Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.15f)))
-            }
         }
+        StudioInnerDivider()
+        StudioSliderItem(stringResource(R.string.brush_studio_tip_spikes), vm.brushSpikes.toDouble(), 2.0, 16.0, unit = stringResource(R.string.brush_studio_unit_spikes), textMain = textMain, textSub = textSub) { vm.updateBrushSpikes(it.toInt()) }
+        StudioSliderItem(stringResource(R.string.brush_studio_tip_feather_hardness), vm.brushSoftness, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSoftness(it) }
     }
 
-    StudioSliderItem(stringResource(R.string.brush_studio_tip_spikes), vm.brushSpikes.toDouble(), 2.0, 16.0, unit = stringResource(R.string.brush_studio_unit_spikes), textMain = textMain, textSub = textSub) { vm.updateBrushSpikes(it.toInt()) }
-    StudioSliderItem(stringResource(R.string.brush_studio_tip_feather_hardness), vm.brushSoftness, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSoftness(it) }
-
-    StudioSectionHeader(stringResource(R.string.brush_studio_tip_antialias), textSub)
-    val aaList = listOf(
-        stringResource(R.string.brush_studio_tip_aa_none),
-        stringResource(R.string.brush_studio_tip_aa_standard),
-        stringResource(R.string.brush_studio_tip_aa_high),
-        stringResource(R.string.brush_studio_tip_aa_stepped),
-    )
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg),
-    ) {
+    StudioGroupCard(stringResource(R.string.brush_studio_tip_antialias)) {
+        val aaList = listOf(
+            stringResource(R.string.brush_studio_tip_aa_none),
+            stringResource(R.string.brush_studio_tip_aa_standard),
+            stringResource(R.string.brush_studio_tip_aa_high),
+            stringResource(R.string.brush_studio_tip_aa_stepped),
+        )
         aaList.forEachIndexed { idx, name ->
             val sel = vm.brushAntiAliasing == idx
             StudioRadioRow(name = name, selected = sel, textMain = textMain, textSub = textSub) { vm.updateBrushAntiAliasing(idx) }
-            if (idx < aaList.size - 1) {
-                Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.15f)))
-            }
         }
     }
 
-    StudioSwitchItem(stringResource(R.string.brush_studio_tip_flip_x), vm.brushRandomFlipX, textMain = textMain) { vm.updateBrushRandomFlipX(it) }
-    StudioSwitchItem(stringResource(R.string.brush_studio_tip_flip_y), vm.brushRandomFlipY, textMain = textMain) { vm.updateBrushRandomFlipY(it) }
+    StudioGroupCard(stringResource(R.string.brush_studio_geo_title)) {
+        StudioSwitchItem(stringResource(R.string.brush_studio_tip_flip_x), vm.brushRandomFlipX, textMain = textMain) { vm.updateBrushRandomFlipX(it) }
+        StudioInnerDivider()
+        StudioSwitchItem(stringResource(R.string.brush_studio_tip_flip_y), vm.brushRandomFlipY, textMain = textMain) { vm.updateBrushRandomFlipY(it) }
+    }
 }
 
 // ==========================================
@@ -1132,11 +1119,7 @@ private fun StudioSensorChips(
     textSub: Color,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(title, color = textSub, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -1148,8 +1131,8 @@ private fun StudioSensorChips(
                 val sel = (selectedSensor == sensorId) || (sensorId == "pressure" && selectedSensor.isBlank())
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (sel) Morandi.accent.copy(alpha = 0.22f) else Morandi.panel)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (sel) Morandi.accent.copy(alpha = 0.22f) else Morandi.panel.copy(alpha = 0.6f))
                         .clickable { onSelectSensor(sensorId) }
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                     contentAlignment = Alignment.Center,
@@ -1177,8 +1160,8 @@ private fun StudioCurvePreview(
         modifier = modifier
             .fillMaxWidth()
             .height(96.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Morandi.panel.copy(alpha = 0.6f))
             .padding(10.dp)
     ) {
         val w = size.width
@@ -1237,82 +1220,78 @@ private fun MaskingTabContent(
     textMain: Color,
     textSub: Color,
 ) {
-    StudioSectionHeader(stringResource(R.string.brush_studio_masking_title), textSub)
-    StudioSwitchItem(stringResource(R.string.brush_studio_masking_enable), vm.brushMaskingEnabled, textMain = textMain) { vm.updateBrushMaskingEnabled(it) }
+    StudioCard {
+        StudioSwitchItem(stringResource(R.string.brush_studio_masking_enable), vm.brushMaskingEnabled, textMain = textMain) { vm.updateBrushMaskingEnabled(it) }
+    }
 
     if (vm.brushMaskingEnabled) {
-        StudioSectionHeader(stringResource(R.string.brush_studio_masking_tip), textSub)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(cardBg)
-                .clickable { onOpenMaskingTipPicker() }
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            val maskTip = allTips.firstOrNull { it.filename == vm.brushMaskingTipAsset }
-            Box(
+        val maskTip = allTips.firstOrNull { it.filename == vm.brushMaskingTipAsset }
+        StudioGroupCard(stringResource(R.string.brush_studio_masking_tip)) {
+            Row(
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Morandi.panel),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onOpenMaskingTipPicker() }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                CheckerboardBackground(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)))
-                if (maskTip?.bitmap != null) {
-                    Image(
-                        bitmap = maskTip.bitmap.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize().padding(2.dp),
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Morandi.panel),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CheckerboardBackground(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)))
+                    if (maskTip?.bitmap != null) {
+                        Image(
+                            bitmap = maskTip.bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().padding(2.dp),
+                        )
+                    } else {
+                        Box(Modifier.size(22.dp).clip(CircleShape).background(Color.White))
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = maskTip?.name ?: stringResource(R.string.brush_studio_masking_tip_default),
+                        color = textMain,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
                     )
-                } else {
-                    Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White))
+                    Text(
+                        text = if (vm.brushMaskingTipAsset.isNotBlank()) vm.brushMaskingTipAsset else stringResource(R.string.brush_studio_tip_preset_default),
+                        color = textSub,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Morandi.panel.copy(alpha = 0.8f))
+                        .clickable { onOpenMaskingTipPicker() }
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                ) {
+                    Text(stringResource(R.string.brush_studio_masking_tip_choose), color = textMain, fontSize = 11.sp)
                 }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = maskTip?.name ?: stringResource(R.string.brush_studio_masking_tip_default),
-                    color = textMain,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                )
-                Text(
-                    text = if (vm.brushMaskingTipAsset.isNotBlank()) vm.brushMaskingTipAsset else stringResource(R.string.brush_studio_tip_preset_default),
-                    color = textSub,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                )
-            }
-            ReTextButton(
-                stringResource(R.string.brush_studio_masking_tip_choose),
-                onClick = onOpenMaskingTipPicker,
-                fontSize = 11.sp,
-                textColor = textMain,
-            )
         }
 
-        StudioSectionHeader(stringResource(R.string.brush_studio_masking_mode), textSub)
-        val maskingModes = listOf(
-            "multiply" to R.string.brush_studio_blend_multiply,
-            "screen" to R.string.brush_studio_blend_screen,
-            "overlay" to R.string.brush_studio_blend_overlay,
-            "darken" to R.string.brush_studio_blend_darken,
-            "lighten" to R.string.brush_studio_blend_lighten,
-            "dodge" to R.string.brush_studio_blend_dodge,
-            "burn" to R.string.brush_studio_blend_burn,
-            "addition" to R.string.brush_studio_blend_hard_light,
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(cardBg)
-                .padding(6.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+        StudioGroupCard(stringResource(R.string.brush_studio_masking_mode)) {
+            val maskingModes = listOf(
+                "multiply" to R.string.brush_studio_blend_multiply,
+                "screen" to R.string.brush_studio_blend_screen,
+                "overlay" to R.string.brush_studio_blend_overlay,
+                "darken" to R.string.brush_studio_blend_darken,
+                "lighten" to R.string.brush_studio_blend_lighten,
+                "dodge" to R.string.brush_studio_blend_dodge,
+                "burn" to R.string.brush_studio_blend_burn,
+                "addition" to R.string.brush_studio_blend_hard_light,
+            )
             maskingModes.chunked(4).forEach { row ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     row.forEach { (opId, nameRes) ->
@@ -1320,15 +1299,15 @@ private fun MaskingTabContent(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(30.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(if (sel) Morandi.accent.copy(alpha = 0.18f) else Morandi.panel)
+                                .height(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (sel) Morandi.accent.copy(alpha = 0.22f) else Morandi.panel.copy(alpha = 0.6f))
                                 .clickable { vm.updateBrushMaskingCompositeOp(opId) },
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 stringResource(nameRes),
-                                color = if (sel) textMain else textSub,
+                                color = if (sel) Morandi.accent else textSub,
                                 fontSize = 11.sp,
                                 fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
                             )
@@ -1338,12 +1317,14 @@ private fun MaskingTabContent(
             }
         }
 
-        StudioSliderItem(stringResource(R.string.brush_studio_masking_ratio), vm.brushMaskingSizeRatio, 0.1, 3.0, unit = "x", textMain = textMain, textSub = textSub) { vm.updateBrushMaskingSizeRatio(it) }
-        StudioSliderItem(stringResource(R.string.brush_studio_masking_spacing), vm.brushMaskingSpacing, 0.02, 1.5, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushMaskingSpacing(it) }
+        StudioGroupCard(stringResource(R.string.brush_studio_masking_title)) {
+            StudioSliderItem(stringResource(R.string.brush_studio_masking_ratio), vm.brushMaskingSizeRatio, 0.1, 3.0, unit = "x", textMain = textMain, textSub = textSub) { vm.updateBrushMaskingSizeRatio(it) }
+            StudioSliderItem(stringResource(R.string.brush_studio_masking_spacing), vm.brushMaskingSpacing, 0.02, 1.5, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushMaskingSpacing(it) }
 
-        if (vm.brushMaskingTipAsset.isBlank()) {
-            StudioSliderItem(stringResource(R.string.brush_studio_masking_fade), vm.brushMaskingFade, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushMaskingFade(it) }
-            StudioSliderItem(stringResource(R.string.brush_studio_masking_softness), vm.brushMaskingSoftness, 0.1, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushMaskingSoftness(it) }
+            if (vm.brushMaskingTipAsset.isBlank()) {
+                StudioSliderItem(stringResource(R.string.brush_studio_masking_fade), vm.brushMaskingFade, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushMaskingFade(it) }
+                StudioSliderItem(stringResource(R.string.brush_studio_masking_softness), vm.brushMaskingSoftness, 0.1, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushMaskingSoftness(it) }
+            }
         }
     }
 }
@@ -1359,16 +1340,19 @@ private fun StrokeTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color
         "speed" to R.string.brush_studio_sensor_speed,
     )
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_dynamics_spacing_scatter), textSub)
-    StudioSliderItem(stringResource(R.string.brush_studio_dynamics_spacing), vm.brushSpacing, 0.01, 2.5, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSpacing(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_dynamics_scatter), vm.brushScatter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushScatter(it) }
-    StudioSensorChips(stringResource(R.string.brush_studio_scatter_sensor), vm.brushScatterSensor, scatterSensors, { vm.updateBrushScatterSensor(it) }, cardBg, textMain, textSub)
-    StudioSliderItem(stringResource(R.string.brush_studio_dynamics_fade), vm.brushFade, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushFade(it) }
+    StudioGroupCard(stringResource(R.string.brush_studio_dynamics_spacing_scatter)) {
+        StudioSliderItem(stringResource(R.string.brush_studio_dynamics_spacing), vm.brushSpacing, 0.01, 2.5, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSpacing(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_dynamics_scatter), vm.brushScatter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushScatter(it) }
+        StudioSensorChips(stringResource(R.string.brush_studio_scatter_sensor), vm.brushScatterSensor, scatterSensors, { vm.updateBrushScatterSensor(it) }, cardBg, textMain, textSub)
+        StudioSliderItem(stringResource(R.string.brush_studio_dynamics_fade), vm.brushFade, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushFade(it) }
+    }
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_dynamics_airbrush_mode), textSub)
-    StudioSwitchItem(stringResource(R.string.brush_studio_dynamics_airbrush_enable), vm.brushAirbrush, textMain = textMain) { vm.updateBrushAirbrush(it) }
-    if (vm.brushAirbrush) {
-        StudioSliderItem(stringResource(R.string.brush_studio_dynamics_airbrush_rate), vm.brushAirbrushRate, 10.0, 120.0, unit = stringResource(R.string.brush_studio_unit_dabs_per_sec), textMain = textMain, textSub = textSub) { vm.updateBrushAirbrushRate(it) }
+    StudioGroupCard(stringResource(R.string.brush_studio_dynamics_airbrush_mode)) {
+        StudioSwitchItem(stringResource(R.string.brush_studio_dynamics_airbrush_enable), vm.brushAirbrush, textMain = textMain) { vm.updateBrushAirbrush(it) }
+        if (vm.brushAirbrush) {
+            StudioInnerDivider()
+            StudioSliderItem(stringResource(R.string.brush_studio_dynamics_airbrush_rate), vm.brushAirbrushRate, 10.0, 120.0, unit = stringResource(R.string.brush_studio_unit_dabs_per_sec), textMain = textMain, textSub = textSub) { vm.updateBrushAirbrushRate(it) }
+        }
     }
 }
 
@@ -1379,17 +1363,20 @@ private fun StrokeTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color
 private fun ColorTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color, textMain: Color, textSub: Color) {
     val isSmudgeEngine = vm.brushPaintOpId == "colorsmudge" || vm.brushSmudgeRate > 0.0 || vm.brushSmudgeLength > 0.0
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_color_jitter_title), textSub)
-    StudioSliderItem(stringResource(R.string.brush_studio_color_hue_jitter), vm.brushHueJitter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushHueJitter(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_color_sat_jitter), vm.brushSatJitter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSatJitter(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_color_val_jitter), vm.brushValJitter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushValJitter(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_color_secondary_mix), vm.brushSecondaryMix, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSecondaryMix(it) }
-    StudioSwitchItem(stringResource(R.string.brush_studio_color_pressure_mix), vm.brushPressureColorMix, textMain = textMain) { vm.updateBrushPressureColorMix(it) }
+    StudioGroupCard(stringResource(R.string.brush_studio_color_jitter_title)) {
+        StudioSliderItem(stringResource(R.string.brush_studio_color_hue_jitter), vm.brushHueJitter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushHueJitter(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_color_sat_jitter), vm.brushSatJitter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSatJitter(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_color_val_jitter), vm.brushValJitter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushValJitter(it) }
+        StudioInnerDivider()
+        StudioSliderItem(stringResource(R.string.brush_studio_color_secondary_mix), vm.brushSecondaryMix, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSecondaryMix(it) }
+        StudioSwitchItem(stringResource(R.string.brush_studio_color_pressure_mix), vm.brushPressureColorMix, textMain = textMain) { vm.updateBrushPressureColorMix(it) }
+    }
 
     if (isSmudgeEngine) {
-        StudioSectionHeader(stringResource(R.string.brush_studio_color_smudge_title), textSub)
-        StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_rate), vm.brushSmudgeRate, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeRate(it) }
-        StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_length), vm.brushSmudgeLength, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeLength(it) }
+        StudioGroupCard(stringResource(R.string.brush_studio_color_smudge_title)) {
+            StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_rate), vm.brushSmudgeRate, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeRate(it) }
+            StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_length), vm.brushSmudgeLength, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeLength(it) }
+        }
     }
 }
 
@@ -1411,27 +1398,29 @@ private fun GeometryTabContent(
         "speed" to R.string.brush_studio_sensor_speed,
     )
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_geo_title), textSub)
-    Box(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        StudioAngleDial(
-            angle = vm.brushAngle.toFloat(),
-            ratio = vm.brushRatio.toFloat(),
-            onAngleChange = { vm.updateBrushAngle(it.toDouble()) },
-            cardBg = cardBg,
-            borderCol = borderCol,
-            modifier = Modifier.size(96.dp),
-        )
-    }
+    StudioGroupCard(stringResource(R.string.brush_studio_geo_title)) {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            StudioAngleDial(
+                angle = vm.brushAngle.toFloat(),
+                ratio = vm.brushRatio.toFloat(),
+                onAngleChange = { vm.updateBrushAngle(it.toDouble()) },
+                cardBg = cardBg,
+                borderCol = borderCol,
+                modifier = Modifier.size(96.dp),
+            )
+        }
 
-    StudioSliderItem(stringResource(R.string.brush_studio_geo_aspect_ratio), vm.brushRatio, 0.05, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushRatio(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_geo_base_angle), vm.brushAngle, 0.0, 360.0, unit = "°", textMain = textMain, textSub = textSub) { vm.updateBrushAngle(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_geo_offset_angle), vm.brushRotation, 0.0, 360.0, unit = "°", textMain = textMain, textSub = textSub) { vm.updateBrushRotation(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_geo_angle_jitter), vm.brushJitterAngle, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushJitterAngle(it) }
-    StudioSwitchItem(stringResource(R.string.brush_studio_geo_auto_rotate), vm.brushFollowDirection, textMain = textMain) { vm.updateBrushFollowDirection(it) }
-    StudioSensorChips(stringResource(R.string.brush_studio_rotation_sensor), vm.brushRotationSensor, rotationSensors, { vm.updateBrushRotationSensor(it) }, cardBg, textMain, textSub)
+        StudioSliderItem(stringResource(R.string.brush_studio_geo_aspect_ratio), vm.brushRatio, 0.05, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushRatio(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_geo_base_angle), vm.brushAngle, 0.0, 360.0, unit = "°", textMain = textMain, textSub = textSub) { vm.updateBrushAngle(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_geo_offset_angle), vm.brushRotation, 0.0, 360.0, unit = "°", textMain = textMain, textSub = textSub) { vm.updateBrushRotation(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_geo_angle_jitter), vm.brushJitterAngle, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushJitterAngle(it) }
+        StudioInnerDivider()
+        StudioSwitchItem(stringResource(R.string.brush_studio_geo_auto_rotate), vm.brushFollowDirection, textMain = textMain) { vm.updateBrushFollowDirection(it) }
+        StudioSensorChips(stringResource(R.string.brush_studio_rotation_sensor), vm.brushRotationSensor, rotationSensors, { vm.updateBrushRotationSensor(it) }, cardBg, textMain, textSub)
+    }
 }
 
 // ==========================================
@@ -1439,33 +1428,28 @@ private fun GeometryTabContent(
 // ==========================================
 @Composable
 private fun TextureTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color, textMain: Color, textSub: Color) {
-    StudioSwitchItem(stringResource(R.string.brush_studio_tex_enable), vm.brushTextureEnabled, textMain = textMain) { vm.updateBrushTextureEnabled(it) }
+    StudioCard {
+        StudioSwitchItem(stringResource(R.string.brush_studio_tex_enable), vm.brushTextureEnabled, textMain = textMain) { vm.updateBrushTextureEnabled(it) }
+    }
 
     if (vm.brushTextureEnabled) {
-        StudioSectionHeader(stringResource(R.string.brush_studio_tex_blend_mode), textSub)
-        val texModes = listOf(
-            "multiply" to R.string.brush_studio_blend_multiply,
-            "overlay" to R.string.brush_studio_blend_overlay,
-            "screen" to R.string.brush_studio_blend_screen,
-            "dodge" to R.string.brush_studio_blend_dodge_color,
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(cardBg),
-        ) {
+        StudioGroupCard(stringResource(R.string.brush_studio_tex_blend_mode)) {
+            val texModes = listOf(
+                "multiply" to R.string.brush_studio_blend_multiply,
+                "overlay" to R.string.brush_studio_blend_overlay,
+                "screen" to R.string.brush_studio_blend_screen,
+                "dodge" to R.string.brush_studio_blend_dodge_color,
+            )
             texModes.forEachIndexed { idx, (id, nameRes) ->
                 val sel = vm.brushTextureMode == id
                 StudioRadioRow(name = stringResource(nameRes), selected = sel, textMain = textMain, textSub = textSub) { vm.updateBrushTextureMode(id) }
-                if (idx < texModes.size - 1) {
-                    Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.15f)))
-                }
             }
         }
 
-        StudioSliderItem(stringResource(R.string.brush_studio_tex_scale), vm.brushTextureScale, 0.2, 4.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushTextureScale(it) }
-        StudioSliderItem(stringResource(R.string.brush_studio_tex_strength), vm.brushTextureStrength, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushTextureStrength(it) }
+        StudioGroupCard(stringResource(R.string.brush_studio_tab_texture)) {
+            StudioSliderItem(stringResource(R.string.brush_studio_tex_scale), vm.brushTextureScale, 0.2, 4.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushTextureScale(it) }
+            StudioSliderItem(stringResource(R.string.brush_studio_tex_strength), vm.brushTextureStrength, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushTextureStrength(it) }
+        }
     }
 }
 
@@ -1482,42 +1466,39 @@ private fun PressureTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Col
         "fade" to R.string.brush_studio_sensor_fade,
     )
 
-    StudioSwitchItem(stringResource(R.string.brush_studio_press_enable), vm.brushPressureEnabled, textMain = textMain) { vm.updateBrushPressureEnabled(it) }
+    StudioCard {
+        StudioSwitchItem(stringResource(R.string.brush_studio_press_enable), vm.brushPressureEnabled, textMain = textMain) { vm.updateBrushPressureEnabled(it) }
+    }
 
     if (vm.brushPressureEnabled) {
-        StudioSectionHeader(stringResource(R.string.brush_studio_press_dynamics), textSub)
-        StudioSensorChips(stringResource(R.string.brush_studio_size_sensor), vm.brushSizeSensor, standardSensors, { vm.updateBrushSizeSensor(it) }, cardBg, textMain, textSub)
-        StudioSliderItem(stringResource(R.string.brush_studio_press_size), vm.brushPressureSize, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureSize(it) }
+        StudioGroupCard(stringResource(R.string.brush_studio_press_dynamics)) {
+            StudioSensorChips(stringResource(R.string.brush_studio_size_sensor), vm.brushSizeSensor, standardSensors, { vm.updateBrushSizeSensor(it) }, cardBg, textMain, textSub)
+            StudioSliderItem(stringResource(R.string.brush_studio_press_size), vm.brushPressureSize, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureSize(it) }
+            StudioInnerDivider()
 
-        StudioSensorChips(stringResource(R.string.brush_studio_opacity_sensor), vm.brushOpacitySensor, standardSensors, { vm.updateBrushOpacitySensor(it) }, cardBg, textMain, textSub)
-        StudioSliderItem(stringResource(R.string.brush_studio_press_opacity), vm.brushPressureOpacity, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureOpacity(it) }
+            StudioSensorChips(stringResource(R.string.brush_studio_opacity_sensor), vm.brushOpacitySensor, standardSensors, { vm.updateBrushOpacitySensor(it) }, cardBg, textMain, textSub)
+            StudioSliderItem(stringResource(R.string.brush_studio_press_opacity), vm.brushPressureOpacity, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureOpacity(it) }
+            StudioInnerDivider()
 
-        StudioSensorChips(stringResource(R.string.brush_studio_flow_sensor), vm.brushFlowSensor, standardSensors, { vm.updateBrushFlowSensor(it) }, cardBg, textMain, textSub)
-        StudioSliderItem(stringResource(R.string.brush_studio_press_flow), vm.brushPressureFlow, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureFlow(it) }
+            StudioSensorChips(stringResource(R.string.brush_studio_flow_sensor), vm.brushFlowSensor, standardSensors, { vm.updateBrushFlowSensor(it) }, cardBg, textMain, textSub)
+            StudioSliderItem(stringResource(R.string.brush_studio_press_flow), vm.brushPressureFlow, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureFlow(it) }
+            StudioInnerDivider()
 
-        StudioSliderItem(stringResource(R.string.brush_studio_press_speed), vm.brushSpeedSize, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSpeedSize(it) }
+            StudioSliderItem(stringResource(R.string.brush_studio_press_speed), vm.brushSpeedSize, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSpeedSize(it) }
+        }
 
-        StudioSectionHeader(stringResource(R.string.brush_studio_press_curve), textSub)
-        StudioCurvePreview(vm.brushPressureCurve, cardBg, borderCol)
+        StudioGroupCard(stringResource(R.string.brush_studio_press_curve)) {
+            StudioCurvePreview(vm.brushPressureCurve, cardBg, borderCol)
 
-        val curves = listOf(
-            R.string.brush_studio_press_linear,
-            R.string.brush_studio_press_soft,
-            R.string.brush_studio_press_hard,
-            R.string.brush_studio_press_scurve,
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(cardBg),
-        ) {
+            val curves = listOf(
+                R.string.brush_studio_press_linear,
+                R.string.brush_studio_press_soft,
+                R.string.brush_studio_press_hard,
+                R.string.brush_studio_press_scurve,
+            )
             curves.forEachIndexed { idx, curveRes ->
                 val sel = vm.brushPressureCurve == idx
                 StudioRadioRow(name = stringResource(curveRes), selected = sel, textMain = textMain, textSub = textSub) { vm.updateBrushPressureCurve(idx) }
-                if (idx < curves.size - 1) {
-                    Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.15f)))
-                }
             }
         }
     }
@@ -1539,53 +1520,36 @@ private fun EngineTabContent(
     onRename: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    StudioSectionHeader(stringResource(R.string.brush_studio_engine_title), textSub)
-    val engines = listOf(
-        "paintbrush" to R.string.brush_studio_engine_pixel,
-        "colorsmudge" to R.string.brush_studio_engine_smudge,
-        "spray" to R.string.brush_studio_engine_spray,
-        "sketch" to R.string.brush_studio_engine_sketch,
-        "hairy" to R.string.brush_studio_engine_hairy,
-        "roundmarker" to R.string.brush_studio_engine_marker,
-    )
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg),
-    ) {
+    StudioGroupCard(stringResource(R.string.brush_studio_engine_title)) {
+        val engines = listOf(
+            "paintbrush" to R.string.brush_studio_engine_pixel,
+            "colorsmudge" to R.string.brush_studio_engine_smudge,
+            "spray" to R.string.brush_studio_engine_spray,
+            "sketch" to R.string.brush_studio_engine_sketch,
+            "hairy" to R.string.brush_studio_engine_hairy,
+            "roundmarker" to R.string.brush_studio_engine_marker,
+        )
         engines.forEachIndexed { idx, (id, nameRes) ->
             val sel = (vm.brushPaintOpId == id) || (id == "paintbrush" && vm.brushPaintOpId == "defaultpaintop")
             StudioRadioRow(name = stringResource(nameRes), selected = sel, textMain = textMain, textSub = textSub) { vm.updateBrushPaintOpId(id) }
-            if (idx < engines.size - 1) {
-                Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.15f)))
-            }
         }
     }
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_engine_blend_modes), textSub)
-    val blendModeList = listOf(
-        "normal" to R.string.brush_studio_blend_normal,
-        "multiply" to R.string.brush_studio_blend_multiply,
-        "screen" to R.string.brush_studio_blend_screen,
-        "overlay" to R.string.brush_studio_blend_overlay,
-        "darken" to R.string.brush_studio_blend_darken,
-        "lighten" to R.string.brush_studio_blend_lighten,
-        "dodge" to R.string.brush_studio_blend_dodge,
-        "burn" to R.string.brush_studio_blend_burn,
-        "hard_light" to R.string.brush_studio_blend_hard_light,
-        "soft_light" to R.string.brush_studio_blend_soft_light,
-        "difference" to R.string.brush_studio_blend_difference,
-        "exclusion" to R.string.brush_studio_blend_exclusion,
-    )
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg)
-            .padding(6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+    StudioGroupCard(stringResource(R.string.brush_studio_engine_blend_modes)) {
+        val blendModeList = listOf(
+            "normal" to R.string.brush_studio_blend_normal,
+            "multiply" to R.string.brush_studio_blend_multiply,
+            "screen" to R.string.brush_studio_blend_screen,
+            "overlay" to R.string.brush_studio_blend_overlay,
+            "darken" to R.string.brush_studio_blend_darken,
+            "lighten" to R.string.brush_studio_blend_lighten,
+            "dodge" to R.string.brush_studio_blend_dodge,
+            "burn" to R.string.brush_studio_blend_burn,
+            "hard_light" to R.string.brush_studio_blend_hard_light,
+            "soft_light" to R.string.brush_studio_blend_soft_light,
+            "difference" to R.string.brush_studio_blend_difference,
+            "exclusion" to R.string.brush_studio_blend_exclusion,
+        )
         blendModeList.chunked(3).forEach { row ->
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 row.forEach { (opId, nameRes) ->
@@ -1593,15 +1557,15 @@ private fun EngineTabContent(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(30.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (sel) Morandi.accent.copy(alpha = 0.18f) else Morandi.panel)
+                            .height(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (sel) Morandi.accent.copy(alpha = 0.22f) else Morandi.panel.copy(alpha = 0.6f))
                             .clickable { vm.updateBrushCompositeOp(opId) },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             stringResource(nameRes),
-                            color = if (sel) textMain else textSub,
+                            color = if (sel) Morandi.accent else textSub,
                             fontSize = 11.sp,
                             fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
                         )
@@ -1614,73 +1578,77 @@ private fun EngineTabContent(
         }
     }
 
-    StudioSliderItem(stringResource(R.string.brush_studio_engine_opacity), vm.brushOpacity, 0.01, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushOpacity(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_engine_flow), vm.brushFlow, 0.01, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushFlow(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_engine_sharpness), vm.brushSharpness, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSharpness(it) }
+    StudioGroupCard(stringResource(R.string.brush_studio_tab_engine)) {
+        StudioSliderItem(stringResource(R.string.brush_studio_engine_opacity), vm.brushOpacity, 0.01, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushOpacity(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_engine_flow), vm.brushFlow, 0.01, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushFlow(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_engine_sharpness), vm.brushSharpness, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSharpness(it) }
+    }
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_engine_limits), textSub)
-    StudioSliderItem(stringResource(R.string.brush_studio_engine_min_size), vm.brushMinSizeLimit, 1.0, 50.0, unit = "px", textMain = textMain, textSub = textSub) { vm.updateBrushMinSizeLimit(it) }
-    StudioSliderItem(stringResource(R.string.brush_studio_engine_max_size), vm.brushMaxSizeLimit, 50.0, 1000.0, unit = "px", textMain = textMain, textSub = textSub) { vm.updateBrushMaxSizeLimit(it) }
+    StudioGroupCard(stringResource(R.string.brush_studio_engine_limits)) {
+        StudioSliderItem(stringResource(R.string.brush_studio_engine_min_size), vm.brushMinSizeLimit, 1.0, 50.0, unit = "px", textMain = textMain, textSub = textSub) { vm.updateBrushMinSizeLimit(it) }
+        StudioSliderItem(stringResource(R.string.brush_studio_engine_max_size), vm.brushMaxSizeLimit, 50.0, 1000.0, unit = "px", textMain = textMain, textSub = textSub) { vm.updateBrushMaxSizeLimit(it) }
+    }
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_prop_ops), textSub)
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ReTextButton(
-            stringResource(R.string.brush_studio_prop_copy),
-            onDuplicate,
-            modifier = Modifier.weight(1f),
-            textColor = textMain,
-            fontSize = 12.sp,
-        )
-        if (preset?.isBuiltIn == true) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(38.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(cardBg),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(stringResource(R.string.brush_studio_prop_builtin_locked), color = textSub.copy(alpha = 0.5f), fontSize = 11.sp)
-            }
-        } else {
+    StudioGroupCard(stringResource(R.string.brush_studio_prop_ops)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ReTextButton(
-                stringResource(R.string.brush_studio_prop_rename),
-                onRename,
+                stringResource(R.string.brush_studio_prop_copy),
+                onDuplicate,
                 modifier = Modifier.weight(1f),
                 textColor = textMain,
                 fontSize = 12.sp,
             )
-        }
-    }
-
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ReTextButton(
-            stringResource(R.string.brush_studio_prop_reset),
-            { vm.resetBrushParams() },
-            modifier = Modifier.weight(1f),
-            textColor = textMain,
-            fontSize = 12.sp,
-        )
-        if (preset?.isBuiltIn == true) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(38.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(cardBg),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(stringResource(R.string.brush_studio_prop_builtin_cannot_delete), color = textSub.copy(alpha = 0.5f), fontSize = 11.sp)
+            if (preset?.isBuiltIn == true) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Morandi.panel.copy(alpha = 0.6f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(stringResource(R.string.brush_studio_prop_builtin_locked), color = textSub.copy(alpha = 0.5f), fontSize = 11.sp)
+                }
+            } else {
+                ReTextButton(
+                    stringResource(R.string.brush_studio_prop_rename),
+                    onRename,
+                    modifier = Modifier.weight(1f),
+                    textColor = textMain,
+                    fontSize = 12.sp,
+                )
             }
-        } else {
+        }
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ReTextButton(
-                stringResource(R.string.brush_studio_prop_delete),
-                onDelete,
+                stringResource(R.string.brush_studio_prop_reset),
+                { vm.resetBrushParams() },
                 modifier = Modifier.weight(1f),
-                containerColor = Color(0xFF2C1E1E),
-                contentColor = Color(0xFFC86464),
+                textColor = textMain,
                 fontSize = 12.sp,
             )
+            if (preset?.isBuiltIn == true) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Morandi.panel.copy(alpha = 0.6f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(stringResource(R.string.brush_studio_prop_builtin_cannot_delete), color = textSub.copy(alpha = 0.5f), fontSize = 11.sp)
+                }
+            } else {
+                ReTextButton(
+                    stringResource(R.string.brush_studio_prop_delete),
+                    onDelete,
+                    modifier = Modifier.weight(1f),
+                    containerColor = Color(0xFF2C1E1E),
+                    contentColor = Color(0xFFC86464),
+                    fontSize = 12.sp,
+                )
+            }
         }
     }
 }
@@ -1699,16 +1667,8 @@ private fun InfoTabContent(
     onRenamePreset: () -> Unit = {},
 ) {
     val isBuiltIn = preset?.isBuiltIn == true
-    StudioSectionHeader(stringResource(R.string.brush_studio_prop_info_title), textSub)
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    StudioGroupCard(stringResource(R.string.brush_studio_prop_info_title)) {
         // Preset Name
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(stringResource(R.string.brush_studio_prop_name), color = textSub, fontSize = 11.sp)
@@ -1722,7 +1682,7 @@ private fun InfoTabContent(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Morandi.panel)
                     .padding(10.dp),
             ) {
@@ -1732,7 +1692,7 @@ private fun InfoTabContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Morandi.panel)
                     .clickable { onRenamePreset() }
                     .padding(horizontal = 10.dp, vertical = 10.dp),
@@ -1754,9 +1714,9 @@ private fun InfoTabContent(
             }
         }
 
-        Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.15f)))
+        StudioInnerDivider()
 
-        // Author Field (with lock indicator for built-in and shared/imported brushes)
+        // Author Field
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(stringResource(R.string.brush_studio_prop_author), color = textSub, fontSize = 11.sp)
             if (isBuiltIn) {
@@ -1772,7 +1732,7 @@ private fun InfoTabContent(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Morandi.panel)
                     .padding(10.dp),
             ) {
@@ -1782,7 +1742,7 @@ private fun InfoTabContent(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Morandi.panel)
                     .padding(10.dp),
             ) {
@@ -1796,13 +1756,13 @@ private fun InfoTabContent(
                 textStyle = androidx.compose.ui.text.TextStyle(color = textMain, fontSize = 13.sp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Morandi.panel)
                     .padding(10.dp),
             )
         }
 
-        Box(Modifier.fillMaxWidth().height(0.6.dp).background(Morandi.border.copy(alpha = 0.15f)))
+        StudioInnerDivider()
 
         // Version & Category
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1816,7 +1776,7 @@ private fun InfoTabContent(
                     textStyle = androidx.compose.ui.text.TextStyle(color = textMain, fontSize = 13.sp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Morandi.panel)
                         .padding(8.dp),
                 )
@@ -1828,7 +1788,7 @@ private fun InfoTabContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Morandi.panel)
                         .padding(8.dp),
                 ) {
@@ -1839,14 +1799,7 @@ private fun InfoTabContent(
         }
     }
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_prop_desc), textSub)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg)
-            .padding(10.dp),
-    ) {
+    StudioGroupCard(stringResource(R.string.brush_studio_prop_desc)) {
         androidx.compose.foundation.text.BasicTextField(
             value = vm.brushDescription,
             onValueChange = { vm.updateBrushDescription(it) },
@@ -1854,30 +1807,24 @@ private fun InfoTabContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 72.dp, max = 160.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(Morandi.panel)
                 .padding(10.dp),
         )
     }
 
-    StudioSectionHeader(stringResource(R.string.brush_studio_prop_tech_specs), textSub)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
+    StudioGroupCard(stringResource(R.string.brush_studio_prop_tech_specs)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
             Text(stringResource(R.string.brush_studio_prop_draw_engine), color = textSub, fontSize = 12.sp, modifier = Modifier.weight(1f))
             Text(vm.brushPaintOpId, color = textMain, fontSize = 12.sp)
         }
-        Row(modifier = Modifier.fillMaxWidth()) {
+        StudioInnerDivider()
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
             Text(stringResource(R.string.brush_studio_prop_tip_mask), color = textSub, fontSize = 12.sp, modifier = Modifier.weight(1f))
             Text(vm.brushTipAsset.ifEmpty { stringResource(R.string.brush_studio_prop_auto_vector) }, color = textMain, fontSize = 12.sp)
         }
-        Row(modifier = Modifier.fillMaxWidth()) {
+        StudioInnerDivider()
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
             Text(stringResource(R.string.brush_studio_prop_smudge_mode), color = textSub, fontSize = 12.sp, modifier = Modifier.weight(1f))
             Text(vm.brushCompositeOp, color = textMain, fontSize = 12.sp)
         }
@@ -1885,29 +1832,79 @@ private fun InfoTabContent(
 }
 
 // ==========================================
-// Minimalist UI Helper Components
+// Minimalist UI Helper Components (Morandi Style)
 // ==========================================
 
 @Composable
-private fun StudioSectionHeader(title: String, textSub: Color) {
-    Row(
-        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
+private fun StudioGroupCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
             modifier = Modifier
-                .size(width = 3.dp, height = 11.dp)
-                .clip(RoundedCornerShape(1.5.dp))
-                .background(Morandi.accent),
-        )
-        Text(
-            text = title,
-            color = textSub,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
+                .fillMaxWidth()
+                .padding(start = 4.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = title,
+                color = Morandi.subText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            trailing?.invoke()
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Morandi.panelHi.copy(alpha = 0.5f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            content = content,
         )
     }
+}
+
+@Composable
+private fun StudioCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Morandi.panelHi.copy(alpha = 0.5f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun StudioInnerDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(0.6.dp)
+            .background(Morandi.border.copy(alpha = 0.1f)),
+    )
+}
+
+@Composable
+private fun StudioSectionHeader(title: String, textSub: Color) {
+    Text(
+        text = title,
+        color = textSub,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp),
+    )
 }
 
 @Composable
@@ -1915,9 +1912,9 @@ private fun StudioSwitchItem(label: String, checked: Boolean, textMain: Color, o
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, color = textMain, fontSize = 13.sp)
-        Spacer(Modifier.weight(1f))
         ReSwitch(
             checked = checked,
             onChecked = onCheckedChange,
@@ -1931,19 +1928,21 @@ private fun StudioRadioRow(name: String, selected: Boolean, textMain: Color, tex
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) Morandi.accent.copy(alpha = 0.12f) else Color.Transparent)
             .clickable { onSelect() }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             name,
-            color = if (selected) textMain else textSub,
+            color = if (selected) Morandi.accent else textMain,
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             modifier = Modifier.weight(1f),
         )
         if (selected) {
-            Icon(painterResource(R.drawable.ic_check), contentDescription = null, tint = textMain, modifier = Modifier.size(16.dp))
+            Icon(painterResource(R.drawable.ic_check), contentDescription = null, tint = Morandi.accent, modifier = Modifier.size(15.dp))
         }
     }
 }
@@ -1987,8 +1986,8 @@ private fun StudioAngleDial(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(cardBg)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Morandi.panel.copy(alpha = 0.6f))
             .pointerInput(Unit) {
                 detectDragGestures { change, _ ->
                     change.consume()
@@ -2007,7 +2006,7 @@ private fun StudioAngleDial(
             val radius = size.minDimension / 2f
 
             drawCircle(
-                color = borderCol,
+                color = Morandi.border.copy(alpha = 0.25f),
                 radius = radius,
                 center = center,
                 style = Stroke(width = 1.5.dp.toPx()),
@@ -2018,7 +2017,7 @@ private fun StudioAngleDial(
             val needleY = center.y + sin(rad) * (radius - 4.dp.toPx())
 
             drawLine(
-                color = Color(0xFFAAAAAA),
+                color = Morandi.accent.copy(alpha = 0.8f),
                 start = center,
                 end = Offset(needleX, needleY),
                 strokeWidth = 2.dp.toPx(),
@@ -2026,8 +2025,8 @@ private fun StudioAngleDial(
             )
 
             drawCircle(
-                color = Color.White,
-                radius = 3.dp.toPx(),
+                color = Morandi.accent,
+                radius = 3.5.dp.toPx(),
                 center = Offset(needleX, needleY),
             )
         }
@@ -2271,7 +2270,7 @@ private fun StudioNewBrushDialog(
                     textStyle = androidx.compose.ui.text.TextStyle(color = textMain, fontSize = 14.sp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Morandi.panel)
                         .padding(10.dp),
                 )
@@ -2317,7 +2316,7 @@ private fun StudioRenameDialog(
                     textStyle = androidx.compose.ui.text.TextStyle(color = textMain, fontSize = 14.sp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Morandi.panel)
                         .padding(10.dp),
                 )
