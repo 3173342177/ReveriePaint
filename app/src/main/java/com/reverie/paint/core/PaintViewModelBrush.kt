@@ -215,7 +215,7 @@ import kotlinx.coroutines.withContext
 
     internal fun PaintViewModel.updateBrushScatter(v: Double) {
         brushScatter = v
-        saveBrushParam()
+        saveBrushParam(dynamicsChanged = true)
         runCore(render = false) { ReverieCoreBridge.setBrushScatter(v) }
     }
 
@@ -679,7 +679,9 @@ import kotlinx.coroutines.withContext
                                 ReverieCoreBridge.setBrushSpacing(pSnapshot.spacing)
                             }
                             ReverieCoreBridge.setBrushAngle(pSnapshot.angle)
-                            ReverieCoreBridge.setBrushScatter(pSnapshot.scatter)
+                            if (pSnapshot.dynamicsCustomized) {
+                                ReverieCoreBridge.setBrushScatter(pSnapshot.scatter)
+                            }
                             ReverieCoreBridge.setBrushFade(pSnapshot.fade)
                             ReverieCoreBridge.setBrushSoftness(pSnapshot.softness)
                             ReverieCoreBridge.setBrushRatio(pSnapshot.ratio)
@@ -876,6 +878,8 @@ import kotlinx.coroutines.withContext
         val resetLegacyJitter = !prefs().getBoolean("brush_jitter_mix_migrated", false)
         // 一次性迁移: 修复自动间距错误换算与历史脏数据导致间距异常变点状的问题
         val resetLegacySpacing = !prefs().getBoolean("brush_spacing_dotted_migrated_v4", false)
+        // 一次性迁移: 修复出厂预设未勾选散布但存在历史非零 ScatterValue 导致笔刷变成散点的问题
+        val resetLegacyScatter = !prefs().getBoolean("brush_scatter_migrated_v1", false)
         try {
             val raw = prefs().getString("brush_params", null) ?: return
             val json = org.json.JSONArray(raw)
@@ -887,13 +891,16 @@ import kotlinx.coroutines.withContext
                 val rawSp = o.optDouble("sp", 0.1)
                 val spc = o.optBoolean("spc", false)
                 val healedSpacing = if (!spc || resetLegacySpacing) 0.1 else rawSp
+                val dc = o.optBoolean("dc", false)
+                val rawSc = o.optDouble("sc", 0.0)
+                val healedScatter = if (!dc || resetLegacyScatter || rawSc >= 2.0) 0.0 else rawSc
                 brushParams[name] = BrushParams(
                     size = o.optDouble("s", 20.0),
                     opacity = o.optDouble("o", 1.0),
                     flow = o.optDouble("f", 1.0),
                     spacing = healedSpacing,
                     angle = o.optDouble("ang", 0.0),
-                    scatter = o.optDouble("sc", 0.0),
+                    scatter = healedScatter,
                     fade = if (resetLegacyFade) KppHelper.FADE_SOLID else o.optDouble("fa", KppHelper.FADE_SOLID),
                     softness = if (resetLegacySoftness) KppHelper.SOFTNESS_NEUTRAL else o.optDouble("so", KppHelper.SOFTNESS_NEUTRAL),
                     ratio = o.optDouble("ra", 1.0),
@@ -965,11 +972,12 @@ import kotlinx.coroutines.withContext
                     flowSensor = o.optString("fl_se", "pressure"),
                 )
             }
-            if (resetLegacySoftness || resetLegacyFade || resetLegacyJitter || resetLegacySpacing) {
+            if (resetLegacySoftness || resetLegacyFade || resetLegacyJitter || resetLegacySpacing || resetLegacyScatter) {
                 prefs().edit().putBoolean("brush_softness_neutral_migrated", true).apply()
                 prefs().edit().putBoolean("brush_fade_solidity_migrated", true).apply()
                 prefs().edit().putBoolean("brush_jitter_mix_migrated", true).apply()
                 prefs().edit().putBoolean("brush_spacing_dotted_migrated_v4", true).apply()
+                prefs().edit().putBoolean("brush_scatter_migrated_v1", true).apply()
                 persistBrushParams()
             }
         } catch (_: Exception) {
@@ -1311,7 +1319,13 @@ import kotlinx.coroutines.withContext
                     if (rawSp >= 0.75) 0.1 else rawSp.coerceIn(0.01, 2.5)
                 }
                 brushAngle = saved.angle
-                brushScatter = saved.scatter
+                brushScatter = if (saved.dynamicsCustomized) {
+                    saved.scatter.coerceIn(0.0, 1.0)
+                } else {
+                    val d = ReverieCoreBridge.brushPresetDefaults(index)
+                    val rawSc = d.getOrNull(9) ?: 0.0
+                    if (rawSc >= 2.0) 0.0 else rawSc.coerceIn(0.0, 1.0)
+                }
                 brushFade = saved.fade
                 brushSoftness = saved.softness
                 brushRatio = saved.ratio
@@ -1397,7 +1411,8 @@ import kotlinx.coroutines.withContext
                     brushSpacing = 0.1
                 }
                 brushAngle = d.getOrNull(8) ?: 0.0
-                brushScatter = d.getOrNull(9) ?: 0.0
+                val rawSc = d.getOrNull(9) ?: 0.0
+                brushScatter = if (rawSc >= 2.0) 0.0 else rawSc.coerceIn(0.0, 1.0)
                 // SoftnessValue 缺省即 1.0(neutral/不改动笔尖羽化)；引擎侧兜底报告的是 0.5，
                 // 那是"半羽化"而不是中性值，所以这里不拿 d[10] 兜底，直接落到 neutral。
                 brushSoftness = parsed.softness ?: KppHelper.SOFTNESS_NEUTRAL
@@ -1483,7 +1498,9 @@ import kotlinx.coroutines.withContext
                     ReverieCoreBridge.setBrushSpacing(saved.spacing)
                 }
                 ReverieCoreBridge.setBrushAngle(saved.angle)
-                ReverieCoreBridge.setBrushScatter(saved.scatter)
+                if (saved.dynamicsCustomized) {
+                    ReverieCoreBridge.setBrushScatter(saved.scatter)
+                }
                 ReverieCoreBridge.setBrushFade(saved.fade)
                 ReverieCoreBridge.setBrushSoftness(saved.softness)
                 ReverieCoreBridge.setBrushRatio(saved.ratio)

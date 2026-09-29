@@ -1192,7 +1192,7 @@ private fun PaintViewModel.copyBundledBrushAssets(): Pair<File, File> {
     val dir = java.io.File(appContext.filesDir, "paintoppresets")
     val assets = appContext.assets
     val prefs = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
-    val needsFactoryRestore = !prefs.getBoolean("brush_kpp_factory_restored_v4", false)
+    val needsFactoryRestore = !prefs.getBoolean("brush_kpp_factory_restored_v5", false)
     try {
         if (!dir.exists()) dir.mkdirs()
         for (name in assets.list("paintoppresets") ?: emptyArray()) {
@@ -1204,7 +1204,7 @@ private fun PaintViewModel.copyBundledBrushAssets(): Pair<File, File> {
             }
         }
         if (needsFactoryRestore) {
-            prefs.edit().putBoolean("brush_kpp_factory_restored_v4", true).apply()
+            prefs.edit().putBoolean("brush_kpp_factory_restored_v5", true).apply()
         }
     } catch (e: Exception) {
         android.util.Log.e("ReveriePaint", "preset copy failed", e)

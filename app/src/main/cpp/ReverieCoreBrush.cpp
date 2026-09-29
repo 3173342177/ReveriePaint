@@ -882,7 +882,8 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
 
     // Angle & Scatter
     const double angle = s->paintOpAngle();
-    const double scatter = s->paintOpScatter();
+    const bool scatterChecked = s->getBool("PressureScatter", false) || s->getBool("Scatter/isChecked", false);
+    const double scatter = scatterChecked ? s->paintOpScatter() : 0.0;
 
     // Softness, Ratio, Sharpness, Rotation
     const double softness = s->getDouble("SoftnessValue", s->getDouble("Softness", 0.5));

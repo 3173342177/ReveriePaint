@@ -472,7 +472,7 @@ object KppHelper {
         xml = updateParam(xml, "AngleValue", params.angle.toString())
         xml = updateParam(xml, "ScatterValue", params.scatter.toString())
         xml = updateParam(xml, "Scatter/strengthValue", params.scatter.toString())
-        val hasScatter = params.scatter > 0.001
+        val hasScatter = params.dynamicsCustomized && params.scatter > 0.001
         xml = updateParam(xml, "PressureScatter", hasScatter.toString())
         xml = updateParam(xml, "Scatter/isChecked", hasScatter.toString())
 
