@@ -2579,7 +2579,7 @@ class CanvasTouchView(context: Context) : View(context) {
         val docPos = screenToDoc(screenPos)
         val isDrawingTool = tool == Tool.BRUSH || tool == Tool.ERASER || tool == Tool.SMUDGE || tool == Tool.LIQUIFY
         val canEyedrop = v.longPressEyedropperEnabled && !v.penOnlyMode && isDrawingTool
-        val isPenOnlyPan = v.penOnlyMode && (
+        val isPenOnlyPan = v.penOnlyMode && v.penModeSingleFingerPanEnabled && (
             tool.group == ToolGroup.BRUSH ||
             tool.group == ToolGroup.SELECTION ||
             tool.group == ToolGroup.SHAPES ||
@@ -2620,6 +2620,10 @@ class CanvasTouchView(context: Context) : View(context) {
                     localPressure = 1f
                     invalidate()
                 } else if (!isPenOnlyPan) {
+                    if (v.penOnlyMode) {
+                        // 笔模式下且未开启单指平移：忽略单指触控输入，防止手掌误触作画
+                        return true
+                    }
                     isPendingLongPress = false
                     localCursorPos = screenPos
                     localIsTouching = true
@@ -2691,6 +2695,10 @@ class CanvasTouchView(context: Context) : View(context) {
                         return true
                     }
                 } else {
+                    if (v.penOnlyMode) {
+                        // 笔模式下且未开启单指平移：忽略单指移动
+                        return true
+                    }
                     if (isPendingLongPress) {
                         val moveSlopPx = (1.5f + (v.eyedropperSensitivity.coerceIn(1, 5) - 3) * 0.3f).coerceIn(0.6f, 2.5f) * density
                         val moveDist = hypot(screenPos.x - pendingDownScreenPos.x, screenPos.y - pendingDownScreenPos.y)
@@ -2743,6 +2751,12 @@ class CanvasTouchView(context: Context) : View(context) {
                 }
 
                 if (!isPenOnlyPan) {
+                    if (v.penOnlyMode) {
+                        localIsTouching = false
+                        localCursorPos = null
+                        invalidate()
+                        return true
+                    }
                     if (isPendingLongPress) {
                         isPendingLongPress = false
                         handleToolDown(pendingDownScreenPos, pendingDownDocPos, pendingDownPressure, isStylus = false)

@@ -1166,6 +1166,7 @@ class PaintViewModel : ViewModel() {
 
     // Stylus Settings (画世界 Pro & Krita style, persisted)
     var penOnlyMode by mutableStateOf(false) // 笔模式 (禁止手指绘制，单指平移，双指缩放旋转)
+    var penModeSingleFingerPanEnabled by mutableStateOf(true) // 笔模式下单指平移画布 (可配置开关)
     var brushCursorMode by mutableIntStateOf(3) // 0: 不显示, 1: 绘画时显示, 2: 悬空显示, 3: 绘画和悬空显示
     var eraserCursorMode by mutableIntStateOf(3)
     var cursorStyleMode by mutableIntStateOf(5) // 0: 圆形, 1: 十字准星, 2: 点, 3: 无, 4: 系统指针, 5: 圆+十字准星
@@ -1602,6 +1603,17 @@ class PaintViewModel : ViewModel() {
                 .getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("penOnlyMode", enable)
+                .apply()
+        }
+    }
+
+    fun updatePenModeSingleFingerPan(enable: Boolean) {
+        penModeSingleFingerPanEnabled = enable
+        if (::appContext.isInitialized) {
+            appContext
+                .getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("penModeSingleFingerPanEnabled", enable)
                 .apply()
         }
     }
@@ -2331,6 +2343,7 @@ class PaintViewModel : ViewModel() {
             }
             extendToCutout = prefs.getBoolean("extendToCutout", true)
             penOnlyMode = prefs.getBoolean("penOnlyMode", false)
+            penModeSingleFingerPanEnabled = prefs.getBoolean("penModeSingleFingerPanEnabled", true)
             oppoPencilModelMode = prefs.getString("oppoPencilModelMode", "AUTO") ?: "AUTO"
             oppoDoubleTapAction = prefs.getString("oppoDoubleTapAction", "toggle_eraser") ?: "toggle_eraser"
             oppoSlideAction = prefs.getString("oppoSlideAction", "adjust_brush_size") ?: "adjust_brush_size"

@@ -111,15 +111,23 @@ internal fun StylusSettingsSubPage(
                     title = stringResource(R.string.settings_pen_mode),
                     summary = stringResource(R.string.stylus_pen_mode_desc),
                     checked = vm.penOnlyMode,
-                    shape = settingGroupShape(0, 5),
+                    shape = settingGroupShape(0, 6),
                     onCheckedChange = { vm.updatePenOnlyMode(it) },
+                )
+                SettingSwitchGroupItem(
+                    icon = R.drawable.ic_hand,
+                    title = stringResource(R.string.settings_pen_mode_single_finger_pan_title),
+                    summary = stringResource(R.string.settings_pen_mode_single_finger_pan_desc),
+                    checked = vm.penModeSingleFingerPanEnabled,
+                    shape = settingGroupShape(1, 6),
+                    onCheckedChange = { vm.updatePenModeSingleFingerPan(it) },
                 )
                 SettingSwitchGroupItem(
                     icon = Icons.Rounded.Speed,
                     title = stringResource(R.string.stylus_prediction_title),
                     summary = stringResource(R.string.stylus_prediction_desc),
                     checked = vm.stylusStrokePredictionEnabled,
-                    shape = settingGroupShape(1, 5),
+                    shape = settingGroupShape(2, 6),
                     onCheckedChange = { vm.updateStylusStrokePredictionEnabled(it) },
                 )
                 SettingDropdownGroupItem(
@@ -128,7 +136,7 @@ internal fun StylusSettingsSubPage(
                     summary = stringResource(R.string.stylus_brush_cursor_desc),
                     currentText = cursorModeOptions.getOrElse(vm.brushCursorMode) { cursorModeOptions[0] },
                     options = cursorModeOptions,
-                    shape = settingGroupShape(2, 5),
+                    shape = settingGroupShape(3, 6),
                     onSelect = { vm.updateBrushCursorMode(it) },
                 )
                 SettingDropdownGroupItem(
@@ -137,7 +145,7 @@ internal fun StylusSettingsSubPage(
                     summary = stringResource(R.string.stylus_eraser_cursor_desc),
                     currentText = cursorModeOptions.getOrElse(vm.eraserCursorMode) { cursorModeOptions.last() },
                     options = cursorModeOptions,
-                    shape = settingGroupShape(3, 5),
+                    shape = settingGroupShape(4, 6),
                     onSelect = { vm.updateEraserCursorMode(it) },
                 )
                 SettingDropdownGroupItem(
@@ -146,7 +154,7 @@ internal fun StylusSettingsSubPage(
                     summary = stringResource(R.string.stylus_cursor_style_desc),
                     currentText = cursorStyleOptions.getOrElse(vm.cursorStyleMode) { cursorStyleOptions[0] },
                     options = cursorStyleOptions,
-                    shape = settingGroupShape(4, 5),
+                    shape = settingGroupShape(5, 6),
                     onSelect = { vm.updateCursorStyleMode(it) },
                 )
             }

@@ -585,6 +585,25 @@ internal fun SettingsTabPage(
                         )
                     }
 
+                    Spacer(Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text(stringResource(R.string.settings_pen_mode_single_finger_pan_title), color = Morandi.text, fontSize = 13.sp)
+                            Text(stringResource(R.string.settings_pen_mode_single_finger_pan_desc), color = Morandi.subText, fontSize = 11.sp)
+                        }
+                        ReSwitch(
+                            checked = vm.penModeSingleFingerPanEnabled,
+                            onChecked = { vm.updatePenModeSingleFingerPan(it) },
+                        )
+                    }
+
                     Spacer(Modifier.height(10.dp))
                     Box(
                         modifier = Modifier

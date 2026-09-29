@@ -696,6 +696,8 @@
     <string name="settings_three_finger_redo_desc">Tap canvas with three fingers to redo last undone stroke</string>
     <string name="settings_quick_pinch_fit_title">Quick Pinch to Fit Canvas</string>
     <string name="settings_quick_pinch_fit_desc">Pinch inward quickly to smooth center and fit screen</string>
+    <string name="settings_pen_mode_single_finger_pan_title">Allow Single-Finger Pan in Stylus Mode</string>
+    <string name="settings_pen_mode_single_finger_pan_desc">When enabled, drag with one finger to pan canvas in stylus mode; when disabled, single-finger touches are ignored for strict palm rejection</string>
     <string name="settings_gesture_pen_hint">Note: Multi-touch gestures work regardless of stylus mode. Two-finger undo and three-finger redo remain available</string>
     <string name="settings_eyedropper_long_press_title">Long Press Eyedropper</string>
     <string name="settings_eyedropper_long_press_stylus_desc">Stylus mode active: long press canvas with stylus to pick color</string>
