@@ -16,10 +16,14 @@ import com.reverie.paint.core.sync.SyncCredentialStore
 import com.reverie.paint.core.sync.SyncCredentials
 import com.reverie.paint.core.sync.SyncEngine
 import com.reverie.paint.core.sync.SyncException
+import com.reverie.paint.core.sync.SyncHttp
 import com.reverie.paint.core.sync.SyncSource
 import com.reverie.paint.core.sync.WebDavSyncClient
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -38,6 +42,12 @@ internal class SyncState {
     var autoBackupEnabled by mutableStateOf(false)
     var wifiOnly by mutableStateOf(true)
     var syncOnExitEnabled by mutableStateOf(false)
+    var periodicBackupEnabled by mutableStateOf(false)
+    var trustSelfSigned by mutableStateOf(false)
+
+    internal var syncTimerJob: Job? = null
+    internal var lastPeriodicBackupMs: Long = 0L
+
     var lastBackupAtMs by mutableLongStateOf(0L)
     var status by mutableStateOf(SyncConnectionStatus.IDLE)
 
@@ -69,6 +79,10 @@ private const val PREF_USERNAME = "sync_username"
 private const val PREF_AUTO_BACKUP = "sync_auto_backup"
 private const val PREF_WIFI_ONLY = "sync_wifi_only"
 private const val PREF_SYNC_ON_EXIT = "sync_on_exit"
+private const val PREF_PERIODIC_BACKUP = "sync_periodic_backup"
+private const val PREF_TRUST_SELF_SIGNED = "sync_trust_self_signed"
+private const val SYNC_TICK_MS = 60_000L
+private const val SYNC_INTERVAL_MS = 30 * 60_000L
 private const val PREF_LAST_BACKUP = "sync_last_backup"
 private const val PREF_SYNC = "paint_prefs"
 private const val MANIFEST_FILE = "sync_manifest.txt"
@@ -116,6 +130,9 @@ internal fun PaintViewModel.loadSyncSettings() {
     syncState.autoBackupEnabled = prefs.getBoolean(PREF_AUTO_BACKUP, false)
     syncState.wifiOnly = prefs.getBoolean(PREF_WIFI_ONLY, true)
     syncState.syncOnExitEnabled = prefs.getBoolean(PREF_SYNC_ON_EXIT, false)
+    syncState.periodicBackupEnabled = prefs.getBoolean(PREF_PERIODIC_BACKUP, false)
+    syncState.trustSelfSigned = prefs.getBoolean(PREF_TRUST_SELF_SIGNED, false)
+    startSyncTimerIfNeeded()
     syncState.lastBackupAtMs = prefs.getLong(PREF_LAST_BACKUP, 0L)
     syncState.hasSavedPassword = savedPassword().isNotEmpty()
     syncState.connected = syncState.serverUrl.isNotBlank() && syncState.username.isNotBlank()
@@ -152,6 +169,57 @@ internal fun PaintViewModel.setSyncOnExitEnabled(value: Boolean) {
     persistSyncSettings()
 }
 
+internal fun PaintViewModel.setSyncTrustSelfSigned(value: Boolean) {
+    syncState.trustSelfSigned = value
+    persistSyncSettings()
+}
+
+internal fun PaintViewModel.setSyncPeriodicBackup(value: Boolean) {
+    syncState.periodicBackupEnabled = value
+    syncState.lastPeriodicBackupMs = System.currentTimeMillis()
+    persistSyncSettings()
+    startSyncTimerIfNeeded()
+}
+
+internal fun PaintViewModel.startSyncTimerIfNeeded() {
+    if (!syncState.periodicBackupEnabled) {
+        stopSyncTimer()
+        return
+    }
+    if (syncState.syncTimerJob?.isActive == true) return
+    syncState.syncTimerJob =
+        viewModelScope.launch {
+            while (isActive) {
+                delay(SYNC_TICK_MS)
+                maybePeriodicBackup()
+            }
+        }
+}
+
+internal fun PaintViewModel.stopSyncTimer() {
+    syncState.syncTimerJob?.cancel()
+    syncState.syncTimerJob = null
+}
+
+private fun PaintViewModel.maybePeriodicBackup() {
+    if (!syncState.periodicBackupEnabled) return
+    if (!isSyncConfigValid()) return
+    val now = System.currentTimeMillis()
+    if (syncState.lastPeriodicBackupMs == 0L) {
+        syncState.lastPeriodicBackupMs = now
+        return
+    }
+    if (now - syncState.lastPeriodicBackupMs < SYNC_INTERVAL_MS) return
+    syncState.lastPeriodicBackupMs = now
+    triggerAutoBackup()
+}
+
+private fun PaintViewModel.syncClient(
+    url: String,
+    user: String,
+    pass: String,
+) = WebDavSyncClient(url, user, pass, SyncHttp.client(syncState.trustSelfSigned))
+
 private fun PaintViewModel.isOnWifi(): Boolean {
     if (!hasAppContext()) return false
     val cm =
@@ -183,7 +251,7 @@ internal fun PaintViewModel.connectSync(
         val failure =
             withContext(Dispatchers.IO) {
                 try {
-                    WebDavSyncClient(normalized, user, effectivePassword).stat("")
+                    syncClient(normalized, user, effectivePassword).stat("")
                     null
                 } catch (e: SyncException) {
                     e.kind.name
@@ -227,7 +295,7 @@ internal fun PaintViewModel.testSyncConnection() {
         val failure =
             withContext(Dispatchers.IO) {
                 try {
-                    WebDavSyncClient(url, user, pass).stat("")
+                    syncClient(url, user, pass).stat("")
                     null
                 } catch (e: SyncException) {
                     e.kind.name
@@ -250,10 +318,13 @@ internal fun PaintViewModel.disconnectSync() {
             .remove(PREF_AUTO_BACKUP)
             .remove(PREF_WIFI_ONLY)
             .remove(PREF_SYNC_ON_EXIT)
+            .remove(PREF_PERIODIC_BACKUP)
+            .remove(PREF_TRUST_SELF_SIGNED)
             .remove(PREF_LAST_BACKUP)
             .apply()
         syncManifestFile().delete()
     }
+    stopSyncTimer()
     syncState.serverUrl = ""
     syncState.username = ""
     syncState.hasSavedPassword = false
@@ -262,6 +333,7 @@ internal fun PaintViewModel.disconnectSync() {
     syncState.autoBackupEnabled = false
     syncState.wifiOnly = true
     syncState.syncOnExitEnabled = false
+    syncState.periodicBackupEnabled = false
     syncState.lastBackupAtMs = 0L
     syncState.status = SyncConnectionStatus.IDLE
     syncState.statusDetail = ""
@@ -292,7 +364,7 @@ internal fun PaintViewModel.backupToCloud() {
         val outcome =
             withContext(Dispatchers.IO) {
                 try {
-                    val client = WebDavSyncClient(url, user, pass)
+                    val client = syncClient(url, user, pass)
                     val manifest =
                         if (manifestFile.exists()) {
                             SyncEngine.decodeManifest(manifestFile.readText())
@@ -359,7 +431,7 @@ internal fun PaintViewModel.restoreFromCloud(category: SyncCategory) {
         val outcome =
             withContext(Dispatchers.IO) {
                 try {
-                    val client = WebDavSyncClient(url, user, pass)
+                    val client = syncClient(url, user, pass)
                     val manifest =
                         if (manifestFile.exists()) {
                             SyncEngine.decodeManifest(manifestFile.readText())
@@ -433,6 +505,8 @@ private fun PaintViewModel.persistSyncSettings() {
         .putBoolean(PREF_AUTO_BACKUP, syncState.autoBackupEnabled)
         .putBoolean(PREF_WIFI_ONLY, syncState.wifiOnly)
         .putBoolean(PREF_SYNC_ON_EXIT, syncState.syncOnExitEnabled)
+        .putBoolean(PREF_PERIODIC_BACKUP, syncState.periodicBackupEnabled)
+        .putBoolean(PREF_TRUST_SELF_SIGNED, syncState.trustSelfSigned)
         .putLong(PREF_LAST_BACKUP, syncState.lastBackupAtMs)
         .apply()
 }

@@ -2017,6 +2017,11 @@
     <string name="sync_time_days">%1$d 天前</string>
     <string name="sync_status_waiting_wifi">等待 Wi-Fi</string>
     <string name="sync_backup_locked_hint">连接云存储后可备份</string>
+    <string name="sync_category_security">安全</string>
+    <string name="sync_trust_self_signed">信任自签名证书</string>
+    <string name="sync_trust_self_signed_summary">仅用于你自己的服务器, 开启后将跳过 HTTPS 证书校验</string>
+    <string name="sync_periodic_backup">定时自动备份</string>
+    <string name="sync_periodic_backup_summary">应用打开期间每 30 分钟自动备份一次</string>
     <string name="sync_category_restore">恢复</string>
     <string name="sync_restore_artworks">恢复画作</string>
     <string name="sync_restore_brushes">恢复笔刷</string>

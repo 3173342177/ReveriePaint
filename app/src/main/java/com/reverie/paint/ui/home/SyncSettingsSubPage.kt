@@ -217,6 +217,18 @@ internal fun SyncSettingsSubPage(
             }
 
             Spacer(Modifier.height(8.dp))
+            SettingCategoryTitle(stringResource(R.string.sync_category_security))
+            SettingGroup {
+                SettingSwitchGroupItem(
+                    title = stringResource(R.string.sync_trust_self_signed),
+                    summary = stringResource(R.string.sync_trust_self_signed_summary),
+                    checked = state.trustSelfSigned,
+                    shape = settingGroupShape(0, 1),
+                    onCheckedChange = { vm.setSyncTrustSelfSigned(it) },
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
             SettingCategoryTitle(stringResource(R.string.sync_category_backup))
             SettingGroup {
                 SettingSwitchGroupItem(
@@ -225,7 +237,7 @@ internal fun SyncSettingsSubPage(
                     summary = stringResource(R.string.sync_auto_backup_summary),
                     checked = state.autoBackupEnabled,
                     enabled = state.connected,
-                    shape = settingGroupShape(0, 4),
+                    shape = settingGroupShape(0, 5),
                     onCheckedChange = { vm.setSyncAutoBackupEnabled(it) },
                 )
                 SettingSwitchGroupItem(
@@ -233,7 +245,7 @@ internal fun SyncSettingsSubPage(
                     summary = stringResource(R.string.sync_wifi_only_summary),
                     checked = state.wifiOnly,
                     enabled = state.connected,
-                    shape = settingGroupShape(1, 4),
+                    shape = settingGroupShape(1, 5),
                     onCheckedChange = { vm.setSyncWifiOnly(it) },
                 )
                 SettingSwitchGroupItem(
@@ -241,12 +253,20 @@ internal fun SyncSettingsSubPage(
                     summary = stringResource(R.string.sync_on_exit_summary),
                     checked = state.syncOnExitEnabled,
                     enabled = state.connected,
-                    shape = settingGroupShape(2, 4),
+                    shape = settingGroupShape(2, 5),
                     onCheckedChange = { vm.setSyncOnExitEnabled(it) },
                 )
+                SettingSwitchGroupItem(
+                    title = stringResource(R.string.sync_periodic_backup),
+                    summary = stringResource(R.string.sync_periodic_backup_summary),
+                    checked = state.periodicBackupEnabled,
+                    enabled = state.connected,
+                    shape = settingGroupShape(3, 5),
+                    onCheckedChange = { vm.setSyncPeriodicBackup(it) },
+                )
                 SyncActionRow(
-                    index = 3,
-                    total = 4,
+                    index = 4,
+                    total = 5,
                     text = stringResource(R.string.sync_backup_now),
                     color = colors.accent,
                     enabled = state.connected,

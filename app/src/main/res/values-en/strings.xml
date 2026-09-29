@@ -2017,6 +2017,11 @@
     <string name="sync_time_days">%1$d d ago</string>
     <string name="sync_status_waiting_wifi">Waiting for Wi-Fi</string>
     <string name="sync_backup_locked_hint">Connect cloud storage to enable backups</string>
+    <string name="sync_category_security">Security</string>
+    <string name="sync_trust_self_signed">Trust self-signed certificates</string>
+    <string name="sync_trust_self_signed_summary">Only for your own server; skips HTTPS certificate validation</string>
+    <string name="sync_periodic_backup">Scheduled backup</string>
+    <string name="sync_periodic_backup_summary">Back up automatically every 30 minutes while the app is open</string>
     <string name="sync_category_restore">Restore</string>
     <string name="sync_restore_artworks">Restore artworks</string>
     <string name="sync_restore_brushes">Restore brushes</string>
