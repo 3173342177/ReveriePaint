@@ -192,8 +192,6 @@ class CanvasTouchView(context: Context) : View(context) {
      * 阶段的抖动"也不会再把随后落下的第三指轻点重做挡掉。
      */
     private var isTwoFingerRotation = false
-    /** 当前多指手势会话中是否已经触发过实际画布运动(位移/缩放/旋转)。一旦发生过，本次触摸抬起前绝不触发连续撤销 */
-    private var hasCanvasTransformOccurred = false
 
     // 本地硬件光标状态 (0 Compose 开销)
     /** 局部失效时并入标尺块(debug 标尺专用; 正式版 [PerfHud.fillHudBounds] 恒 false)。 */
@@ -462,7 +460,6 @@ class CanvasTouchView(context: Context) : View(context) {
         isTransformActive = false
         isPinchMotion = false
         isTwoFingerRotation = false
-        hasCanvasTransformOccurred = false
         isInteracting = false
         maxTouchPointers = 0
         lastPos0 = Offset.Zero
@@ -482,7 +479,7 @@ class CanvasTouchView(context: Context) : View(context) {
             val v = vm ?: return
             // 多指误触保护: 液化手势进行中(含场通路的"零解算"阶段)第二指落下**不得**触发
             // 连续撤销 —— 真机上这是"液化中手指一不小心碰到屏幕, 形变被连续撤销吃掉"的根源。
-            if (!hasCanvasTransformOccurred && maxTouchPointers == 2 && !isPinchMotion && !isTwoFingerRotation && isInteracting && !isLiquifyGestureActive) {
+            if (maxTouchPointers == 2 && !isPinchMotion && !isTwoFingerRotation && isInteracting && !isLiquifyGestureActive) {
                 isContinuousUndoing = true
                 v.undo()
                 postDelayed(this, 110L)
@@ -493,7 +490,7 @@ class CanvasTouchView(context: Context) : View(context) {
     private val continuousRedoRunnable = object : Runnable {
         override fun run() {
             val v = vm ?: return
-            if (!hasCanvasTransformOccurred && maxTouchPointers >= 3 && !isPinchMotion && isInteracting && !isLiquifyGestureActive) {
+            if (maxTouchPointers >= 3 && !isPinchMotion && isInteracting && !isLiquifyGestureActive) {
                 isContinuousUndoing = true
                 v.redo()
                 postDelayed(this, 110L)
@@ -2479,7 +2476,6 @@ class CanvasTouchView(context: Context) : View(context) {
                 isTransformActive = false
                 isInteracting = false
                 isPinchMotion = false
-                hasCanvasTransformOccurred = false
                 maxTouchPointers = 0
                 lastPos0 = Offset.Zero
                 lastPos1 = Offset.Zero
@@ -2531,7 +2527,6 @@ class CanvasTouchView(context: Context) : View(context) {
                 if (isNewGesture || isStaleFragment) {
                     isTransformActive = true
                     if (isNewGesture) {
-                        hasCanvasTransformOccurred = false
                         isPinchMotion = false
                         isTwoFingerRotation = false
                         initialCentroid = centroid
@@ -2551,7 +2546,7 @@ class CanvasTouchView(context: Context) : View(context) {
 
                     removeCallbacks(continuousUndoRunnable)
                     removeCallbacks(continuousRedoRunnable)
-                    if (!isShiftTraceAlign && isNewGesture && !hasCanvasTransformOccurred) {
+                    if (!isShiftTraceAlign && isNewGesture) {
                         if (numFingers == 2 && v.gestureTwoFingerUndo) {
                             postDelayed(continuousUndoRunnable, 420L)
                         } else if (numFingers >= 3 && v.gestureThreeFingerRedo) {
@@ -2657,7 +2652,6 @@ class CanvasTouchView(context: Context) : View(context) {
                         )
                         if (isMotion) {
                             isPinchMotion = true
-                            hasCanvasTransformOccurred = true
                             removeCallbacks(continuousUndoRunnable)
                             removeCallbacks(continuousRedoRunnable)
                         }
@@ -2676,7 +2670,6 @@ class CanvasTouchView(context: Context) : View(context) {
                             )
                         ) {
                             isTwoFingerRotation = true
-                            hasCanvasTransformOccurred = true
                             removeCallbacks(continuousUndoRunnable)
                         }
 
@@ -2694,7 +2687,6 @@ class CanvasTouchView(context: Context) : View(context) {
                         canvasPanX = centroid.x - vRotX - viewW / 2f
                         canvasPanY = centroid.y - vRotY - viewH / 2f
 
-                        hasCanvasTransformOccurred = true
                         onTransform?.invoke(canvasZoom, canvasRotation, canvasPanX, canvasPanY)
                         invalidate()
 
@@ -2758,10 +2750,7 @@ class CanvasTouchView(context: Context) : View(context) {
                     prevCentroid = prevCentroid + Offset(dx / 2f, dy / 2f)
                     canvasPanX += dx
                     canvasPanY += dy
-                    if (hypot(dx, dy) > 2f) {
-                        isPinchMotion = true
-                        hasCanvasTransformOccurred = true
-                    }
+                    if (hypot(dx, dy) > 2f) isPinchMotion = true
                     lastTransformTimestamp = nowMs
                     onTransform?.invoke(canvasZoom, canvasRotation, canvasPanX, canvasPanY)
                     invalidate()
@@ -2772,10 +2761,7 @@ class CanvasTouchView(context: Context) : View(context) {
                     prevCentroid = prevCentroid + Offset(dx / 2f, dy / 2f)
                     canvasPanX += dx
                     canvasPanY += dy
-                    if (hypot(dx, dy) > 2f) {
-                        isPinchMotion = true
-                        hasCanvasTransformOccurred = true
-                    }
+                    if (hypot(dx, dy) > 2f) isPinchMotion = true
                     lastTransformTimestamp = nowMs
                     onTransform?.invoke(canvasZoom, canvasRotation, canvasPanX, canvasPanY)
                     invalidate()
@@ -2809,9 +2795,9 @@ class CanvasTouchView(context: Context) : View(context) {
                     } else if (isQuickPinchFit) {
                         animateFitCanvas()
                         v.showActionToast(context.getString(R.string.canvas_toast_fit_reset), R.drawable.ic_refresh)
-                    } else if (!isContinuousUndoing && !hasCanvasTransformOccurred && !isPinchMotion && !isTwoFingerRotation && !filterSessionActive && maxTouchPointers == 2 && v.gestureTwoFingerUndo && durationMs < 360L) {
+                    } else if (!isContinuousUndoing && !isPinchMotion && !isTwoFingerRotation && !filterSessionActive && maxTouchPointers == 2 && v.gestureTwoFingerUndo && durationMs < 360L) {
                         v.undo()
-                    } else if (!isContinuousUndoing && !hasCanvasTransformOccurred && !isPinchMotion && !filterSessionActive && maxTouchPointers >= 3 && v.gestureThreeFingerRedo && durationMs < 380L) {
+                    } else if (!isContinuousUndoing && !isPinchMotion && !filterSessionActive && maxTouchPointers >= 3 && v.gestureThreeFingerRedo && durationMs < 380L) {
                         v.redo()
                     } else if (rotationSnapGesture.isActive) {
                         // 正常画布手势结束: 若停在 90° 倍数吸附区内, 平滑收敛到精确倍数
@@ -2822,7 +2808,6 @@ class CanvasTouchView(context: Context) : View(context) {
                     isTransformActive = false
                     isPinchMotion = false
                     isTwoFingerRotation = false
-                    hasCanvasTransformOccurred = false
                     maxTouchPointers = 0
                     lastPos0 = Offset.Zero
                     lastPos1 = Offset.Zero
@@ -2832,7 +2817,6 @@ class CanvasTouchView(context: Context) : View(context) {
                     removeCallbacks(continuousUndoRunnable)
                     removeCallbacks(continuousRedoRunnable)
                     isContinuousUndoing = false
-                    hasCanvasTransformOccurred = false
                     if (strokeStarted) {
                         cachedDriver?.feedbackManager?.setWritingHapticsEnabled(false)
                         cachedDriver?.feedbackManager?.stopStrokeSound()
