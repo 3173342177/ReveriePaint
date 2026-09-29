@@ -10,10 +10,13 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
+import com.reverie.paint.R
+import com.reverie.paint.core.sync.SyncCategory
 import com.reverie.paint.core.sync.SyncCredentialStore
 import com.reverie.paint.core.sync.SyncCredentials
 import com.reverie.paint.core.sync.SyncEngine
 import com.reverie.paint.core.sync.SyncException
+import com.reverie.paint.core.sync.SyncSource
 import com.reverie.paint.core.sync.WebDavSyncClient
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +26,8 @@ import kotlinx.coroutines.withContext
 internal enum class SyncConnectionStatus { IDLE, TESTING, OK, FAILED }
 
 internal enum class SyncBackupStatus { IDLE, RUNNING, DONE, FAILED, WAITING_WIFI }
+
+internal enum class SyncRestoreStatus { IDLE, RUNNING, DONE, FAILED }
 
 internal class SyncState {
     var serverUrl by mutableStateOf("")
@@ -43,9 +48,20 @@ internal class SyncState {
     var backupTotal by mutableIntStateOf(0)
     var lastBackupUploaded by mutableIntStateOf(0)
     var lastBackupSkipped by mutableIntStateOf(0)
+    var lastBackupDeleted by mutableIntStateOf(0)
     var lastBackupFailed by mutableIntStateOf(0)
     var lastBackupBytes by mutableLongStateOf(0L)
     var lastBackupError by mutableStateOf("")
+
+    var restoreStatus by mutableStateOf(SyncRestoreStatus.IDLE)
+    var restoreCategory by mutableStateOf<SyncCategory?>(null)
+    var restoreDone by mutableIntStateOf(0)
+    var restoreTotal by mutableIntStateOf(0)
+    var lastRestoreDownloaded by mutableIntStateOf(0)
+    var lastRestoreSkipped by mutableIntStateOf(0)
+    var lastRestoreConflicts by mutableIntStateOf(0)
+    var lastRestoreFailed by mutableIntStateOf(0)
+    var lastRestoreError by mutableStateOf("")
 }
 
 private const val PREF_SERVER_URL = "sync_server_url"
@@ -66,6 +82,31 @@ private fun PaintViewModel.syncManifestFile() = File(appContext.filesDir, MANIFE
 
 private fun PaintViewModel.savedPassword(): String =
     if (hasAppContext()) SyncCredentialStore.loadPassword(appContext) else ""
+
+private fun PaintViewModel.bundledNames(assetDir: String): Set<String> =
+    try {
+        appContext.assets.list(assetDir)?.toSet() ?: emptySet()
+    } catch (_: Exception) {
+        emptySet()
+    }
+
+private fun PaintViewModel.syncSources(): List<SyncSource> {
+    val filesDir = appContext.filesDir
+    val bundledPresets = bundledNames("paintoppresets")
+    val bundledTips = bundledNames("brushes")
+    return listOf(
+        SyncSource(SyncCategory.ARTWORKS, File(filesDir, "projects"), "") { SyncEngine.isSyncable(it) },
+        SyncSource(SyncCategory.ARTWORKS, File(filesDir, "autosave"), "autosave/") {
+            SyncEngine.isPlainFile(it) && it.endsWith(".revp", ignoreCase = true)
+        },
+        SyncSource(SyncCategory.BRUSHES, File(filesDir, "paintoppresets"), "brushes/presets/") {
+            SyncEngine.isPlainFile(it) && it !in bundledPresets
+        },
+        SyncSource(SyncCategory.BRUSHES, File(filesDir, "brushes"), "brushes/tips/") {
+            SyncEngine.isPlainFile(it) && it !in bundledTips
+        },
+    )
+}
 
 internal fun PaintViewModel.loadSyncSettings() {
     if (!hasAppContext()) return
@@ -226,6 +267,8 @@ internal fun PaintViewModel.disconnectSync() {
     syncState.statusDetail = ""
     syncState.backupStatus = SyncBackupStatus.IDLE
     syncState.lastBackupError = ""
+    syncState.restoreStatus = SyncRestoreStatus.IDLE
+    syncState.lastRestoreError = ""
 }
 
 internal fun PaintViewModel.backupToCloud() {
@@ -238,7 +281,6 @@ internal fun PaintViewModel.backupToCloud() {
     val url = SyncCredentials.normalizeServerUrl(syncState.serverUrl)
     val user = syncState.username
     val pass = savedPassword()
-    val rootDir = File(appContext.filesDir, "projects")
     val manifestFile = syncManifestFile()
 
     syncState.backupStatus = SyncBackupStatus.RUNNING
@@ -257,14 +299,15 @@ internal fun PaintViewModel.backupToCloud() {
                         } else {
                             emptyMap()
                         }
-                    val local = SyncEngine.scan(rootDir)
+                    val sources = syncSources()
+                    val local = SyncEngine.scan(sources)
                     val result =
-                        SyncEngine.backup(client, local, manifest) { done, total ->
+                        SyncEngine.backup(client, sources, local, manifest) { done, total ->
                             syncState.backupDone = done
                             syncState.backupTotal = total
                         }
                     try {
-                        manifestFile.writeText(SyncEngine.encodeManifest(result.manifest))
+                        SyncEngine.writeTextAtomically(manifestFile, SyncEngine.encodeManifest(result.manifest))
                     } catch (e: Exception) {
                         android.util.Log.e("ReverieSync", "写入同步清单失败", e)
                     }
@@ -283,11 +326,77 @@ internal fun PaintViewModel.backupToCloud() {
             syncState.backupStatus = SyncBackupStatus.DONE
             syncState.lastBackupUploaded = result.uploaded
             syncState.lastBackupSkipped = result.skipped
+            syncState.lastBackupDeleted = result.deleted
             syncState.lastBackupFailed = result.failed
             syncState.lastBackupBytes = result.bytes
             syncState.lastBackupError = result.errors.firstOrNull() ?: ""
             syncState.lastBackupAtMs = System.currentTimeMillis()
             persistSyncSettings()
+        }
+    }
+}
+
+internal fun PaintViewModel.restoreFromCloud(category: SyncCategory) {
+    if (!isSyncConfigValid()) {
+        syncState.status = SyncConnectionStatus.FAILED
+        syncState.statusDetail = SYNC_DETAIL_NOT_CONFIGURED
+        return
+    }
+    if (!hasAppContext()) return
+    val url = SyncCredentials.normalizeServerUrl(syncState.serverUrl)
+    val user = syncState.username
+    val pass = savedPassword()
+    val manifestFile = syncManifestFile()
+    val conflictSuffix = getString(R.string.sync_conflict_suffix)
+
+    syncState.restoreStatus = SyncRestoreStatus.RUNNING
+    syncState.restoreCategory = category
+    syncState.restoreDone = 0
+    syncState.restoreTotal = 0
+    syncState.lastRestoreError = ""
+
+    viewModelScope.launch {
+        val outcome =
+            withContext(Dispatchers.IO) {
+                try {
+                    val client = WebDavSyncClient(url, user, pass)
+                    val manifest =
+                        if (manifestFile.exists()) {
+                            SyncEngine.decodeManifest(manifestFile.readText())
+                        } else {
+                            emptyMap()
+                        }
+                    val sources = syncSources()
+                    val local = SyncEngine.scan(sources.filter { it.category == category })
+                    val result =
+                        SyncEngine.restore(client, sources, category, local, manifest, conflictSuffix) { done, total ->
+                            syncState.restoreDone = done
+                            syncState.restoreTotal = total
+                        }
+                    try {
+                        SyncEngine.writeTextAtomically(manifestFile, SyncEngine.encodeManifest(result.manifest))
+                    } catch (e: Exception) {
+                        android.util.Log.e("ReverieSync", "写入同步清单失败", e)
+                    }
+                    result to null
+                } catch (e: SyncException) {
+                    null to e.kind.name
+                } catch (e: Exception) {
+                    null to e.javaClass.simpleName
+                }
+            }
+        val result = outcome.first
+        if (result == null) {
+            syncState.restoreStatus = SyncRestoreStatus.FAILED
+            syncState.lastRestoreError = outcome.second ?: ""
+        } else {
+            syncState.restoreStatus = SyncRestoreStatus.DONE
+            syncState.lastRestoreDownloaded = result.downloaded
+            syncState.lastRestoreSkipped = result.skipped
+            syncState.lastRestoreConflicts = result.conflicts
+            syncState.lastRestoreFailed = result.failed
+            syncState.lastRestoreError = result.errors.firstOrNull() ?: ""
+            refreshProjects()
         }
     }
 }

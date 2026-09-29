@@ -1990,9 +1990,9 @@
     <string name="sync_category_backup">Backup</string>
     <string name="sync_backup_now">Back up to cloud now</string>
     <string name="sync_backup_running">Uploading %1$d/%2$d</string>
-    <string name="sync_backup_result">Uploaded %1$d, skipped %2$d, failed %3$d</string>
+    <string name="sync_backup_result">Uploaded %1$d, skipped %2$d, cleaned %3$d, failed %4$d</string>
     <string name="sync_backup_info_title">Backup notes</string>
-    <string name="sync_backup_info_text">Backs up formal projects only, excluding autosave drafts. One-way backup: files go to the cloud, local files are never modified or deleted, and a same-named cloud file is overwritten</string>
+    <string name="sync_backup_info_text">Backs up artworks (including autosave drafts) and your own brushes; bundled brushes are not uploaded. Local files are never modified or deleted, files you deleted locally are removed from the cloud, and other same-named files are overwritten</string>
     <string name="sync_auto_backup">Auto-backup after save</string>
     <string name="sync_auto_backup_summary">Upload changed files automatically after each project save</string>
     <string name="sync_connected_badge">Connected</string>
@@ -2008,6 +2008,15 @@
     <string name="sync_time_days">%1$d d ago</string>
     <string name="sync_status_waiting_wifi">Waiting for Wi-Fi</string>
     <string name="sync_backup_locked_hint">Connect cloud storage to enable backups</string>
+    <string name="sync_category_restore">Restore</string>
+    <string name="sync_restore_artworks">Restore artworks</string>
+    <string name="sync_restore_brushes">Restore brushes</string>
+    <string name="sync_artworks">Artworks</string>
+    <string name="sync_brushes">Brushes</string>
+    <string name="sync_restore_hint">Adds only artworks and brushes missing locally; never overwrites or deletes local files</string>
+    <string name="sync_restore_running">Restoring %1$d/%2$d</string>
+    <string name="sync_restore_result">Restored %1$d, skipped %2$d, conflicts %3$d, failed %4$d</string>
+    <string name="sync_conflict_suffix"> (cloud)</string>
 </resources>
 
 

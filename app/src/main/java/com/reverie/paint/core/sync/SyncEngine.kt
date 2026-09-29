@@ -17,10 +17,30 @@ internal data class LocalProject(
 internal data class BackupOutcome(
     val uploaded: Int,
     val skipped: Int,
+    val deleted: Int,
     val failed: Int,
     val bytes: Long,
     val errors: List<String>,
     val manifest: Map<String, String>,
+)
+
+internal data class RestoreOutcome(
+    val downloaded: Int,
+    val skipped: Int,
+    val conflicts: Int,
+    val failed: Int,
+    val bytes: Long,
+    val errors: List<String>,
+    val manifest: Map<String, String>,
+)
+
+internal enum class SyncCategory { ARTWORKS, BRUSHES }
+
+internal data class SyncSource(
+    val category: SyncCategory,
+    val localDir: File,
+    val remotePrefix: String,
+    val accept: (String) -> Boolean,
 )
 
 internal object SyncEngine {
@@ -38,14 +58,29 @@ internal object SyncEngine {
         return true
     }
 
-    fun scan(rootDir: File): List<LocalProject> {
-        if (!rootDir.isDirectory) return emptyList()
+    fun isPlainFile(relativePath: String): Boolean {
+        val normalized = relativePath.replace('\\', '/')
+        if (normalized.isEmpty()) return false
+        val segments = normalized.split('/')
+        if (segments.any { it.isEmpty() || it.startsWith(".") }) return false
+        return !segments.last().lowercase().endsWith(".tmp")
+    }
+
+    fun isSafeRelativePath(path: String): Boolean {
+        val normalized = path.replace('\\', '/')
+        if (normalized.isEmpty() || normalized.startsWith("/")) return false
+        return normalized.split('/').all { it.isNotEmpty() && it != "." && it != ".." && !it.contains('\u0000') }
+    }
+
+    fun scan(sources: List<SyncSource>): List<LocalProject> {
         val out = ArrayList<LocalProject>()
-        rootDir.walkTopDown().forEach { file ->
-            if (!file.isFile) return@forEach
-            val rel = file.relativeTo(rootDir).path.replace(File.separatorChar, '/')
-            if (isSyncable(rel)) {
-                out.add(LocalProject(rel, file, file.length(), sha256(file)))
+        for (source in sources) {
+            if (!source.localDir.isDirectory) continue
+            source.localDir.walkTopDown().forEach { file ->
+                if (!file.isFile) return@forEach
+                val rel = file.relativeTo(source.localDir).path.replace(File.separatorChar, '/')
+                if (!isSafeRelativePath(rel) || !source.accept(rel)) return@forEach
+                out.add(LocalProject(source.remotePrefix + rel, file, file.length(), sha256(file)))
             }
         }
         return out.sortedBy { it.relativePath }
@@ -61,7 +96,12 @@ internal object SyncEngine {
                 digest.update(buffer, 0, read)
             }
         }
-        val bytes = digest.digest()
+        return hex(digest.digest())
+    }
+
+    fun sha256(data: ByteArray): String = hex(MessageDigest.getInstance("SHA-256").digest(data))
+
+    private fun hex(bytes: ByteArray): String {
         val sb = StringBuilder(bytes.size * 2)
         for (b in bytes) {
             val v = b.toInt() and 0xff
@@ -101,16 +141,117 @@ internal object SyncEngine {
         return out
     }
 
+    fun writeAtomically(
+        target: File,
+        data: ByteArray,
+    ) {
+        val parent = target.parentFile
+        parent?.mkdirs()
+        val temp = File(parent, "${target.name}.part")
+        try {
+            temp.outputStream().use { out ->
+                out.write(data)
+                out.flush()
+                (out as? java.io.FileOutputStream)?.fd?.sync()
+            }
+            if (!temp.renameTo(target)) {
+                temp.copyTo(target, overwrite = true)
+                temp.delete()
+            }
+        } catch (e: Exception) {
+            temp.delete()
+            throw e
+        }
+    }
+
+    fun writeTextAtomically(
+        target: File,
+        text: String,
+    ) = writeAtomically(target, text.toByteArray(Charsets.UTF_8))
+
+    fun assignSource(
+        sources: List<SyncSource>,
+        remotePath: String,
+    ): SyncSource? =
+        sources
+            .filter { remotePath.startsWith(it.remotePrefix) }
+            .maxByOrNull { it.remotePrefix.length }
+
+    fun localTarget(
+        sources: List<SyncSource>,
+        remotePath: String,
+    ): File? {
+        val source = assignSource(sources, remotePath) ?: return null
+        val rel = remotePath.removePrefix(source.remotePrefix)
+        if (!isSafeRelativePath(rel) || !source.accept(rel)) return null
+        return File(source.localDir, rel)
+    }
+
+    fun listRemote(
+        client: SyncClient,
+        sources: List<SyncSource>,
+        category: SyncCategory,
+    ): List<RemoteEntry> {
+        val wanted = sources.filter { it.category == category }
+        val startPrefix = commonDirPrefix(wanted.map { it.remotePrefix }).trimEnd('/')
+        val excluded = sources.filter { it.category != category }.map { it.remotePrefix }.filter { it.isNotEmpty() }
+
+        val out = ArrayList<RemoteEntry>()
+        val dirs = ArrayDeque<String>()
+        dirs.add(startPrefix)
+        var visited = 0
+        while (dirs.isNotEmpty() && visited < MAX_REMOTE_DIRS) {
+            val dir = dirs.removeFirst()
+            visited++
+            val entries =
+                try {
+                    client.list(dir)
+                } catch (e: SyncException) {
+                    if (e.kind == SyncException.Kind.NOT_FOUND) continue
+                    throw e
+                }
+            for (entry in entries) {
+                if (!isSafeRelativePath(entry.path)) continue
+                if (excluded.any { entry.path == it.trimEnd('/') || entry.path.startsWith(it) }) continue
+                if (entry.isDirectory) {
+                    dirs.add(entry.path)
+                    continue
+                }
+                val source = assignSource(sources, entry.path) ?: continue
+                if (source.category != category) continue
+                val rel = entry.path.removePrefix(source.remotePrefix)
+                if (!isSafeRelativePath(rel) || !source.accept(rel)) continue
+                out.add(entry)
+            }
+        }
+        return out.sortedBy { it.path }
+    }
+
+    fun planDeletions(
+        sources: List<SyncSource>,
+        local: List<LocalProject>,
+        manifest: Map<String, String>,
+    ): List<String> {
+        val localPaths = local.mapTo(HashSet()) { it.relativePath }
+        return manifest.keys
+            .filter { it !in localPaths }
+            .filter { path -> assignSource(sources, path)?.localDir?.isDirectory == true }
+            .sorted()
+    }
+
     fun backup(
         client: SyncClient,
+        sources: List<SyncSource>,
         local: List<LocalProject>,
         manifest: Map<String, String>,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BackupOutcome {
         val uploads = planUploads(local, manifest)
+        val deletions = planDeletions(sources, local, manifest)
         val newManifest = LinkedHashMap(manifest)
         val errors = ArrayList<String>()
         var uploaded = 0
+        var deleted = 0
         var bytes = 0L
 
         for (dir in requiredRemoteDirs(local.map { it.relativePath })) {
@@ -134,15 +275,133 @@ internal object SyncEngine {
             onProgress(index + 1, total)
         }
 
+        for (path in deletions) {
+            try {
+                client.delete(path)
+                newManifest.remove(path)
+                deleted++
+            } catch (e: Exception) {
+                errors.add("$path: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+
+        val keepDirs = requiredRemoteDirs(local.map { it.relativePath }).toSet()
+        val staleDirs = requiredRemoteDirs(deletions).filter { it !in keepDirs }.sortedByDescending { it.length }
+        for (dir in staleDirs) {
+            try {
+                client.delete(dir)
+            } catch (_: Exception) {
+            }
+        }
+
         return BackupOutcome(
             uploaded = uploaded,
             skipped = local.size - uploads.size,
+            deleted = deleted,
             failed = errors.size,
             bytes = bytes,
             errors = errors,
             manifest = newManifest,
         )
     }
+
+    fun restore(
+        client: SyncClient,
+        sources: List<SyncSource>,
+        category: SyncCategory,
+        local: List<LocalProject>,
+        manifest: Map<String, String>,
+        conflictSuffix: String,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): RestoreOutcome {
+        val remote = listRemote(client, sources, category)
+        val localHashes = local.associate { it.relativePath to it.sha256 }
+        val newManifest = LinkedHashMap(manifest)
+        val errors = ArrayList<String>()
+        var downloaded = 0
+        var skipped = 0
+        var conflicts = 0
+        var bytes = 0L
+
+        onProgress(0, remote.size)
+        for ((index, entry) in remote.withIndex()) {
+            val target = localTarget(sources, entry.path)
+            if (target == null) {
+                errors.add("${entry.path}: invalid path")
+                onProgress(index + 1, remote.size)
+                continue
+            }
+            val existingHash = localHashes[entry.path]
+            if (existingHash != null && existingHash == manifest[entry.path]) {
+                skipped++
+                onProgress(index + 1, remote.size)
+                continue
+            }
+            try {
+                val data = client.get(entry.path)
+                val hash = sha256(data)
+                val expected = manifest[entry.path]
+                if (expected != null && hash != expected) {
+                    errors.add("${entry.path}: checksum mismatch")
+                } else if (existingHash == null) {
+                    writeAtomically(target, data)
+                    newManifest[entry.path] = hash
+                    downloaded++
+                    bytes += data.size.toLong()
+                } else if (hash == existingHash) {
+                    skipped++
+                } else {
+                    val copy = File(target.parentFile, conflictName(target.name, conflictSuffix))
+                    if (isSafeRelativePath(copy.name)) {
+                        writeAtomically(copy, data)
+                        conflicts++
+                        bytes += data.size.toLong()
+                    } else {
+                        errors.add("${entry.path}: invalid conflict path")
+                    }
+                }
+            } catch (e: Exception) {
+                errors.add("${entry.path}: ${e.message ?: e.javaClass.simpleName}")
+            }
+            onProgress(index + 1, remote.size)
+        }
+
+        return RestoreOutcome(
+            downloaded = downloaded,
+            skipped = skipped,
+            conflicts = conflicts,
+            failed = errors.size,
+            bytes = bytes,
+            errors = errors,
+            manifest = newManifest,
+        )
+    }
+
+    fun conflictName(
+        name: String,
+        suffix: String,
+    ): String {
+        val dot = name.lastIndexOf('.')
+        return if (dot > 0) {
+            "${name.substring(0, dot)}$suffix${name.substring(dot)}"
+        } else {
+            name + suffix
+        }
+    }
+
+    private fun commonDirPrefix(prefixes: List<String>): String {
+        if (prefixes.isEmpty()) return ""
+        var common = prefixes.first()
+        for (other in prefixes) {
+            var i = 0
+            while (i < common.length && i < other.length && common[i] == other[i]) i++
+            common = common.substring(0, i)
+        }
+        val slash = common.lastIndexOf('/')
+        return if (slash >= 0) common.substring(0, slash + 1) else ""
+    }
+
+    private const val MAX_REMOTE_DIRS = 512
 
     private val HEX = "0123456789abcdef".toCharArray()
 }
