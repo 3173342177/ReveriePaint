@@ -660,10 +660,12 @@ internal fun PaintViewModel.applyTool(toolId: String) {
         } else if (isBrushTool && state.presetIndex >= 0) {
             // Self-healing: if brush tool mistakenly inherited an eraser preset, revert to default drawing brush
             val cur = brushPresets.firstOrNull { it.index == state.presetIndex }
-            val isEraser = cur == null || cur.group == "橡皮擦" || cur.name.startsWith("a)") || cur.name.contains("Eraser", ignoreCase = true)
-            if (isEraser && defaultBrushIdx >= 0) {
-                state = state.copy(category = "基础", presetIndex = defaultBrushIdx)
-                toolBrushStates = toolBrushStates.toMutableMap().apply { put(toolId, state) }
+            if (cur != null) {
+                val isEraser = cur.group == "橡皮擦" || cur.name.startsWith("a)_Eraser") || cur.name.equals("Eraser_circle", ignoreCase = true)
+                if (isEraser && defaultBrushIdx >= 0) {
+                    state = state.copy(category = "基础", presetIndex = defaultBrushIdx)
+                    toolBrushStates = toolBrushStates.toMutableMap().apply { put(toolId, state) }
+                }
             }
         }
 

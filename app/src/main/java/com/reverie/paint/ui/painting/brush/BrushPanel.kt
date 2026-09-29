@@ -126,6 +126,11 @@ fun BrushPanel(
         }
     }
     var selectedCategory by remember { mutableStateOf(vm.brushPanelSelectedCategory) }
+    LaunchedEffect(vm.brushPanelSelectedCategory) {
+        if (selectedCategory != vm.brushPanelSelectedCategory) {
+            selectedCategory = vm.brushPanelSelectedCategory
+        }
+    }
     var showNewGroupDialog by remember { mutableStateOf(false) }
     var showNewBrushDialog by remember { mutableStateOf(false) }
     var renamePresetName by remember { mutableStateOf<String?>(null) }

@@ -1261,11 +1261,17 @@ import kotlinx.coroutines.withContext
 
     internal fun PaintViewModel.updateCurrentToolBrushState(updater: (PaintViewModel.ToolBrushState) -> PaintViewModel.ToolBrushState) {
         val t = com.reverie.paint.model.Tool.fromId(currentToolId)
-        if (t == com.reverie.paint.model.Tool.BRUSH || t == com.reverie.paint.model.Tool.ERASER || t == com.reverie.paint.model.Tool.SMUDGE) {
-            val state = toolBrushStates[t.id] ?: PaintViewModel.ToolBrushState()
-            toolBrushStates = toolBrushStates.toMutableMap().apply { put(t.id, updater(state)) }
-            schedulePersistToolBrushStates()
+        val targetToolId = if (t == com.reverie.paint.model.Tool.BRUSH ||
+            t == com.reverie.paint.model.Tool.ERASER ||
+            t == com.reverie.paint.model.Tool.SMUDGE
+        ) {
+            currentToolId
+        } else {
+            if (lastDrawingToolId.isNotBlank()) lastDrawingToolId else "brush"
         }
+        val state = toolBrushStates[targetToolId] ?: PaintViewModel.ToolBrushState()
+        toolBrushStates = toolBrushStates.toMutableMap().apply { put(targetToolId, updater(state)) }
+        schedulePersistToolBrushStates()
     }
 
     /** Krita saved{Mode}Size 语义: 把当前 size/opacity/flow 快照进
