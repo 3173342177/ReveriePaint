@@ -256,6 +256,21 @@ internal object SyncEngine {
         text: String,
     ) = writeAtomically(target, text.toByteArray(Charsets.UTF_8))
 
+    fun remotePathForLocal(
+        sources: List<SyncSource>,
+        file: File,
+    ): String? {
+        val target = file.absoluteFile.path
+        for (source in sources) {
+            val dir = source.localDir.absoluteFile.path
+            if (!target.startsWith("$dir${File.separator}")) continue
+            val rel = target.substring(dir.length + 1).replace(File.separatorChar, '/')
+            if (!isSafeRelativePath(rel) || !source.accept(rel)) continue
+            return source.remotePrefix + rel
+        }
+        return null
+    }
+
     fun assignSource(
         sources: List<SyncSource>,
         remotePath: String,
@@ -377,6 +392,7 @@ internal object SyncEngine {
         manifest: Map<String, ManifestEntry>,
         remoteEntries: List<RemoteEntry>,
         conflictSuffix: String,
+        protectedPaths: Set<String> = emptySet(),
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BackupOutcome {
         val tombstones = readTombstones(client)
@@ -395,7 +411,9 @@ internal object SyncEngine {
             }
             val recorded = manifest[path]
             if (recorded != null && project.sha256 == recorded.hash) {
-                if (project.file.delete()) {
+                if (path in protectedPaths) {
+                    notices.add("$path: deletion from another device deferred (file is open)")
+                } else if (project.file.delete()) {
                     effectiveManifest.remove(path)
                     removedLocal++
                 } else {

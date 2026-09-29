@@ -367,6 +367,37 @@ class SyncEngineTest {
     }
 
     @Test
+    fun `backup defers a tombstone for a protected file`() {
+        val root = Files.createTempDirectory("revp-tomb-protected").toFile()
+        try {
+            root.resolve("a.revp").writeText("v1")
+            val client = FakeClient()
+            val src = sources(root)
+            val first =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src), suffix)
+
+            client.delete("a.revp")
+            client.putText(SyncEngine.TOMBSTONES_FILE, "a.revp\t123")
+            val second =
+                SyncEngine.backup(
+                    client,
+                    src,
+                    SyncEngine.scan(src),
+                    first.manifest,
+                    SyncEngine.listRemoteAll(client, src),
+                    suffix,
+                    setOf("a.revp"),
+                )
+
+            assertEquals(0, second.removedLocal)
+            assertTrue(root.resolve("a.revp").exists())
+            assertTrue(String(client.files[SyncEngine.TOMBSTONES_FILE]!!).contains("a.revp"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `backup keeps local edits over a remote tombstone`() {
         val root = Files.createTempDirectory("revp-tomb-edit").toFile()
         try {

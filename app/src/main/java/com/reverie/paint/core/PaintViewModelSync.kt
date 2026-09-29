@@ -210,6 +210,11 @@ private fun PaintViewModel.maybePeriodicBackup() {
     triggerAutoBackup()
 }
 
+private fun protectedSyncPaths(
+    sources: List<SyncSource>,
+    openProject: String?,
+): Set<String> = openProject?.let { SyncEngine.remotePathForLocal(sources, File(it)) }?.let { setOf(it) } ?: emptySet()
+
 private fun PaintViewModel.syncClient(
     url: String,
     user: String,
@@ -349,6 +354,7 @@ internal fun PaintViewModel.backupToCloud() {
     val pass = savedPassword()
     val manifestFile = syncManifestFile()
     val conflictSuffix = getString(R.string.sync_conflict_suffix)
+    val openProject = if (currentPage == Page.PAINTING) currentProjectFile else null
 
     resetSyncResults()
     syncState.backupStatus = SyncBackupStatus.RUNNING
@@ -369,8 +375,17 @@ internal fun PaintViewModel.backupToCloud() {
                     val sources = syncSources()
                     val local = SyncEngine.scan(sources)
                     val remoteEntries = SyncEngine.listRemoteAll(client, sources)
+                    val protectedPaths = protectedSyncPaths(sources, openProject)
                     val result =
-                        SyncEngine.backup(client, sources, local, manifest, remoteEntries, conflictSuffix) { done, total ->
+                        SyncEngine.backup(
+                            client,
+                            sources,
+                            local,
+                            manifest,
+                            remoteEntries,
+                            conflictSuffix,
+                            protectedPaths,
+                        ) { done, total ->
                             syncState.backupDone = done
                             syncState.backupTotal = total
                         }
@@ -404,6 +419,7 @@ internal fun PaintViewModel.backupToCloud() {
             syncState.lastBackupError = result.errors.firstOrNull() ?: ""
             syncState.lastBackupAtMs = System.currentTimeMillis()
             persistSyncSettings()
+            if (result.removedLocal > 0) refreshProjects()
         }
     }
 }
@@ -431,6 +447,7 @@ internal fun PaintViewModel.syncAll() {
     val pass = savedPassword()
     val manifestFile = syncManifestFile()
     val conflictSuffix = getString(R.string.sync_conflict_suffix)
+    val openProject = if (currentPage == Page.PAINTING) currentProjectFile else null
 
     resetSyncResults()
     syncState.backupStatus = SyncBackupStatus.RUNNING
@@ -449,6 +466,7 @@ internal fun PaintViewModel.syncAll() {
                             emptyMap()
                         }
                     val sources = syncSources()
+                    val protectedPaths = protectedSyncPaths(sources, openProject)
                     val backup =
                         SyncEngine.backup(
                             client,
@@ -457,6 +475,7 @@ internal fun PaintViewModel.syncAll() {
                             manifest,
                             SyncEngine.listRemoteAll(client, sources),
                             conflictSuffix,
+                            protectedPaths,
                         ) { done, total ->
                             syncState.backupDone = done
                             syncState.backupTotal = total
