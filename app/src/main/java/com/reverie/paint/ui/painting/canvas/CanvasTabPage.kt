@@ -16,7 +16,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.shadow
-import com.reverie.paint.ui.theme.glassBorder
+import com.reverie.paint.ui.components.liquidHighlight
+import com.reverie.paint.ui.components.pressScale
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -53,7 +54,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.paint.core.*
-import com.reverie.paint.ui.components.ReMenuItem
 import com.reverie.paint.ui.components.ReSwitch
 import com.reverie.paint.ui.components.noRippleClickable
 import com.reverie.paint.ui.theme.Morandi
@@ -102,7 +102,6 @@ internal fun CanvasTabPage(
                     .shadow(20.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.4f))
                     .clip(RoundedCornerShape(16.dp))
                     .background(Morandi.panel)
-                    .glassBorder(RoundedCornerShape(16.dp))
                     .padding(20.dp)
             ) {
                 Column {
@@ -181,14 +180,13 @@ internal fun CanvasTabPage(
             context.getString(R.string.duration_secs, secs)
         }
 
-        // 1. 画布规格信息卡 (Specs Dashboard Card)
+        // 1. 画布规格信息卡 (Specs Dashboard Card - Zero Border)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Morandi.panelHi.copy(alpha = 0.55f))
-                .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .clip(RoundedCornerShape(14.dp))
+                .background(Morandi.panelHi.copy(alpha = 0.5f))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -217,9 +215,7 @@ internal fun CanvasTabPage(
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border.copy(alpha = 0.35f)))
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
 
             // 2-Column Specs Grid
             Row(
@@ -277,7 +273,7 @@ internal fun CanvasTabPage(
             }
         }
 
-        // 2. 工程与图层卡片 (Project & Layers Group)
+        // 2. 工程与图层卡片 (Project & Layers Group - Zero Border Tiles)
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.canvas_group_project),
@@ -290,10 +286,10 @@ internal fun CanvasTabPage(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                ReMenuItem(
+                CanvasActionTile(
                     icon = R.drawable.ic_save,
                     label = stringResource(R.string.common_save),
-                    onTap = {
+                    onClick = {
                         onClose()
                         vm.saveProject(vm.docName) {
                             android.widget.Toast.makeText(context, context.getString(R.string.canvas_toast_project_saved, vm.docName), android.widget.Toast.LENGTH_SHORT).show()
@@ -301,25 +297,25 @@ internal fun CanvasTabPage(
                     },
                     modifier = Modifier.weight(1f),
                 )
-                ReMenuItem(
+                CanvasActionTile(
                     icon = R.drawable.ic_save_as,
                     label = stringResource(R.string.canvas_action_save_as),
-                    onTap = {
+                    onClick = {
                         saveAsName = vm.docName + "_copy"
                         showSaveAsDialog = true
                     },
                     modifier = Modifier.weight(1f),
                 )
-                ReMenuItem(
+                CanvasActionTile(
                     icon = R.drawable.ic_image,
                     label = stringResource(R.string.canvas_action_import_image),
-                    onTap = { imagePickerLauncher.launch("image/*") },
+                    onClick = { imagePickerLauncher.launch("image/*") },
                     modifier = Modifier.weight(1f),
                 )
-                ReMenuItem(
+                CanvasActionTile(
                     icon = R.drawable.ic_stamp,
                     label = stringResource(R.string.canvas_action_stamp),
-                    onTap = {
+                    onClick = {
                         vm.stampVisibleLayers()
                         android.widget.Toast.makeText(context, context.getString(R.string.canvas_toast_stamp_success), android.widget.Toast.LENGTH_SHORT).show()
                         onClose()
@@ -329,7 +325,7 @@ internal fun CanvasTabPage(
             }
         }
 
-        // 3. 变换与调整卡片 (Transform & Adjust Group)
+        // 3. 变换与调整卡片 (Transform & Adjust Group - Zero Border Tiles)
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.canvas_group_transform),
@@ -342,37 +338,37 @@ internal fun CanvasTabPage(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                ReMenuItem(
+                CanvasActionTile(
                     icon = R.drawable.ic_canvas_resize,
                     label = stringResource(R.string.canvas_action_resize),
-                    onTap = {
+                    onClick = {
                         onClose()
                         vm.enterCanvasAdjustMode(com.reverie.paint.model.CanvasAdjustMode.CROP_EXPAND)
                     },
                     modifier = Modifier.weight(1f),
                 )
-                ReMenuItem(
+                CanvasActionTile(
                     icon = R.drawable.ic_flip_horizontal,
                     label = stringResource(R.string.canvas_action_flip_h),
-                    onTap = {
+                    onClick = {
                         vm.flipCanvasHorizontal()
                         onClose()
                     },
                     modifier = Modifier.weight(1f),
                 )
-                ReMenuItem(
+                CanvasActionTile(
                     icon = R.drawable.ic_flip_vertical,
                     label = stringResource(R.string.canvas_action_flip_v),
-                    onTap = {
+                    onClick = {
                         vm.flipCanvasVertical()
                         onClose()
                     },
                     modifier = Modifier.weight(1f),
                 )
-                ReMenuItem(
+                CanvasActionTile(
                     icon = R.drawable.ic_image_adjust,
                     label = stringResource(R.string.canvas_action_filters),
-                    onTap = {
+                    onClick = {
                         onClose()
                         onOpenFilters?.invoke(vm.editTargetLayers())
                     },
@@ -380,6 +376,44 @@ internal fun CanvasTabPage(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CanvasActionTile(
+    icon: Int,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(12.dp)
+
+    Column(
+        modifier = modifier
+            .pressScale(interaction, pressedScale = 0.94f)
+            .clip(shape)
+            .liquidHighlight(interaction, Color.White, radius = 30.dp)
+            .background(Morandi.panelHi.copy(alpha = 0.55f))
+            .clickable(interactionSource = interaction, indication = null) { onClick() }
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = label,
+            tint = Morandi.icon,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = label,
+            color = Morandi.text,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+        )
     }
 }
 

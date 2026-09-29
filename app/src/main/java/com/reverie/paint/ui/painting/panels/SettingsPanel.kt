@@ -100,7 +100,7 @@ fun SettingsPanel(
         }
         vm.targetSettingsTab = null
     }
-    val panelShape = RoundedCornerShape(14.dp)
+    val panelShape = RoundedCornerShape(16.dp)
 
     Box(
         modifier = modifier
@@ -121,7 +121,7 @@ fun SettingsPanel(
                 )
                 .width(350.dp)
                 .heightIn(max = (LocalConfiguration.current.screenHeightDp - 60).coerceAtLeast(240).dp)
-                .shadow(16.dp, panelShape, spotColor = Color.Black.copy(alpha = 0.5f))
+                .shadow(16.dp, panelShape, spotColor = Color.Black.copy(alpha = 0.45f))
                 .clip(panelShape)
                 .then(
                     if (vm.blurBackground && hazeState != null) {
@@ -133,7 +133,6 @@ fun SettingsPanel(
                         Modifier.background(Morandi.panel.copy(alpha = opacity))
                     }
                 )
-                .glassBorder(panelShape)
                 .padding(12.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -146,7 +145,7 @@ fun SettingsPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Morandi.panelHi.copy(alpha = 0.6f))
+                    .background(Morandi.panelHi.copy(alpha = 0.5f))
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -209,10 +208,6 @@ private fun TabCapsuleItem(
         modifier = modifier
             .clip(shape)
             .background(if (selected) Morandi.panel else Color.Transparent)
-            .then(
-                if (selected) Modifier.border(1.dp, Morandi.border.copy(alpha = 0.6f), shape)
-                else Modifier
-            )
             .clickable(interactionSource = interaction, indication = null) { onClick() }
             .padding(vertical = 7.dp),
         horizontalArrangement = Arrangement.Center,

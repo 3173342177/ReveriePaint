@@ -323,16 +323,12 @@ private fun StaticExportSection(
                         modifier = Modifier
                             .weight(1f)
                             .pressScale(chipInteraction, pressedScale = 0.94f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSel) Morandi.panel else Morandi.panelHi.copy(alpha = 0.5f))
-                            .then(
-                                if (isSel) Modifier.border(1.dp, Morandi.accent, RoundedCornerShape(8.dp))
-                                else Modifier.border(1.dp, Morandi.border.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                            )
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSel) Morandi.accent.copy(alpha = 0.18f) else Morandi.panelHi.copy(alpha = 0.5f))
                             .clickable(interactionSource = chipInteraction, indication = null) {
                                 selectedFormat = item.format
                             }
-                            .padding(vertical = 7.dp),
+                            .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Row(
@@ -370,16 +366,12 @@ private fun StaticExportSection(
                         modifier = Modifier
                             .weight(1f)
                             .pressScale(chipInteraction, pressedScale = 0.94f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSel) Morandi.panel else Morandi.panelHi.copy(alpha = 0.5f))
-                            .then(
-                                if (isSel) Modifier.border(1.dp, Morandi.accent, RoundedCornerShape(8.dp))
-                                else Modifier.border(1.dp, Morandi.border.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                            )
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSel) Morandi.accent.copy(alpha = 0.18f) else Morandi.panelHi.copy(alpha = 0.5f))
                             .clickable(interactionSource = chipInteraction, indication = null) {
                                 selectedFormat = item.format
                             }
-                            .padding(vertical = 7.dp),
+                            .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Row(
@@ -407,16 +399,15 @@ private fun StaticExportSection(
             }
         }
 
-        // 格式参数与属性控制台卡片 (Unified Console Parameters Card)
+        // 格式参数与属性控制台卡片 (Unified Console Parameters Card - Zero Border)
         val detail = exportFormats.firstOrNull { it.format == selectedFormat } ?: exportFormats.first()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Morandi.panelHi.copy(alpha = 0.55f))
-                .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .clip(RoundedCornerShape(14.dp))
+                .background(Morandi.panelHi.copy(alpha = 0.5f))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // Row 1: Format Details
             Row(
@@ -427,7 +418,7 @@ private fun StaticExportSection(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Morandi.accent.copy(alpha = 0.12f))
+                        .background(Morandi.accent.copy(alpha = 0.14f))
                         .padding(horizontal = 7.dp, vertical = 2.dp),
                 ) {
                     Text(stringResource(detail.tagRes), color = Morandi.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -457,7 +448,7 @@ private fun StaticExportSection(
                 }
             }
 
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border.copy(alpha = 0.35f)))
+            Spacer(Modifier.height(2.dp))
 
             // Row 2: 紧凑两栏设置项 (Specs + Optional Author Profile)
             Row(
@@ -784,16 +775,12 @@ private fun AnimationExportSection(
                     modifier = Modifier
                         .weight(1f)
                         .pressScale(chipInteraction, pressedScale = 0.94f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSel) Morandi.panel else Morandi.panelHi.copy(alpha = 0.5f))
-                        .then(
-                            if (isSel) Modifier.border(1.dp, Morandi.accent, RoundedCornerShape(8.dp))
-                            else Modifier.border(1.dp, Morandi.border.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                        )
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSel) Morandi.accent.copy(alpha = 0.18f) else Morandi.panelHi.copy(alpha = 0.5f))
                         .clickable(interactionSource = chipInteraction, indication = null) {
                             selectedFormat = item.format
                         }
-                        .padding(vertical = 7.dp),
+                        .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -806,21 +793,20 @@ private fun AnimationExportSection(
             }
         }
 
-        // 选中格式介绍卡 (Unified Card)
+        // 选中格式介绍卡 (Unified Card - Zero Border)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Morandi.panelHi.copy(alpha = 0.55f))
-                .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .clip(RoundedCornerShape(14.dp))
+                .background(Morandi.panelHi.copy(alpha = 0.5f))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(Morandi.accent.copy(alpha = 0.12f))
+                    .background(Morandi.accent.copy(alpha = 0.14f))
                     .padding(horizontal = 7.dp, vertical = 2.dp),
             ) {
                 Text(stringResource(currentItem.tagRes), color = Morandi.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -847,13 +833,13 @@ private fun AnimationExportSection(
             )
         }
 
-        // 参数配置卡片
+        // 参数配置卡片 (Zero Border)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Morandi.panelHi)
-                .padding(12.dp),
+                .clip(RoundedCornerShape(14.dp))
+                .background(Morandi.panelHi.copy(alpha = 0.5f))
+                .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // 分辨率缩放

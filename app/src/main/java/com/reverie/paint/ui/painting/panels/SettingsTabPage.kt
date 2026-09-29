@@ -730,11 +730,29 @@ internal fun SettingsTabPage(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(40.dp),
+                                .height(44.dp)
+                                .padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Text(stringResource(R.string.settings_pen_mode), color = Morandi.text, fontSize = 13.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Morandi.accent.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_pencil),
+                                        contentDescription = null,
+                                        tint = Morandi.accent,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Text(stringResource(R.string.settings_pen_mode), color = Morandi.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            }
                             ReSwitch(
                                 checked = vm.penOnlyMode,
                                 onChecked = { vm.updatePenOnlyMode(it) },
@@ -743,13 +761,23 @@ internal fun SettingsTabPage(
 
                         SettingsInnerDivider()
 
-                        SettingNavRow(stringResource(R.string.settings_gestures)) {
+                        SettingNavRow(
+                            title = stringResource(R.string.settings_gestures),
+                            icon = R.drawable.ic_hand,
+                            iconTint = Color(0xFFE5A88B),
+                            iconBg = Color(0xFFE5A88B).copy(alpha = 0.15f),
+                        ) {
                             currentSubPage = "GESTURE"
                         }
 
                         SettingsInnerDivider()
 
-                        SettingNavRow(stringResource(R.string.settings_stylus)) {
+                        SettingNavRow(
+                            title = stringResource(R.string.settings_stylus),
+                            icon = R.drawable.ic_pencil,
+                            iconTint = Color(0xFF8BAAE5),
+                            iconBg = Color(0xFF8BAAE5).copy(alpha = 0.15f),
+                        ) {
                             vm.openMoreSettings("STYLUS")
                             onClose()
                         }
@@ -757,20 +785,35 @@ internal fun SettingsTabPage(
 
                     // 2. 显示与色彩
                     SettingsGroupCard(title = stringResource(R.string.settings_group_canvas_display)) {
-                        SettingNavRow(stringResource(R.string.settings_view_display)) {
+                        SettingNavRow(
+                            title = stringResource(R.string.settings_view_display),
+                            icon = R.drawable.ic_canvas_tab,
+                            iconTint = Color(0xFF7EBFAC),
+                            iconBg = Color(0xFF7EBFAC).copy(alpha = 0.15f),
+                        ) {
                             currentSubPage = "VIEW"
                         }
 
                         SettingsInnerDivider()
 
-                        SettingNavRow(stringResource(R.string.settings_color_title)) {
+                        SettingNavRow(
+                            title = stringResource(R.string.settings_color_title),
+                            icon = R.drawable.ic_picker,
+                            iconTint = Color(0xFFE58BB7),
+                            iconBg = Color(0xFFE58BB7).copy(alpha = 0.15f),
+                        ) {
                             currentSubPage = "COLOR"
                         }
                     }
 
                     // 3. 效率与辅助
                     SettingsGroupCard(title = stringResource(R.string.settings_group_efficiency)) {
-                        SettingNavRow(stringResource(R.string.settings_shortcuts_title)) {
+                        SettingNavRow(
+                            title = stringResource(R.string.settings_shortcuts_title),
+                            icon = R.drawable.ic_grid,
+                            iconTint = Color(0xFFB58BE5),
+                            iconBg = Color(0xFFB58BE5).copy(alpha = 0.15f),
+                        ) {
                             currentSubPage = "SHORTCUTS"
                         }
 
@@ -780,25 +823,42 @@ internal fun SettingsTabPage(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp),
+                                .padding(horizontal = 4.dp, vertical = 8.dp),
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(stringResource(R.string.settings_stroke_stabilizer), color = Morandi.text, fontSize = 13.sp)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Morandi.accent.copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_brush),
+                                            contentDescription = null,
+                                            tint = Morandi.accent,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(stringResource(R.string.settings_stroke_stabilizer), color = Morandi.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                }
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
+                                        .clip(RoundedCornerShape(6.dp))
                                         .background(Morandi.panel)
                                         .padding(horizontal = 8.dp, vertical = 2.dp),
                                 ) {
-                                    Text("${(vm.strokeStabilizer * 100).roundToInt()}%", color = Morandi.subText, fontSize = 12.sp)
+                                    Text("${(vm.strokeStabilizer * 100).roundToInt()}%", color = Morandi.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             }
 
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(10.dp))
 
                             // Interactive Stabilizer Slider
                             BoxWithConstraints(
@@ -871,8 +931,8 @@ internal fun SettingsTabPage(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp))
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
                                         .background(Morandi.panel),
                                 )
                                 // Active Track
@@ -880,8 +940,8 @@ internal fun SettingsTabPage(
                                     Box(
                                         modifier = Modifier
                                             .width(activeTrackWidth)
-                                            .height(4.dp)
-                                            .clip(RoundedCornerShape(2.dp))
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(3.dp))
                                             .background(Morandi.accent),
                                     )
                                 }
@@ -890,9 +950,9 @@ internal fun SettingsTabPage(
                                     modifier = Modifier
                                         .padding(start = thumbOffset)
                                         .size(thumbSize)
+                                        .shadow(2.dp, CircleShape)
                                         .clip(CircleShape)
-                                        .background(Morandi.text)
-                                        .border(2.dp, Morandi.panelHi, CircleShape),
+                                        .background(Morandi.text),
                                 )
                             }
                         }
@@ -900,7 +960,12 @@ internal fun SettingsTabPage(
 
                     // 4. 高级设置
                     SettingsGroupCard(title = stringResource(R.string.settings_group_advanced)) {
-                        SettingNavRow(stringResource(R.string.settings_more_settings)) {
+                        SettingNavRow(
+                            title = stringResource(R.string.settings_more_settings),
+                            icon = R.drawable.ic_settings,
+                            iconTint = Morandi.subText,
+                            iconBg = Morandi.subText.copy(alpha = 0.15f),
+                        ) {
                             vm.openMoreSettings("MAIN")
                             onClose()
                         }
@@ -1029,23 +1094,46 @@ internal fun SettingsTabPage(
 @Composable
 internal fun SettingNavRow(
     title: String,
+    icon: Int? = null,
+    iconTint: Color = Morandi.accent,
+    iconBg: Color = Morandi.accent.copy(alpha = 0.14f),
     onClick: () -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(40.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 2.dp),
+            .height(44.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(interactionSource = interaction, indication = null) { onClick() }
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(title, color = Morandi.text, fontSize = 13.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(iconBg),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(icon),
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+            }
+            Text(title, color = Morandi.text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        }
         Icon(
             painter = painterResource(R.drawable.ic_chevron),
             contentDescription = null,
-            tint = Morandi.subText,
+            tint = Morandi.subText.copy(alpha = 0.7f),
             modifier = Modifier.size(16.dp),
         )
     }
@@ -1084,10 +1172,9 @@ private fun SettingsGroupCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Morandi.panelHi.copy(alpha = 0.55f))
-                .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .clip(RoundedCornerShape(14.dp))
+                .background(Morandi.panelHi.copy(alpha = 0.5f))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
             content = content,
         )
     }
@@ -1101,22 +1188,16 @@ private fun SettingsCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Morandi.panelHi.copy(alpha = 0.55f))
-            .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .clip(RoundedCornerShape(14.dp))
+            .background(Morandi.panelHi.copy(alpha = 0.5f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         content = content,
     )
 }
 
 @Composable
 private fun SettingsInnerDivider() {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(Morandi.border.copy(alpha = 0.35f))
-    )
+    Spacer(Modifier.height(2.dp))
 }
 
 @Composable
@@ -1128,7 +1209,7 @@ private fun SubPageHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp),
+            .height(38.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
