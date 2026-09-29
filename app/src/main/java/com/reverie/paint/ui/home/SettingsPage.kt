@@ -83,6 +83,7 @@ enum class SettingsSubPage {
     THEME,
     STYLUS,
     AUTHOR,
+    SYNC,
     ABOUT,
 }
 
@@ -202,6 +203,12 @@ fun SettingsPageContent(
                         onClick = { subPage = SettingsSubPage.AUTHOR },
                     )
                     SettingMasterNavRow(
+                        iconRes = R.drawable.ic_cloud,
+                        title = stringResource(R.string.settings_sync),
+                        isSelected = subPage == SettingsSubPage.SYNC,
+                        onClick = { subPage = SettingsSubPage.SYNC },
+                    )
+                    SettingMasterNavRow(
                         iconRes = R.drawable.ic_info_circle,
                         title = stringResource(R.string.settings_about),
                         isSelected = subPage == SettingsSubPage.ABOUT,
@@ -238,6 +245,7 @@ fun SettingsPageContent(
                         SettingsSubPage.THEME -> ThemeSettingsSubPage(vm = vm, showBackButton = false, onBack = onExit)
                         SettingsSubPage.STYLUS -> StylusSettingsSubPage(vm = vm, showBackButton = false, onBack = onExit)
                         SettingsSubPage.AUTHOR -> AuthorSettingsSubPage(vm = vm, showBackButton = false, onBack = onExit)
+                        SettingsSubPage.SYNC -> SyncSettingsSubPage(vm = vm, showBackButton = false, onBack = onExit)
                         SettingsSubPage.ABOUT -> AboutSettingsSubPage(showBackButton = false, onBack = onExit)
                         SettingsSubPage.MAIN -> GeneralSettingsSubPage(vm = vm, showBackButton = false, onBack = onExit)
                     }
@@ -291,6 +299,13 @@ fun SettingsPageContent(
 
                 SettingsSubPage.AUTHOR -> {
                     AuthorSettingsSubPage(
+                        vm = vm,
+                        onBack = { subPage = SettingsSubPage.MAIN },
+                    )
+                }
+
+                SettingsSubPage.SYNC -> {
+                    SyncSettingsSubPage(
                         vm = vm,
                         onBack = { subPage = SettingsSubPage.MAIN },
                     )
@@ -373,6 +388,19 @@ private fun SettingsMainPage(onNavigate: (SettingsSubPage) -> Unit) {
                     summary = stringResource(R.string.settings_nav_author_sub),
                     shape = settingGroupShape(0, 1),
                     onClick = { onNavigate(SettingsSubPage.AUTHOR) },
+                )
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            SettingCategoryTitle(stringResource(R.string.settings_group_sync))
+            SettingGroup {
+                SettingNavGroupItem(
+                    icon = R.drawable.ic_cloud,
+                    title = stringResource(R.string.settings_sync),
+                    summary = stringResource(R.string.settings_nav_sync_sub),
+                    shape = settingGroupShape(0, 1),
+                    onClick = { onNavigate(SettingsSubPage.SYNC) },
                 )
             }
 

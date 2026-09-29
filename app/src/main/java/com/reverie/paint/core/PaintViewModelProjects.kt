@@ -77,6 +77,7 @@ internal fun PaintViewModel.saveProject(
                 android.util.Log.w("RP_IO", "saveProject target file not found or empty, retaining autosave draft")
             }
             refreshProjects()
+            if (saveSucceeded) maybeAutoBackup()
             isBlockingLoading = false
             onComplete?.invoke()
         },
