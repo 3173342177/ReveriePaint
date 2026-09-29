@@ -66,6 +66,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.reverie.paint.R
 import com.reverie.paint.core.*
+import com.reverie.paint.model.RotationSnap
+import com.reverie.paint.ui.components.ReSlider
 import com.reverie.paint.ui.components.ReSwitch
 import com.reverie.paint.ui.components.noRippleClickable
 import com.reverie.paint.ui.theme.Morandi
@@ -275,6 +277,51 @@ internal fun SettingsTabPage(
                                 checked = vm.canvasRotationEnabled,
                                 onChecked = { vm.updateCanvasRotationEnabled(it) },
                             )
+                        }
+
+                        // 旋转吸附阈值 (仅在允许旋转时可配置; 0° 表示关闭吸附)
+                        if (vm.canvasRotationEnabled) {
+                            SettingsInnerDivider()
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(
+                                        stringResource(R.string.settings_canvas_rotation_snap),
+                                        color = Morandi.text,
+                                        fontSize = 13.sp,
+                                    )
+                                    Text(
+                                        if (vm.canvasRotationSnapDegrees <= 0f) {
+                                            stringResource(R.string.settings_canvas_rotation_snap_off)
+                                        } else {
+                                            stringResource(
+                                                R.string.settings_canvas_rotation_snap_format,
+                                                vm.canvasRotationSnapDegrees.roundToInt(),
+                                            )
+                                        },
+                                        color = Morandi.accent,
+                                        fontSize = 12.sp,
+                                    )
+                                }
+
+                                Spacer(Modifier.height(8.dp))
+
+                                // 0 ~ MAX 映射到 0~1; 拖到最左即关闭吸附
+                                ReSlider(
+                                    value = (vm.canvasRotationSnapDegrees / RotationSnap.MAX_THRESHOLD_DEGREES).coerceIn(0f, 1f),
+                                    onValue = { frac ->
+                                        vm.updateCanvasRotationSnapDegrees(frac * RotationSnap.MAX_THRESHOLD_DEGREES)
+                                    },
+                                )
+                            }
                         }
 
                         SettingsInnerDivider()

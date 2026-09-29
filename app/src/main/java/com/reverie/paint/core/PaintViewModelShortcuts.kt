@@ -14,6 +14,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import com.reverie.paint.R
+import com.reverie.paint.model.RotationSnap
 import com.reverie.paint.model.Tool
 import org.json.JSONObject
 
@@ -95,6 +96,12 @@ internal fun PaintViewModel.updateCanvasRotationEnabled(enabled: Boolean) {
     saveViewSettings()
 }
 
+/** 设置双指旋转吸附阈值 (度); 0 表示关闭吸附, 上限见 [RotationSnap.MAX_THRESHOLD_DEGREES] */
+internal fun PaintViewModel.updateCanvasRotationSnapDegrees(degrees: Float) {
+    canvasRotationSnapDegrees = degrees.coerceIn(0f, RotationSnap.MAX_THRESHOLD_DEGREES)
+    saveViewSettings()
+}
+
 internal fun PaintViewModel.updateMagnificationInterpolation(enabled: Boolean) {
     magnificationInterpolation = enabled
     saveViewSettings()
@@ -120,6 +127,7 @@ internal fun PaintViewModel.saveViewSettings() {
         val o = JSONObject()
         o.put("quick_slider", quickSliderMode)
         o.put("canvas_rotation", canvasRotationEnabled)
+        o.put("canvas_rotation_snap", canvasRotationSnapDegrees.toDouble())
         o.put("mag_interpolation", magnificationInterpolation)
         o.put("pixel_grid", pixelGridEnabled)
         o.put("undo_toast", undoToastEnabled)
@@ -135,6 +143,9 @@ internal fun PaintViewModel.loadViewSettings() {
         val o = JSONObject(raw)
         quickSliderMode = o.optInt("quick_slider", 0)
         canvasRotationEnabled = o.optBoolean("canvas_rotation", true)
+        canvasRotationSnapDegrees = o.optDouble("canvas_rotation_snap", RotationSnap.DEFAULT_THRESHOLD_DEGREES.toDouble())
+            .toFloat()
+            .coerceIn(0f, RotationSnap.MAX_THRESHOLD_DEGREES)
         magnificationInterpolation = o.optBoolean("mag_interpolation", true)
         pixelGridEnabled = o.optBoolean("pixel_grid", true)
         undoToastEnabled = o.optBoolean("undo_toast", true)

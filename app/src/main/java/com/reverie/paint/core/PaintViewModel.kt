@@ -1154,6 +1154,8 @@ class PaintViewModel : ViewModel() {
     var brushOpacityPresets by mutableStateOf<List<Double?>>(listOf(0.10, 0.25, 0.40, 0.50, 0.65, 0.75, 0.85, 0.95, 1.00))
     var brushFlowPresets by mutableStateOf<List<Double?>>(listOf(0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.75, 0.90, 1.00))
     var canvasRotationEnabled by mutableStateOf(true) // 画布可旋转
+    
+    var canvasRotationSnapDegrees by mutableFloatStateOf(RotationSnap.DEFAULT_THRESHOLD_DEGREES)
     var magnificationInterpolation by mutableStateOf(true) // 放大插值
     var pixelGridEnabled by mutableStateOf(true) // 放大显示网格线
     var undoToastEnabled by mutableStateOf(true) // 撤销操作提醒

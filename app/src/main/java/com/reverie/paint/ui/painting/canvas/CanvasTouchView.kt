@@ -80,6 +80,14 @@ private const val IDLE_FRAME_RATE_HZ = 60f
 /** Phase 5 · C3-2: 本地补点列表的步长(px, py, nx, ny, mode, strength, size)。 */
 private const val FIELD_DAB_STRIDE = 7
 
+/**
+ * 双指旋转吸附"武装"阈值(度): 本段手势累计转过的原始角度超过它之后才启用磁性吸附。
+ *
+ * 目的: 纯捏合缩放 / 双指平移时不得改动旋转角。若不武装, 只要画布恰好停在某个 90°
+ * 倍数附近 (例如 92°), 任何双指手势的第一帧都会被磁性曲线拽走零点几度。
+ */
+private const val ROTATION_SNAP_ENGAGE_SPAN_DEG = 0.6f
+
 
 /**
  * 画世界 / Procreate 架构原生触控引擎 (CanvasTouchView)
@@ -131,6 +139,9 @@ class CanvasTouchView(context: Context) : View(context) {
     var canvasFitScale: Float = 1f
 
     var onTransform: ((zoom: Float, rotation: Float, panX: Float, panY: Float) -> Unit)? = null
+
+    /** 旋转进入 90° 倍数吸附区时回调 (视觉反馈: 高亮角度 HUD), 参数为当前吸附后角度 */
+    var onRotationSnap: ((rotation: Float) -> Unit)? = null
     var onTextRequested: ((x: Float, y: Float) -> Unit)? = null
     var onPolyPoint: ((Offset) -> Unit)? = null
     var onCropRect: ((Rect?) -> Unit)? = null
@@ -431,6 +442,19 @@ class CanvasTouchView(context: Context) : View(context) {
     private var lastPos0 = Offset.Zero
     private var lastPos1 = Offset.Zero
 
+    // ---- 双指旋转 90° 倍数磁性吸附状态 ----
+    // 手势原始累计角 (未吸附): 与 canvasRotation 分离, 保证吸附不污染原始角、离开吸附区无累计误差
+    private var rawRotation = 0f
+
+    // 上一帧是否处于吸附区 (用于进入沿触发一次反馈; 判定带迟滞, 见 RotationSnap.isSnapEngaged)
+    private var rotationSnapEngaged = false
+
+    // 本段手势累计转过的原始角度 (度): 用于武装吸附与判定是否真的发生了旋转
+    private var gestureRotSpan = 0f
+
+    // 手势结束后的"收敛到精确 90° 倍数"动画 (围绕最后双指中心, 不改变缩放/旋转中心)
+    private var snapAnimator: android.animation.ValueAnimator? = null
+
     // 跨碎片延迟重置任务
     private val resetTransformRunnable = Runnable {
         isTransformActive = false
@@ -499,6 +523,7 @@ class CanvasTouchView(context: Context) : View(context) {
 
     private fun animateFitCanvas() {
         fitAnimator?.cancel()
+        snapAnimator?.cancel()
         val startZoom = canvasZoom
         val startRot = canvasRotation
         val startPanX = canvasPanX
@@ -518,6 +543,62 @@ class CanvasTouchView(context: Context) : View(context) {
             }
         }
         fitAnimator = animator
+        animator.start()
+    }
+
+    /**
+     * 双指松开后, 若当前处于 90° 倍数吸附区, 围绕最后一次双指中心把角度平滑收敛到**精确倍数**。
+     *
+     * 收敛过程实时用旋转增量补偿平移, 使 [pivotX]/[pivotY] 对应的画布内容在屏幕上保持不动 ——
+     * 即"吸附后旋转中心不变、内容不滑移", 且缩放比例全程不变。角差超过吸附区则不收敛,
+     * 避免自由旋转时突然被拽走。
+     */
+    private fun settleRotationToSnap(pivotX: Float, pivotY: Float) {
+        snapAnimator?.cancel()
+        val v = vm ?: return
+        if (gestureRotSpan < ROTATION_SNAP_ENGAGE_SPAN_DEG) return
+        val threshold = v.canvasRotationSnapDegrees
+        if (!v.canvasRotationEnabled || threshold <= 0f) return
+        // 仅在吸附区内才收敛 (isWithinThreshold 已折叠角差, 天然处理 360°/0° 等价)
+        if (!RotationSnap.isWithinThreshold(rawRotation, threshold)) return
+
+        val target = RotationSnap.nearestMultiple(rawRotation)
+        val dSettle = RotationSnap.shortestDelta(canvasRotation, target)
+        if (abs(dSettle) < 0.02f) {
+            if (canvasRotation != target) {
+                canvasRotation = target
+                onTransform?.invoke(canvasZoom, canvasRotation, canvasPanX, canvasPanY)
+                invalidate()
+            }
+            return
+        }
+
+        val startRot = canvasRotation
+        val startPanX = canvasPanX
+        val startPanY = canvasPanY
+        val c0x = viewW / 2f + startPanX
+        val c0y = viewH / 2f + startPanY
+        // 旋转中心 (双指中心) 相对旧画面中心的向量
+        val vx = pivotX - c0x
+        val vy = pivotY - c0y
+
+        val animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 150L
+            interpolator = android.view.animation.DecelerateInterpolator(2f)
+            addUpdateListener { anim ->
+                val dTheta = dSettle * anim.animatedFraction
+                val rad = Math.toRadians(dTheta.toDouble())
+                val cosR = kotlin.math.cos(rad).toFloat()
+                val sinR = kotlin.math.sin(rad).toFloat()
+                canvasRotation = startRot + dTheta
+                // 围绕 pivot 反向补偿平移: 缩放不变 (k=1), 内容不动
+                canvasPanX = pivotX - (vx * cosR - vy * sinR) - viewW / 2f
+                canvasPanY = pivotY - (vx * sinR + vy * cosR) - viewH / 2f
+                onTransform?.invoke(canvasZoom, canvasRotation, canvasPanX, canvasPanY)
+                invalidate()
+            }
+        }
+        snapAnimator = animator
         animator.start()
     }
 
@@ -1023,6 +1104,8 @@ class CanvasTouchView(context: Context) : View(context) {
         cachedDriver?.feedbackManager?.setWritingHapticsEnabled(false)
         cachedDriver?.feedbackManager?.stopStrokeSound()
         cachedDriver = null
+        snapAnimator?.cancel()
+        snapAnimator = null
         oplusPredictor?.destroy()
         oplusPredictor = null
         androidMotionPredictor = null
@@ -2336,6 +2419,12 @@ class CanvasTouchView(context: Context) : View(context) {
                     initialDistance = distance
                     initialAngle = angle
                     touchDownTimeMs = nowMs
+                    // 新一段画布手势开始: 终止上一次吸附收敛动画, 并以当前生效角为原始角起点,
+                    // 避免残留动画与新手势互相拉扯
+                    snapAnimator?.cancel()
+                    rawRotation = canvasRotation
+                    rotationSnapEngaged = false
+                    gestureRotSpan = 0f
 
                     removeCallbacks(continuousUndoRunnable)
                     removeCallbacks(continuousRedoRunnable)
@@ -2395,7 +2484,34 @@ class CanvasTouchView(context: Context) : View(context) {
                         invalidate()
                     } else {
                         val k = (distance / prevDistance).coerceIn(0.7f, 1.4f)
-                        val dRot = if (v.canvasRotationEnabled) normalizeAngle(angle - prevAngle).coerceIn(-15f, 15f) else 0f
+                        val snapThreshold = if (v.canvasRotationEnabled) v.canvasRotationSnapDegrees else 0f
+                        // 90° 倍数磁性吸附: 原始累计角 rawRotation 与实际生效角 canvasRotation 分离 ——
+                        // 吸附只改变生效角, 不污染原始角, 因此离开吸附区时既不跳变也无累计误差。
+                        // dRot 取"本帧实际旋转增量"(已含吸附), 平移补偿必须用它, 否则手指标定点会漂移。
+                        val dRot: Float
+                        if (v.canvasRotationEnabled) {
+                            val rawDelta = normalizeAngle(angle - prevAngle).coerceIn(-15f, 15f)
+                            rawRotation += rawDelta
+                            gestureRotSpan += abs(rawDelta)
+                            // 累计转过 ROTATION_SNAP_ENGAGE_SPAN_DEG 后才武装吸附:
+                            // 纯捏合/平移手势不改变旋转角, 内容与旋转中心保持稳定
+                            val magnetActive = snapThreshold > 0f && gestureRotSpan >= ROTATION_SNAP_ENGAGE_SPAN_DEG
+                            val snapped = if (magnetActive) RotationSnap.apply(rawRotation, snapThreshold) else rawRotation
+                            dRot = snapped - canvasRotation
+                            canvasRotation = snapped
+                            val engaged = magnetActive &&
+                                RotationSnap.isSnapEngaged(rawRotation, snapThreshold, rotationSnapEngaged)
+                            if (engaged && !rotationSnapEngaged) {
+                                // 进入吸附区沿: 轻微触觉反馈 + 上层高亮角度 HUD (视觉反馈)
+                                performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                                onRotationSnap?.invoke(canvasRotation)
+                            }
+                            rotationSnapEngaged = engaged
+                        } else {
+                            dRot = 0f
+                            rawRotation = canvasRotation
+                            rotationSnapEngaged = false
+                        }
                         val rad = Math.toRadians(dRot.toDouble())
                         val cosR = kotlin.math.cos(rad).toFloat()
                         val sinR = kotlin.math.sin(rad).toFloat()
@@ -2428,10 +2544,6 @@ class CanvasTouchView(context: Context) : View(context) {
                         canvasZoom = targetZoom
                         canvasPanX = centroid.x - vRotX - viewW / 2f
                         canvasPanY = centroid.y - vRotY - viewH / 2f
-
-                        if (v.canvasRotationEnabled && abs(dRot) > 0.01f) {
-                            canvasRotation += dRot
-                        }
 
                         onTransform?.invoke(canvasZoom, canvasRotation, canvasPanX, canvasPanY)
                         invalidate()
@@ -2545,6 +2657,9 @@ class CanvasTouchView(context: Context) : View(context) {
                         v.undo()
                     } else if (!isContinuousUndoing && !isPinchMotion && !filterSessionActive && maxTouchPointers >= 3 && v.gestureThreeFingerRedo && durationMs < 380L) {
                         v.redo()
+                    } else if (gestureRotSpan >= ROTATION_SNAP_ENGAGE_SPAN_DEG) {
+                        // 正常画布手势结束: 若停在 90° 倍数吸附区内, 平滑收敛到精确倍数
+                        settleRotationToSnap(prevCentroid.x, prevCentroid.y)
                     }
 
                     isContinuousUndoing = false

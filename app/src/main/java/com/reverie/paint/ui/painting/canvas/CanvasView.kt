@@ -83,6 +83,8 @@ fun CanvasView(
     filterSessionActive: Boolean = false,
     onFilterSlideDelta: ((Float) -> Unit)? = null,
     onFilterHoldingCompare: ((Boolean) -> Unit)? = null,
+    /** 双指旋转进入 90° 倍数吸附区时回调 (视觉反馈: 高亮角度 HUD) */
+    onRotationSnap: ((Float) -> Unit)? = null,
 ) {
     var viewW by remember { mutableStateOf(1) }
     var viewH by remember { mutableStateOf(1) }
@@ -310,6 +312,7 @@ fun CanvasView(
                 touchView.filterSessionActive = filterSessionActive
                 touchView.onFilterSlideDelta = onFilterSlideDelta
                 touchView.onFilterHoldingCompare = onFilterHoldingCompare
+                touchView.onRotationSnap = onRotationSnap
                 if (touchView.overlayPanelsOpen != overlayPanelsOpen) {
                     touchView.overlayPanelsOpen = overlayPanelsOpen
                     touchView.invalidate()
