@@ -1415,7 +1415,7 @@ bool ReverieCore::loadRevp(const QString &path)
 
     KisImageSP image = new KisImage(m_undoStore, w, h, cs, QStringLiteral("Untitled"));
     image->setUndoStore(m_undoStore);
-    image->setResolution(72.0, 72.0);
+    image->setResolution(1.0, 1.0);
 
     QJsonArray layersArray = meta["layers"].toArray();
     bool bgLayerVisible = false;
@@ -2071,6 +2071,7 @@ bool ReverieCore::saveKra(const QString &path)
         xml.writeStartElement(QStringLiteral("DOC"));
         xml.writeAttribute(QStringLiteral("xmlns"), QStringLiteral("http://www.calligra.org/DTD/krita"));
         xml.writeAttribute(QStringLiteral("syntaxVersion"), QStringLiteral("2.0"));
+        xml.writeAttribute(QStringLiteral("kritaVersion"), QStringLiteral("5.0.0"));
         xml.writeAttribute(QStringLiteral("editor"), QStringLiteral("Krita"));
 
         xml.writeStartElement(QStringLiteral("IMAGE"));
@@ -2103,11 +2104,19 @@ bool ReverieCore::saveKra(const QString &path)
         store->close();
     }
 
-    // 2.1 documentinfo.xml - Calligra / Krita Dublin Core metadata
-    if (m_authorProfile.enabled && !m_authorProfile.isEmpty()) {
+    // 2.1 documentinfo.xml - Calligra / Krita Dublin Core metadata (required by Krita)
+    {
         const QString docTitle = image->objectName().isEmpty() ? QStringLiteral("Artwork") : image->objectName();
         const QString nowIso = QDateTime::currentDateTime().toString(Qt::ISODate);
-        const QString creator = m_authorProfile.nickname.isEmpty() ? m_authorProfile.name : m_authorProfile.nickname;
+        const bool hasAuthor = m_authorProfile.enabled && !m_authorProfile.isEmpty();
+        const QString creator = hasAuthor
+            ? (m_authorProfile.nickname.isEmpty() ? m_authorProfile.name : m_authorProfile.nickname)
+            : QStringLiteral("ReveriePaint");
+        const QString authorName = hasAuthor ? m_authorProfile.name : QStringLiteral("ReveriePaint");
+        const QString copyright = hasAuthor ? m_authorProfile.copyright : QString();
+        const QString org = hasAuthor ? m_authorProfile.organization : QString();
+        const QString email = hasAuthor ? m_authorProfile.email : QString();
+        const QString web = hasAuthor ? m_authorProfile.website : QString();
 
         auto escapeXml = [](QString s) -> QString {
             return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;");
@@ -2144,12 +2153,12 @@ bool ReverieCore::saveKra(const QString &path)
          .arg(escapeXml(creator))
          .arg(nowIso)
          .arg(nowIso)
-         .arg(escapeXml(m_authorProfile.copyright))
-         .arg(escapeXml(m_authorProfile.name))
+         .arg(escapeXml(copyright))
+         .arg(escapeXml(authorName))
          .arg(escapeXml(creator))
-         .arg(escapeXml(m_authorProfile.organization))
-         .arg(escapeXml(m_authorProfile.email))
-         .arg(escapeXml(m_authorProfile.website));
+         .arg(escapeXml(org))
+         .arg(escapeXml(email))
+         .arg(escapeXml(web));
 
         if (store->open("documentinfo.xml")) {
             store->write(docInfo.toUtf8());
@@ -2177,66 +2186,6 @@ bool ReverieCore::saveKra(const QString &path)
             store->write(compBytes);
             store->close();
         }
-    }
-
-
-
-    // 5. Also write meta.json for roundtrip
-    QJsonObject meta;
-    meta["version"] = 1;
-    meta["appName"] = "ReveriePaint";
-    meta["width"] = image->width();
-    meta["height"] = image->height();
-    meta["colorMode"] = "RGB";
-    meta["colorDepth"] = 8;
-    meta["xRes"] = image->xRes();
-    meta["yRes"] = image->yRes();
-    meta["createdTime"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-    meta["modifiedTime"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-
-    QJsonArray layersArray;
-    for (int i = 0; i < m_layers.size(); ++i) {
-        const LayerEntry &e = m_layers[i];
-        QJsonObject layerObj;
-        layerObj["index"] = i;
-        layerObj["name"] = e.name;
-        layerObj["visible"] = e.visible;
-        layerObj["opacity"] = layerOpacity(i);
-        layerObj["blendMode"] = layerBlendMode(i);
-        layerObj["locked"] = e.locked;
-        layerObj["alphaLocked"] = e.alphaLocked;
-        layerObj["clipped"] = e.clipped;
-        layerObj["isGroup"] = e.isGroup;
-        layerObj["depth"] = e.depth;
-        layerObj["colorLabel"] = e.colorLabel;
-        layerObj["background"] = e.background;
-        layersArray.append(layerObj);
-    }
-    meta["layers"] = layersArray;
-
-    if (m_authorProfile.enabled && !m_authorProfile.isEmpty()) {
-        QJsonObject authorObj;
-        authorObj["name"] = m_authorProfile.name;
-        authorObj["nickname"] = m_authorProfile.nickname;
-        authorObj["organization"] = m_authorProfile.organization;
-        authorObj["email"] = m_authorProfile.email;
-        authorObj["website"] = m_authorProfile.website;
-        authorObj["copyright"] = m_authorProfile.copyright;
-        meta["author"] = authorObj;
-    }
-
-    if (store->open("meta.json")) {
-        QJsonDocument doc(meta);
-        store->write(doc.toJson(QJsonDocument::Indented));
-        store->close();
-    }
-
-    // 兼容 KRA 语义的图层树元数据 (加载端重建非破坏节点树用)
-    if (store->open("layers.xml")) {
-        QString xml;
-        writeLayersXml(&xml);
-        store->write(xml.toUtf8());
-        store->close();
     }
 
     store->finalize();

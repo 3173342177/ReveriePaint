@@ -104,7 +104,7 @@ bool ReverieCore::newDocument(int width, int height, bool infiniteCanvas)
     if (!image) {
         return false;
     }
-    image->setResolution(72.0, 72.0);
+    image->setResolution(1.0, 1.0);
 
     m_backgroundColor = Qt::white;
     KoColor bgKoColor(m_backgroundColor, cs);
