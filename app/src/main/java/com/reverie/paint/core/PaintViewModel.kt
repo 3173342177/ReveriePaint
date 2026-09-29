@@ -495,6 +495,8 @@ class PaintViewModel : ViewModel() {
     // custom group names the user created (persisted in SharedPreferences)
     var userBrushGroups by mutableStateOf<Map<String, String>>(emptyMap())
     var customBrushGroups by mutableStateOf<List<String>>(emptyList())
+    /** 笔刷导入进度: Pair(当前处理数, 总数), 非导入状态时为 null */
+    var brushImportProgress by mutableStateOf<Pair<Int, Int>?>(null)
 
     // Custom display order of presets (persisted); empty = default (sorted)
     var brushOrder by mutableStateOf<List<String>>(emptyList())

@@ -1639,6 +1639,7 @@ import kotlinx.coroutines.withContext
         val success: Boolean,
         val presetName: String? = null,
         val groupName: String? = null,
+        val count: Int = 1,
     )
 
     internal suspend fun PaintViewModel.importSingleBrushInternal(
@@ -1685,7 +1686,126 @@ import kotlinx.coroutines.withContext
                 }
                 saveBrushGroups()
                 BrushImportResult(success = true, presetName = presetName, groupName = group)
-            } else if (filename.endsWith(".png", true) || filename.endsWith(".gbr", true) || filename.endsWith(".gih", true) || filename.endsWith(".abr", true)) {
+            } else if (filename.endsWith(".abr", ignoreCase = true)) {
+                val packBaseName = filename.substringBeforeLast(".").trim().ifBlank { "ABR" }
+                val targetGroupName = chosenGroup ?: packBaseName
+
+                val parseResult = resolver.openInputStream(uri)?.use { inStream ->
+                    AbrParser.parse(inStream, basePackName = targetGroupName)
+                }
+
+                if (parseResult == null || (parseResult.tips.isEmpty() && parseResult.presets.isEmpty())) {
+                    return BrushImportResult(success = false)
+                }
+
+                val safeGroupPrefix = packBaseName.replace(Regex("""[^\w\u4e00-\u9fa5]"""), "_")
+                val tipsByUuid = parseResult.tips.associateBy { it.uuid }
+                val tipsByIndex = parseResult.tips.associateBy { it.index }
+
+                // 1. Export decoded tip PNG files to filesDir/brushes/
+                val tipFileNameMap = mutableMapOf<Int, String>()
+                for (tip in parseResult.tips) {
+                    val tipFileName = "${safeGroupPrefix}_tip_${tip.index}.png"
+                    val tipFile = File(brushDir, tipFileName)
+                    val tipBytes = AbrParser.encodeTipPng(tip)
+                    tipFile.writeBytes(tipBytes)
+                    tipFileNameMap[tip.index] = tipFileName
+                }
+
+                // 2. Export preset .kpp files to filesDir/paintoppresets/
+                val totalPresets = parseResult.presets.size
+                withContext(Dispatchers.Main) {
+                    brushImportProgress = Pair(0, totalPresets)
+                }
+
+                val importedPresetNames = mutableListOf<String>()
+                val existingKppNames = (presetDir.list() ?: emptyArray()).map { it.removeSuffix(".kpp") }.toMutableSet()
+
+                for ((idx, preset) in parseResult.presets.withIndex()) {
+                    val matchedTip = (preset.tipUuid?.let { tipsByUuid[it] })
+                        ?: tipsByIndex[preset.tipIndex]
+                        ?: parseResult.tips.firstOrNull()
+                    val matchedTipFileName = matchedTip?.let { tipFileNameMap[it.index] } ?: ""
+
+                    val rawName = preset.name.trim().ifBlank { "$targetGroupName ${idx + 1}" }
+                    var candidateName = rawName.replace(Regex("""[\\/:*?"<>|]"""), "_")
+                    var counter = 2
+                    while (existingKppNames.contains(candidateName)) {
+                        candidateName = "${rawName}_$counter"
+                        counter++
+                    }
+                    existingKppNames.add(candidateName)
+                    importedPresetNames.add(candidateName)
+
+                    val previewBytes = AbrParser.encodePreviewPng(
+                        tip = matchedTip,
+                        diameter = preset.diameter,
+                        roundness = preset.roundness,
+                    )
+
+                    val hasDynamics = preset.pressureSize || preset.pressureOpacity || preset.pressureFlow
+                    val bp = BrushParams(
+                        size = preset.diameter,
+                        opacity = 1.0,
+                        flow = 1.0,
+                        spacing = preset.spacing,
+                        angle = preset.angle,
+                        scatter = preset.scatter,
+                        ratio = preset.roundness,
+                        followDirection = preset.followDirection,
+                        randomFlipX = preset.flipX,
+                        randomFlipY = preset.flipY,
+                        pressureEnabled = hasDynamics,
+                        pressureSize = if (preset.pressureSize) 1.0 else 0.0,
+                        pressureOpacity = if (preset.pressureOpacity) 1.0 else 0.0,
+                        pressureFlow = if (preset.pressureFlow) 1.0 else 0.0,
+                        tipAsset = matchedTipFileName,
+                        paintOpId = "paintbrush",
+                        author = "外部创作者 (ABR)",
+                        isAuthorLocked = true,
+                        description = "导入自 Photoshop ABR 笔刷包: $packBaseName",
+                        isCustomized = false,
+                        dynamicsCustomized = hasDynamics,
+                        smudgeCustomized = false,
+                    )
+
+                    val kppFile = File(presetDir, "$candidateName.kpp")
+                    val kppBytes = KppHelper.updateKppBytes(previewBytes, candidateName, bp)
+                    kppFile.writeBytes(kppBytes)
+
+                    brushParams[candidateName] = bp
+
+                    withContext(Dispatchers.Main) {
+                        brushImportProgress = Pair(idx + 1, totalPresets)
+                    }
+                }
+
+                // 3. Update groups and state
+                var newCustomGroups = customBrushGroups
+                if (!newCustomGroups.contains(targetGroupName) && targetGroupName != "全部") {
+                    newCustomGroups = newCustomGroups + targetGroupName
+                }
+                var newUserGroups = userBrushGroups
+                for (pName in importedPresetNames) {
+                    newUserGroups = newUserGroups + (pName to targetGroupName)
+                }
+
+                withContext(Dispatchers.Main) {
+                    customBrushGroups = newCustomGroups
+                    userBrushGroups = newUserGroups
+                    saveBrushGroups()
+                    persistBrushParams()
+                    brushImportProgress = null
+                    reloadBrushPresets(selectName = importedPresetNames.firstOrNull())
+                }
+
+                BrushImportResult(
+                    success = true,
+                    presetName = importedPresetNames.firstOrNull(),
+                    groupName = targetGroupName,
+                    count = importedPresetNames.size,
+                )
+            } else if (filename.endsWith(".png", true) || filename.endsWith(".gbr", true) || filename.endsWith(".gih", true)) {
                 val target = File(brushDir, filename)
                 resolver.openInputStream(uri)?.use { input ->
                     target.outputStream().use { output -> input.copyTo(output) }
@@ -1864,10 +1984,18 @@ import kotlinx.coroutines.withContext
                 if (onComplete != null) {
                     onComplete(result.success)
                 } else {
+                    val toastMsg = if (result.success) {
+                        if (result.count > 1 && result.groupName != null) {
+                            appContext.getString(R.string.brush_import_abr_success, result.count, result.groupName)
+                        } else {
+                            appContext.getString(R.string.brush_studio_toast_imported)
+                        }
+                    } else {
+                        appContext.getString(R.string.brush_studio_toast_import_failed)
+                    }
                     android.widget.Toast.makeText(
                         appContext,
-                        if (result.success) appContext.getString(R.string.brush_studio_toast_imported)
-                        else appContext.getString(R.string.brush_studio_toast_import_failed),
+                        toastMsg,
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                 }

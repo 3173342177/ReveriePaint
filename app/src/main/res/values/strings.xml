@@ -1066,6 +1066,9 @@
     <string name="brush_studio_scratchpad_clear">清空</string>
     <string name="brush_studio_scratchpad_hint">在此随意画线测试手感</string>
     <string name="brush_studio_toast_imported">笔刷导入成功</string>
+    <string name="brush_importing_title">正在导入画笔</string>
+    <string name="brush_importing_progress">正在解包预设 (%1$d/%2$d)</string>
+    <string name="brush_import_abr_success">成功导入 %1$d 个画笔预设至分组「%2$s」</string>
     <string name="brush_studio_toast_import_failed">导入失败，请检查文件格式</string>
     <string name="brush_studio_toast_tip_imported">自定义笔尖导入成功</string>
     <string name="brush_studio_toast_tip_import_failed">笔尖导入失败</string>
