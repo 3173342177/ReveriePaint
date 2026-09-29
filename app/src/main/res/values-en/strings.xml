@@ -1999,9 +1999,9 @@
     <string name="sync_category_backup">Backup</string>
     <string name="sync_backup_now">Back up to cloud now</string>
     <string name="sync_backup_running">Uploading %1$d/%2$d</string>
-    <string name="sync_backup_result">Uploaded %1$d, skipped %2$d, cleaned %3$d, changed in cloud %4$d, failed %5$d</string>
+    <string name="sync_backup_result">Uploaded %1$d, skipped %2$d, cleaned %3$d, cloud newer %4$d, conflicts %5$d, failed %6$d</string>
     <string name="sync_backup_info_title">Backup notes</string>
-    <string name="sync_backup_info_text">Backs up artworks (including autosave drafts) and your own brushes; bundled brushes are not uploaded. Local files are never modified or deleted, files you deleted locally are removed from the cloud, and files changed by another device are never overwritten</string>
+    <string name="sync_backup_info_text">Backs up artworks (including autosave drafts) and your own brushes; bundled brushes are not uploaded. Files you deleted locally are removed from the cloud; files changed by another device are not overwritten, and when both sides changed the local file wins with the cloud version saved as a copy</string>
     <string name="sync_auto_backup">Auto-backup after save</string>
     <string name="sync_auto_backup_summary">Upload changed files automatically after each project save</string>
     <string name="sync_connected_badge">Connected</string>

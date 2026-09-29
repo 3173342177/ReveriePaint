@@ -3,6 +3,7 @@
  */
 package com.reverie.paint.core
 
+import com.reverie.paint.core.sync.BackupDecision
 import com.reverie.paint.core.sync.LocalProject
 import com.reverie.paint.core.sync.ManifestEntry
 import com.reverie.paint.core.sync.RemoteEntry
@@ -19,6 +20,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SyncEngineTest {
+    private val suffix = " (cloud)"
     private fun sources(root: File): List<SyncSource> =
         listOf(SyncSource(SyncCategory.ARTWORKS, root, "") { SyncEngine.isSyncable(it) })
 
@@ -67,21 +69,32 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `planUploads skips unchanged and uploads changed`() {
+    fun `planBackup decides upload skip and remote newer`() {
         val a = LocalProject("a.revp", File("a.revp"), 10, "hash-a")
         val b = LocalProject("b.revp", File("b.revp"), 20, "hash-b")
-        val manifest = mapOf("a.revp" to ManifestEntry("hash-a", "e1"), "b.revp" to ManifestEntry("old", "e1"))
-        val tokens = mapOf("a.revp" to "e1", "b.revp" to "e1")
-        val uploads = SyncEngine.planUploads(listOf(a, b), manifest, tokens).map { it.relativePath }
-        assertEquals(listOf("b.revp"), uploads)
+        val c = LocalProject("c.revp", File("c.revp"), 30, "hash-c")
+        val manifest =
+            mapOf(
+                "a.revp" to ManifestEntry("hash-a", "e1"),
+                "b.revp" to ManifestEntry("old", "e1"),
+                "c.revp" to ManifestEntry("hash-c", "e1"),
+            )
+        val tokens = mapOf("a.revp" to "e1", "b.revp" to "e1", "c.revp" to "e2")
+        val plan =
+            SyncEngine
+                .planBackup(listOf(a, b, c), manifest, tokens)
+                .associate { it.project.relativePath to it.decision }
+        assertEquals(BackupDecision.SKIP, plan["a.revp"])
+        assertEquals(BackupDecision.UPLOAD, plan["b.revp"])
+        assertEquals(BackupDecision.REMOTE_NEWER, plan["c.revp"])
     }
 
     @Test
-    fun `planUploads uploads when remote token changed`() {
-        val a = LocalProject("a.revp", File("a.revp"), 10, "hash-a")
-        val manifest = mapOf("a.revp" to ManifestEntry("hash-a", "e1"))
+    fun `planBackup marks conflict when both sides changed`() {
+        val a = LocalProject("a.revp", File("a.revp"), 10, "new-local")
+        val manifest = mapOf("a.revp" to ManifestEntry("old-local", "e1"))
         val tokens = mapOf("a.revp" to "e2")
-        assertEquals(1, SyncEngine.planRemoteChanged(listOf(a), manifest, tokens).size)
+        assertEquals(BackupDecision.CONFLICT, SyncEngine.planBackup(listOf(a), manifest, tokens).single().decision)
     }
 
     @Test
@@ -123,6 +136,7 @@ class SyncEngineTest {
                     SyncEngine.scan(src),
                     emptyMap(),
                     SyncEngine.listRemoteAll(client, src),
+                    suffix,
                 )
             assertEquals(2, first.uploaded)
             assertEquals(0, first.skipped)
@@ -137,6 +151,7 @@ class SyncEngineTest {
                     SyncEngine.scan(src),
                     first.manifest,
                     SyncEngine.listRemoteAll(client, src),
+                    suffix,
                 )
             assertEquals(0, second.uploaded)
             assertEquals(2, second.skipped)
@@ -149,6 +164,7 @@ class SyncEngineTest {
                     SyncEngine.scan(src),
                     second.manifest,
                     SyncEngine.listRemoteAll(client, src),
+                    suffix,
                 )
             assertEquals(1, third.uploaded)
             assertEquals(1, third.skipped)
@@ -165,14 +181,14 @@ class SyncEngineTest {
             val client = FakeClient()
             val src = sources(root)
             val first =
-                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src))
+                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src), suffix)
             assertEquals(1, first.uploaded)
 
             client.writeRemote("a.revp", "from-another-device")
             val second =
-                SyncEngine.backup(client, src, SyncEngine.scan(src), first.manifest, SyncEngine.listRemoteAll(client, src))
+                SyncEngine.backup(client, src, SyncEngine.scan(src), first.manifest, SyncEngine.listRemoteAll(client, src), suffix)
             assertEquals(0, second.uploaded)
-            assertEquals(1, second.remoteChanged)
+            assertEquals(1, second.remoteNewer)
             assertEquals("from-another-device", String(client.files["a.revp"]!!))
         } finally {
             root.deleteRecursively()
@@ -187,12 +203,12 @@ class SyncEngineTest {
             val client = FakeClient()
             val src = sources(root)
             val first =
-                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src))
+                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src), suffix)
 
             root.resolve("a.revp").delete()
             client.writeRemote("a.revp", "changed-remotely")
             val second =
-                SyncEngine.backup(client, src, SyncEngine.scan(src), first.manifest, SyncEngine.listRemoteAll(client, src))
+                SyncEngine.backup(client, src, SyncEngine.scan(src), first.manifest, SyncEngine.listRemoteAll(client, src), suffix)
             assertEquals(0, second.deleted)
             assertTrue(client.files.containsKey("a.revp"))
         } finally {
@@ -238,7 +254,7 @@ class SyncEngineTest {
             val client = FakeClient()
             val src = sources(root)
             val first =
-                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src))
+                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src), suffix)
             assertEquals(1, first.uploaded)
 
             client.writeRemote("gone.revp", "x")
@@ -246,11 +262,59 @@ class SyncEngineTest {
             withGone["gone.revp"] = ManifestEntry("h2", client.tokenOf("gone.revp"))
 
             val second =
-                SyncEngine.backup(client, src, SyncEngine.scan(src), withGone, SyncEngine.listRemoteAll(client, src))
+                SyncEngine.backup(client, src, SyncEngine.scan(src), withGone, SyncEngine.listRemoteAll(client, src), suffix)
             assertEquals(0, second.uploaded)
             assertEquals(1, second.deleted)
             assertFalse(client.files.containsKey("gone.revp"))
             assertFalse(second.manifest.containsKey("gone.revp"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `backup treats an unstable token as in sync when content matches`() {
+        val root = Files.createTempDirectory("revp-token-noise").toFile()
+        try {
+            root.resolve("a.revp").writeText("same")
+            val client = FakeClient()
+            val src = sources(root)
+            val first =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src), suffix)
+            assertEquals(1, first.uploaded)
+
+            client.bumpToken("a.revp")
+            val second =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), first.manifest, SyncEngine.listRemoteAll(client, src), suffix)
+            assertEquals(0, second.remoteNewer)
+            assertEquals(1, second.skipped)
+            assertEquals("same", String(client.files["a.revp"]!!))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `backup keeps local and saves cloud copy when both changed`() {
+        val root = Files.createTempDirectory("revp-conflict").toFile()
+        try {
+            root.resolve("a.revp").writeText("v1")
+            val client = FakeClient()
+            val src = sources(root)
+            val first =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), emptyMap(), SyncEngine.listRemoteAll(client, src), suffix)
+            assertEquals(1, first.uploaded)
+
+            root.resolve("a.revp").writeText("v2-local")
+            client.writeRemote("a.revp", "v2-cloud")
+            val second =
+                SyncEngine.backup(client, src, SyncEngine.scan(src), first.manifest, SyncEngine.listRemoteAll(client, src), suffix)
+            assertEquals(1, second.conflicts)
+            assertEquals(1, second.uploaded)
+            assertEquals("v2-local", root.resolve("a.revp").readText())
+            assertEquals("v2-cloud", root.resolve("a (cloud).revp").readText())
+            assertEquals("v2-local", String(client.files["a.revp"]!!))
+            assertEquals("v2-cloud", String(client.files["a (cloud).revp"]!!))
         } finally {
             root.deleteRecursively()
         }
@@ -269,6 +333,10 @@ class SyncEngineTest {
             content: String,
         ) {
             files[path] = content.toByteArray()
+            etags[path] = "e${++seq}"
+        }
+
+        fun bumpToken(path: String) {
             etags[path] = "e${++seq}"
         }
 

@@ -22,12 +22,21 @@ internal data class ManifestEntry(
 internal data class BackupOutcome(
     val uploaded: Int,
     val skipped: Int,
-    val remoteChanged: Int,
+    val remoteNewer: Int,
+    val conflicts: Int,
     val deleted: Int,
     val failed: Int,
     val bytes: Long,
     val errors: List<String>,
+    val notices: List<String>,
     val manifest: Map<String, ManifestEntry>,
+)
+
+internal enum class BackupDecision { UPLOAD, SKIP, REMOTE_NEWER, CONFLICT }
+
+internal data class PlannedFile(
+    val project: LocalProject,
+    val decision: BackupDecision,
 )
 
 internal data class RestoreOutcome(
@@ -256,27 +265,25 @@ internal object SyncEngine {
         sources: List<SyncSource>,
     ): List<RemoteEntry> = SyncCategory.values().flatMap { listRemote(client, sources, it) }
 
-    fun planUploads(
+    fun planBackup(
         local: List<LocalProject>,
         manifest: Map<String, ManifestEntry>,
         remoteTokens: Map<String, String>,
-    ): List<LocalProject> =
-        local.filter { project ->
-            val recorded = manifest[project.relativePath] ?: return@filter true
-            if (project.sha256 != recorded.hash) return@filter true
-            val now = remoteTokens[project.relativePath] ?: return@filter true
-            recorded.token.isNotEmpty() && now != recorded.token
-        }
-
-    fun planRemoteChanged(
-        local: List<LocalProject>,
-        manifest: Map<String, ManifestEntry>,
-        remoteTokens: Map<String, String>,
-    ): List<String> =
-        local.mapNotNull { project ->
-            val recorded = manifest[project.relativePath] ?: return@mapNotNull null
-            val now = remoteTokens[project.relativePath] ?: return@mapNotNull null
-            if (recorded.token.isNotEmpty() && now != recorded.token) project.relativePath else null
+    ): List<PlannedFile> =
+        local.map { project ->
+            val recorded = manifest[project.relativePath]
+            val now = remoteTokens[project.relativePath]
+            val localChanged = recorded == null || project.sha256 != recorded.hash
+            val remoteChanged = recorded != null && now != null && recorded.token.isNotEmpty() && now != recorded.token
+            val decision =
+                when {
+                    recorded == null || now == null -> BackupDecision.UPLOAD
+                    remoteChanged && localChanged -> BackupDecision.CONFLICT
+                    remoteChanged -> BackupDecision.REMOTE_NEWER
+                    localChanged -> BackupDecision.UPLOAD
+                    else -> BackupDecision.SKIP
+                }
+            PlannedFile(project, decision)
         }
 
     fun planDeletions(
@@ -303,22 +310,21 @@ internal object SyncEngine {
         local: List<LocalProject>,
         manifest: Map<String, ManifestEntry>,
         remoteEntries: List<RemoteEntry>,
+        conflictSuffix: String,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BackupOutcome {
         val remoteTokens = remoteEntries.associate { it.path to versionToken(it) }
-        val remoteChanged = planRemoteChanged(local, manifest, remoteTokens)
-        val changedSet = remoteChanged.toHashSet()
-        val uploads = planUploads(local, manifest, remoteTokens).filter { it.relativePath !in changedSet }
+        val plan = planBackup(local, manifest, remoteTokens)
         val deletions = planDeletions(sources, local, manifest, remoteTokens)
         val newManifest = LinkedHashMap(manifest)
         val errors = ArrayList<String>()
+        val notices = ArrayList<String>()
         var uploaded = 0
+        var skipped = 0
+        var remoteNewer = 0
+        var conflicts = 0
         var deleted = 0
         var bytes = 0L
-
-        for (path in remoteChanged) {
-            errors.add("$path: cloud changed by another device, not overwritten")
-        }
 
         for (dir in requiredRemoteDirs(local.map { it.relativePath })) {
             try {
@@ -327,18 +333,73 @@ internal object SyncEngine {
             }
         }
 
-        val total = uploads.size
+        val total = plan.count { it.decision != BackupDecision.SKIP }
         onProgress(0, total)
-        for ((index, project) in uploads.withIndex()) {
-            try {
-                client.put(project.relativePath, project.file.readBytes())
-                newManifest[project.relativePath] = ManifestEntry(project.sha256, tokenAfterUpload(client, project.relativePath))
-                uploaded++
-                bytes += project.size
-            } catch (e: Exception) {
-                errors.add("${project.relativePath}: ${e.message ?: e.javaClass.simpleName}")
+        var done = 0
+
+        for (planned in plan) {
+            val project = planned.project
+            val recorded = manifest[project.relativePath]
+            when (planned.decision) {
+                BackupDecision.SKIP -> skipped++
+
+                BackupDecision.REMOTE_NEWER -> {
+                    done++
+                    onProgress(done, total)
+                    try {
+                        val data = client.get(project.relativePath)
+                        val hash = sha256(data)
+                        if (recorded != null && hash == recorded.hash) {
+                            newManifest[project.relativePath] =
+                                ManifestEntry(hash, remoteTokens[project.relativePath] ?: "")
+                            skipped++
+                        } else {
+                            remoteNewer++
+                            notices.add("${project.relativePath}: newer version in the cloud, restore to get it")
+                        }
+                    } catch (e: Exception) {
+                        errors.add("${project.relativePath}: ${e.message ?: e.javaClass.simpleName}")
+                    }
+                }
+
+                BackupDecision.CONFLICT -> {
+                    done++
+                    onProgress(done, total)
+                    try {
+                        val data = client.get(project.relativePath)
+                        writeAtomically(File(project.file.parentFile, conflictName(project.file.name, conflictSuffix)), data)
+                        client.put(project.relativePath, project.file.readBytes())
+                        newManifest[project.relativePath] =
+                            ManifestEntry(project.sha256, tokenAfterUpload(client, project.relativePath))
+                        uploaded++
+                        bytes += project.size
+                        val copyPath = conflictName(project.relativePath, conflictSuffix)
+                        try {
+                            client.put(copyPath, data)
+                            newManifest[copyPath] = ManifestEntry(sha256(data), tokenAfterUpload(client, copyPath))
+                        } catch (_: Exception) {
+                        }
+                        conflicts++
+                        notices.add("${project.relativePath}: kept local, cloud version saved as a copy")
+                    } catch (e: Exception) {
+                        errors.add("${project.relativePath}: ${e.message ?: e.javaClass.simpleName}")
+                    }
+                }
+
+                BackupDecision.UPLOAD -> {
+                    done++
+                    onProgress(done, total)
+                    try {
+                        client.put(project.relativePath, project.file.readBytes())
+                        newManifest[project.relativePath] =
+                            ManifestEntry(project.sha256, tokenAfterUpload(client, project.relativePath))
+                        uploaded++
+                        bytes += project.size
+                    } catch (e: Exception) {
+                        errors.add("${project.relativePath}: ${e.message ?: e.javaClass.simpleName}")
+                    }
+                }
             }
-            onProgress(index + 1, total)
         }
 
         for (path in deletions) {
@@ -362,12 +423,14 @@ internal object SyncEngine {
 
         return BackupOutcome(
             uploaded = uploaded,
-            skipped = local.size - uploads.size - remoteChanged.size,
-            remoteChanged = remoteChanged.size,
+            skipped = skipped,
+            remoteNewer = remoteNewer,
+            conflicts = conflicts,
             deleted = deleted,
             failed = errors.size,
             bytes = bytes,
             errors = errors,
+            notices = notices,
             manifest = newManifest,
         )
     }

@@ -543,7 +543,8 @@ private fun SyncBackupStatusLine(vm: PaintViewModel) {
                             state.lastBackupUploaded,
                             state.lastBackupSkipped,
                             state.lastBackupDeleted,
-                            state.lastBackupRemoteChanged,
+                            state.lastBackupRemoteNewer,
+                            state.lastBackupConflicts,
                             state.lastBackupFailed,
                         ),
                     color = if (state.lastBackupFailed > 0) Color(0xFFE05555) else colors.accent,
@@ -552,6 +553,10 @@ private fun SyncBackupStatusLine(vm: PaintViewModel) {
                 if (state.lastBackupError.isNotBlank()) {
                     Spacer(Modifier.height(2.dp))
                     Text(text = state.lastBackupError, color = Color(0xFFE05555), fontSize = 11.sp)
+                }
+                if (state.lastBackupNotice.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(text = state.lastBackupNotice, color = colors.subText, fontSize = 11.sp)
                 }
             }
         }
