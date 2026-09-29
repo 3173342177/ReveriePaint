@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.paint.R
 import com.reverie.paint.core.*
+import com.reverie.paint.core.sync.SyncCategory
 import com.reverie.paint.core.sync.SyncCredentials
 import com.reverie.paint.core.sync.SyncTimeFormat
 import com.reverie.paint.ui.components.pressScale
@@ -270,11 +271,18 @@ internal fun SyncSettingsSubPage(
             SettingGroup {
                 SyncActionRow(
                     index = 0,
-                    total = 1,
-                    text = stringResource(R.string.sync_restore_now),
+                    total = 2,
+                    text = stringResource(R.string.sync_restore_artworks),
                     color = colors.accent,
                     enabled = state.connected,
-                ) { vm.restoreFromCloud() }
+                ) { vm.restoreFromCloud(SyncCategory.ARTWORKS) }
+                SyncActionRow(
+                    index = 1,
+                    total = 2,
+                    text = stringResource(R.string.sync_restore_brushes),
+                    color = colors.accent,
+                    enabled = state.connected,
+                ) { vm.restoreFromCloud(SyncCategory.BRUSHES) }
             }
             Spacer(Modifier.height(6.dp))
             Text(
@@ -541,12 +549,19 @@ private fun SyncBackupStatusLine(vm: PaintViewModel) {
 private fun SyncRestoreStatusLine(vm: PaintViewModel) {
     val colors = Theme.current
     val state = vm.syncState
+    val label =
+        when (state.restoreCategory) {
+            SyncCategory.ARTWORKS -> stringResource(R.string.sync_artworks)
+            SyncCategory.BRUSHES -> stringResource(R.string.sync_brushes)
+            null -> ""
+        }
+    val prefix = if (label.isEmpty()) "" else "$label · "
     when (state.restoreStatus) {
         SyncRestoreStatus.IDLE -> Unit
 
         SyncRestoreStatus.RUNNING -> {
             Text(
-                text = stringResource(R.string.sync_restore_running, state.restoreDone, state.restoreTotal),
+                text = prefix + stringResource(R.string.sync_restore_running, state.restoreDone, state.restoreTotal),
                 color = colors.subText,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(start = 6.dp),
@@ -557,13 +572,14 @@ private fun SyncRestoreStatusLine(vm: PaintViewModel) {
             Column(modifier = Modifier.padding(start = 6.dp)) {
                 Text(
                     text =
-                        stringResource(
-                            R.string.sync_restore_result,
-                            state.lastRestoreDownloaded,
-                            state.lastRestoreSkipped,
-                            state.lastRestoreConflicts,
-                            state.lastRestoreFailed,
-                        ),
+                        prefix +
+                            stringResource(
+                                R.string.sync_restore_result,
+                                state.lastRestoreDownloaded,
+                                state.lastRestoreSkipped,
+                                state.lastRestoreConflicts,
+                                state.lastRestoreFailed,
+                            ),
                     color = if (state.lastRestoreFailed > 0) Color(0xFFE05555) else colors.accent,
                     fontSize = 12.sp,
                 )
@@ -576,7 +592,7 @@ private fun SyncRestoreStatusLine(vm: PaintViewModel) {
 
         SyncRestoreStatus.FAILED -> {
             Text(
-                text = stringResource(R.string.sync_status_failed) + " (" + state.lastRestoreError + ")",
+                text = prefix + stringResource(R.string.sync_status_failed) + " (" + state.lastRestoreError + ")",
                 color = Color(0xFFE05555),
                 fontSize = 12.sp,
                 modifier = Modifier.padding(start = 6.dp),

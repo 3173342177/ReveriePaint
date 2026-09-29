@@ -5,9 +5,11 @@ package com.reverie.paint.core
 
 import com.reverie.paint.core.sync.LocalProject
 import com.reverie.paint.core.sync.RemoteEntry
+import com.reverie.paint.core.sync.SyncCategory
 import com.reverie.paint.core.sync.SyncClient
 import com.reverie.paint.core.sync.SyncEngine
 import com.reverie.paint.core.sync.SyncException
+import com.reverie.paint.core.sync.SyncSource
 import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
@@ -16,6 +18,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SyncEngineTest {
+    private fun sources(root: File): List<SyncSource> =
+        listOf(SyncSource(SyncCategory.ARTWORKS, root, "") { SyncEngine.isSyncable(it) })
 
     @Test
     fun `isSyncable only accepts formal revp projects`() {
@@ -54,7 +58,7 @@ class SyncEngineTest {
             root.resolve("note.txt").writeText("n")
             root.resolve(".hidden.revp").writeText("h")
 
-            val names = SyncEngine.scan(root).map { it.relativePath }
+            val names = SyncEngine.scan(sources(root)).map { it.relativePath }
             assertEquals(listOf("a.revp", "画集/b.revp"), names)
         } finally {
             root.deleteRecursively()
@@ -94,18 +98,18 @@ class SyncEngineTest {
             root.resolve("sub/b.revp").writeText("beta")
 
             val client = FakeClient()
-            val first = SyncEngine.backup(client, SyncEngine.scan(root), emptyMap())
+            val first = SyncEngine.backup(client, SyncEngine.scan(sources(root)), emptyMap())
             assertEquals(2, first.uploaded)
             assertEquals(0, first.skipped)
             assertTrue(client.dirs.contains("sub"))
             assertTrue(client.files.containsKey("sub/b.revp"))
 
-            val second = SyncEngine.backup(client, SyncEngine.scan(root), first.manifest)
+            val second = SyncEngine.backup(client, SyncEngine.scan(sources(root)), first.manifest)
             assertEquals(0, second.uploaded)
             assertEquals(2, second.skipped)
 
             root.resolve("a.revp").writeText("alpha-2")
-            val third = SyncEngine.backup(client, SyncEngine.scan(root), second.manifest)
+            val third = SyncEngine.backup(client, SyncEngine.scan(sources(root)), second.manifest)
             assertEquals(1, third.uploaded)
             assertEquals(1, third.skipped)
         } finally {

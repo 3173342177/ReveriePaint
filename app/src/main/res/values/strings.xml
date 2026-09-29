@@ -1992,7 +1992,7 @@
     <string name="sync_backup_running">正在上传 %1$d/%2$d</string>
     <string name="sync_backup_result">上传 %1$d 个, 跳过 %2$d 个, 失败 %3$d 个</string>
     <string name="sync_backup_info_title">备份说明</string>
-    <string name="sync_backup_info_text">仅备份正式工程, 不含自动保存草稿。这是单向备份: 只上传到云端, 不会修改或删除本地文件, 云端同名文件会被覆盖</string>
+    <string name="sync_backup_info_text">备份画作 (含自动保存草稿) 与你自己添加的笔刷, 内置笔刷不上传。这是单向备份: 只上传到云端, 不会修改或删除本地文件, 云端同名文件会被覆盖</string>
     <string name="sync_auto_backup">保存后自动备份</string>
     <string name="sync_auto_backup_summary">每次保存工程后自动上传有变化的部分</string>
     <string name="sync_connected_badge">已连接</string>
@@ -2009,8 +2009,11 @@
     <string name="sync_status_waiting_wifi">等待 Wi-Fi</string>
     <string name="sync_backup_locked_hint">连接云存储后可备份</string>
     <string name="sync_category_restore">恢复</string>
-    <string name="sync_restore_now">从云端恢复</string>
-    <string name="sync_restore_hint">只补齐本地缺少的工程, 不会覆盖或删除本地文件</string>
+    <string name="sync_restore_artworks">恢复画作</string>
+    <string name="sync_restore_brushes">恢复笔刷</string>
+    <string name="sync_artworks">画作</string>
+    <string name="sync_brushes">笔刷</string>
+    <string name="sync_restore_hint">只补齐本地缺少的画作与笔刷, 不会覆盖或删除本地文件</string>
     <string name="sync_restore_running">正在恢复 %1$d/%2$d</string>
     <string name="sync_restore_result">恢复 %1$d 个, 跳过 %2$d 个, 冲突 %3$d 个, 失败 %4$d 个</string>
     <string name="sync_conflict_suffix"> (云端)</string>

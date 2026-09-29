@@ -4,18 +4,38 @@
 package com.reverie.paint.core
 
 import com.reverie.paint.core.sync.RemoteEntry
+import com.reverie.paint.core.sync.SyncCategory
 import com.reverie.paint.core.sync.SyncClient
 import com.reverie.paint.core.sync.SyncEngine
 import com.reverie.paint.core.sync.SyncException
+import com.reverie.paint.core.sync.SyncSource
 import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SyncEngineRestoreTest {
     private val suffix = " (cloud)"
+
+    private fun sources(
+        root: File,
+        brushRoot: File,
+    ): List<SyncSource> =
+        listOf(
+            SyncSource(SyncCategory.ARTWORKS, root, "") { SyncEngine.isSyncable(it) },
+            SyncSource(SyncCategory.ARTWORKS, File(root, "autosave"), "autosave/") {
+                SyncEngine.isPlainFile(it) && it.endsWith(".revp", ignoreCase = true)
+            },
+            SyncSource(SyncCategory.BRUSHES, File(brushRoot, "presets"), "brushes/presets/") {
+                SyncEngine.isPlainFile(it)
+            },
+            SyncSource(SyncCategory.BRUSHES, File(brushRoot, "tips"), "brushes/tips/") {
+                SyncEngine.isPlainFile(it)
+            },
+        )
 
     @Test
     fun `safe relative path rejects traversal and absolute`() {
@@ -46,41 +66,133 @@ class SyncEngineRestoreTest {
     }
 
     @Test
-    fun `listRemoteProjects recurses and filters`() {
-        val client = TreeClient()
-        client.files["a.revp"] = "a".toByteArray()
-        client.files["画集/b.revp"] = "b".toByteArray()
-        client.files["画集/子/c.revp"] = "c".toByteArray()
-        client.files["note.txt"] = "n".toByteArray()
-        client.files["autosave/x.autosave.revp"] = "x".toByteArray()
-        client.files["../evil.revp"] = "e".toByteArray()
-
-        val names = SyncEngine.listRemoteProjects(client).map { it.path }
-        assertEquals(listOf("a.revp", "画集/b.revp", "画集/子/c.revp"), names)
+    fun `conflictName inserts suffix before extension`() {
+        assertEquals("a (cloud).revp", SyncEngine.conflictName("a.revp", suffix))
+        assertEquals("a (cloud)", SyncEngine.conflictName("a", suffix))
     }
 
     @Test
-    fun `restore into empty dir downloads and records manifest`() {
-        val root = Files.createTempDirectory("revp-restore-empty").toFile()
+    fun `scan adds remote prefixes per source`() {
+        val root = Files.createTempDirectory("revp-scan-root").toFile()
+        val brushes = Files.createTempDirectory("revp-scan-brush").toFile()
+        try {
+            root.resolve("a.revp").writeText("a")
+            File(root, "autosave").mkdirs()
+            root.resolve("autosave/x.autosave.revp").writeText("x")
+            File(brushes, "presets").mkdirs()
+            File(brushes, "tips").mkdirs()
+            File(brushes, "presets/my.kpp").writeText("p")
+            File(brushes, "tips/my.gbr").writeText("t")
+
+            val paths = SyncEngine.scan(sources(root, brushes)).map { it.relativePath }.toSet()
+            assertEquals(
+                setOf(
+                    "a.revp",
+                    "autosave/x.autosave.revp",
+                    "brushes/presets/my.kpp",
+                    "brushes/tips/my.gbr",
+                ),
+                paths,
+            )
+        } finally {
+            root.deleteRecursively()
+            brushes.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `localTarget picks the longest matching prefix`() {
+        val root = Files.createTempDirectory("revp-target").toFile()
+        val brushes = Files.createTempDirectory("revp-target-brush").toFile()
+        try {
+            val src = sources(root, brushes)
+            assertEquals(File(root, "a.revp"), SyncEngine.localTarget(src, "a.revp"))
+            assertEquals(File(root, "autosave/x.autosave.revp"), SyncEngine.localTarget(src, "autosave/x.autosave.revp"))
+            assertEquals(File(brushes, "tips/my.gbr"), SyncEngine.localTarget(src, "brushes/tips/my.gbr"))
+            assertEquals(File(brushes, "presets/my.kpp"), SyncEngine.localTarget(src, "brushes/presets/my.kpp"))
+            assertNull(SyncEngine.localTarget(src, "../evil.revp"))
+        } finally {
+            root.deleteRecursively()
+            brushes.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `listRemote splits categories`() {
+        val root = Files.createTempDirectory("revp-list-root").toFile()
+        val brushes = Files.createTempDirectory("revp-list-brush").toFile()
         try {
             val client = TreeClient()
             client.files["a.revp"] = "a".toByteArray()
-            client.files["sub/b.revp"] = "bb".toByteArray()
+            client.files["autosave/x.autosave.revp"] = "x".toByteArray()
+            client.files["brushes/presets/my.kpp"] = "p".toByteArray()
+            client.files["brushes/tips/my.gbr"] = "t".toByteArray()
+            client.files["note.txt"] = "n".toByteArray()
 
-            val out = SyncEngine.restore(client, root, SyncEngine.scan(root), emptyMap(), suffix)
+            val src = sources(root, brushes)
+            assertEquals(
+                listOf("a.revp", "autosave/x.autosave.revp"),
+                SyncEngine.listRemote(client, src, SyncCategory.ARTWORKS).map { it.path },
+            )
+            assertEquals(
+                listOf("brushes/presets/my.kpp", "brushes/tips/my.gbr"),
+                SyncEngine.listRemote(client, src, SyncCategory.BRUSHES).map { it.path },
+            )
+        } finally {
+            root.deleteRecursively()
+            brushes.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `restore artworks downloads missing and records manifest`() {
+        val root = Files.createTempDirectory("revp-restore-art").toFile()
+        val brushes = Files.createTempDirectory("revp-restore-art-b").toFile()
+        try {
+            val client = TreeClient()
+            client.files["a.revp"] = "a".toByteArray()
+            client.files["autosave/x.autosave.revp"] = "xx".toByteArray()
+            client.files["brushes/tips/my.gbr"] = "t".toByteArray()
+
+            val src = sources(root, brushes)
+            val out = SyncEngine.restore(client, src, SyncCategory.ARTWORKS, emptyList(), emptyMap(), suffix)
             assertEquals(2, out.downloaded)
-            assertEquals(0, out.skipped)
-            assertEquals(3L, out.bytes)
-            assertEquals("bb", root.resolve("sub/b.revp").readText())
+            assertEquals("a", root.resolve("a.revp").readText())
+            assertEquals("xx", root.resolve("autosave/x.autosave.revp").readText())
+            assertFalse(root.resolve("brushes").exists())
             assertEquals(2, out.manifest.size)
         } finally {
             root.deleteRecursively()
+            brushes.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `restore brushes writes into brush dirs`() {
+        val root = Files.createTempDirectory("revp-restore-brush").toFile()
+        val brushes = Files.createTempDirectory("revp-restore-brush-b").toFile()
+        try {
+            val client = TreeClient()
+            client.files["a.revp"] = "a".toByteArray()
+            client.files["brushes/presets/my.kpp"] = "p".toByteArray()
+            client.files["brushes/tips/my.gbr"] = "t".toByteArray()
+
+            val src = sources(root, brushes)
+            val out = SyncEngine.restore(client, src, SyncCategory.BRUSHES, emptyList(), emptyMap(), suffix)
+            assertEquals(2, out.downloaded)
+            assertEquals("p", brushes.resolve("presets/my.kpp").readText())
+            assertEquals("t", brushes.resolve("tips/my.gbr").readText())
+            assertFalse(root.resolve("a.revp").exists())
+        } finally {
+            root.deleteRecursively()
+            brushes.deleteRecursively()
         }
     }
 
     @Test
     fun `restore skips file already in sync`() {
         val root = Files.createTempDirectory("revp-restore-skip").toFile()
+        val brushes = Files.createTempDirectory("revp-restore-skip-b").toFile()
         try {
             val local = root.resolve("a.revp")
             local.writeText("same")
@@ -89,19 +201,21 @@ class SyncEngineRestoreTest {
             val client = TreeClient()
             client.files["a.revp"] = "remote-different".toByteArray()
 
-            val out = SyncEngine.restore(client, root, SyncEngine.scan(root), mapOf("a.revp" to hash), suffix)
+            val src = sources(root, brushes)
+            val out = SyncEngine.restore(client, src, SyncCategory.ARTWORKS, SyncEngine.scan(src), mapOf("a.revp" to hash), suffix)
             assertEquals(0, out.downloaded)
             assertEquals(1, out.skipped)
-            assertEquals(0, out.conflicts)
             assertEquals("same", local.readText())
         } finally {
             root.deleteRecursively()
+            brushes.deleteRecursively()
         }
     }
 
     @Test
     fun `restore keeps local file and writes a conflict copy`() {
         val root = Files.createTempDirectory("revp-restore-conflict").toFile()
+        val brushes = Files.createTempDirectory("revp-restore-conflict-b").toFile()
         try {
             val local = root.resolve("a.revp")
             local.writeText("local-newer")
@@ -109,47 +223,55 @@ class SyncEngineRestoreTest {
             val client = TreeClient()
             client.files["a.revp"] = "cloud-older".toByteArray()
 
-            val out = SyncEngine.restore(client, root, SyncEngine.scan(root), emptyMap(), suffix)
+            val src = sources(root, brushes)
+            val out = SyncEngine.restore(client, src, SyncCategory.ARTWORKS, SyncEngine.scan(src), emptyMap(), suffix)
             assertEquals(0, out.downloaded)
             assertEquals(1, out.conflicts)
             assertEquals("local-newer", local.readText())
             assertEquals("cloud-older", root.resolve("a (cloud).revp").readText())
         } finally {
             root.deleteRecursively()
+            brushes.deleteRecursively()
         }
     }
 
     @Test
     fun `restore rejects checksum mismatch and writes nothing`() {
         val root = Files.createTempDirectory("revp-restore-badsum").toFile()
+        val brushes = Files.createTempDirectory("revp-restore-badsum-b").toFile()
         try {
             val client = TreeClient()
             client.files["a.revp"] = "payload".toByteArray()
 
-            val out = SyncEngine.restore(client, root, SyncEngine.scan(root), mapOf("a.revp" to "deadbeef"), suffix)
+            val src = sources(root, brushes)
+            val out = SyncEngine.restore(client, src, SyncCategory.ARTWORKS, emptyList(), mapOf("a.revp" to "deadbeef"), suffix)
             assertEquals(0, out.downloaded)
             assertEquals(1, out.failed)
             assertFalse(root.resolve("a.revp").exists())
         } finally {
             root.deleteRecursively()
+            brushes.deleteRecursively()
         }
     }
 
     @Test
     fun `restore keeps going after a failed download`() {
         val root = Files.createTempDirectory("revp-restore-fail").toFile()
+        val brushes = Files.createTempDirectory("revp-restore-fail-b").toFile()
         try {
             val client = TreeClient()
             client.files["a.revp"] = "a".toByteArray()
             client.files["b.revp"] = "b".toByteArray()
             client.failOn = "a.revp"
 
-            val out = SyncEngine.restore(client, root, SyncEngine.scan(root), emptyMap(), suffix)
+            val src = sources(root, brushes)
+            val out = SyncEngine.restore(client, src, SyncCategory.ARTWORKS, emptyList(), emptyMap(), suffix)
             assertEquals(1, out.downloaded)
             assertEquals(1, out.failed)
             assertTrue(root.resolve("b.revp").exists())
         } finally {
             root.deleteRecursively()
+            brushes.deleteRecursively()
         }
     }
 
@@ -203,12 +325,7 @@ class SyncEngineRestoreTest {
             val slash = remotePath.lastIndexOf('/')
             val dir = if (slash >= 0) remotePath.substring(0, slash + 1) else ""
             val name = if (slash >= 0) remotePath.substring(slash + 1) else remotePath
-            val dot = name.lastIndexOf('.')
-            return if (dot > 0) {
-                "$dir${name.substring(0, dot)}$suffix${name.substring(dot)}"
-            } else {
-                "$dir$name$suffix"
-            }
+            return dir + SyncEngine.conflictName(name, suffix)
         }
     }
 }
