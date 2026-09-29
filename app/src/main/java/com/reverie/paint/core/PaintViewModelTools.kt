@@ -899,6 +899,7 @@ internal fun PaintViewModel.cropCanvas(
         if (nw > 0 && nh > 0 && (nw != docWidth || nh != docHeight)) {
             docWidth = nw
             docHeight = nh
+            checkBrushSizeLimit()
         }
         // Force a viewport resize: renderW/renderH were computed for the
         // old document size, so recompute + full redraw
@@ -924,6 +925,7 @@ internal fun PaintViewModel.scaleImage(
         if (nw > 0 && nh > 0 && (nw != docWidth || nh != docHeight)) {
             docWidth = nw
             docHeight = nh
+            checkBrushSizeLimit()
         }
         renderW = -1
         renderH = -1
@@ -1153,6 +1155,7 @@ internal fun PaintViewModel.undo() {
             docHeight = nh
             renderW = -1
             renderH = -1
+            checkBrushSizeLimit()
         }
         notifyLayerChanged(forceThumbs = false, immediateRender = true, pixelChanged = true)
         refreshSelection()
@@ -1184,6 +1187,7 @@ internal fun PaintViewModel.redo() {
             docHeight = nh
             renderW = -1
             renderH = -1
+            checkBrushSizeLimit()
         }
         notifyLayerChanged(forceThumbs = false, immediateRender = true, pixelChanged = true)
         refreshSelection()

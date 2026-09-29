@@ -125,6 +125,12 @@ internal fun PaintViewModel.updateStrokeStabilizer(value: Float) {
     saveViewSettings()
 }
 
+internal fun PaintViewModel.updateBrushSizeScalesWithCanvas(enabled: Boolean) {
+    brushSizeScalesWithCanvas = enabled
+    saveViewSettings()
+    checkBrushSizeLimit()
+}
+
 internal fun PaintViewModel.saveViewSettings() {
     try {
         val o = JSONObject()
@@ -135,6 +141,7 @@ internal fun PaintViewModel.saveViewSettings() {
         o.put("pixel_grid", pixelGridEnabled)
         o.put("undo_toast", undoToastEnabled)
         o.put("stroke_stabilizer", strokeStabilizer.toDouble())
+        o.put("brush_size_scales_with_canvas", brushSizeScalesWithCanvas)
         prefs().edit().putString("view_settings", o.toString()).apply()
     } catch (_: Exception) {
     }
@@ -158,6 +165,8 @@ internal fun PaintViewModel.loadViewSettings() {
         pixelGridEnabled = o.optBoolean("pixel_grid", true)
         undoToastEnabled = o.optBoolean("undo_toast", true)
         strokeStabilizer = o.optDouble("stroke_stabilizer", 0.0).toFloat().coerceIn(0f, 1f)
+        brushSizeScalesWithCanvas = o.optBoolean("brush_size_scales_with_canvas", true)
+        checkBrushSizeLimit()
     } catch (_: Exception) {
     }
 }
@@ -387,7 +396,7 @@ internal fun PaintViewModel.handleKeyEvent(event: KeyEvent): Boolean {
             true
         }
         "]" -> {
-            val maxL = brushMaxSizeLimit.coerceAtLeast(brushMinSizeLimit)
+            val maxL = effectiveBrushMaxSize
             updateBrushSize((brushSize * 1.25).coerceAtMost(maxL))
             true
         }
@@ -489,7 +498,7 @@ internal fun PaintViewModel.executeShortcutAction(id: String) {
         "tool_transform" -> applyTool("transform")
         "tool_move" -> applyTool("move")
         "brush_size_inc" -> {
-            val maxL = brushMaxSizeLimit.coerceAtLeast(brushMinSizeLimit)
+            val maxL = effectiveBrushMaxSize
             val newSize = (brushSize * 1.25).coerceAtMost(maxL)
             updateBrushSize(newSize)
         }

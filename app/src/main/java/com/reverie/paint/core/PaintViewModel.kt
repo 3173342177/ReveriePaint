@@ -560,6 +560,24 @@ class PaintViewModel : ViewModel() {
     var brushPressureCurve by mutableIntStateOf(0) // 0: 线性, 1: 柔和, 2: 硬朗, 3: S型
     var brushMinSizeLimit by mutableDoubleStateOf(1.0)
     var brushMaxSizeLimit by mutableDoubleStateOf(500.0)
+    var brushSizeScalesWithCanvas by mutableStateOf(true)
+
+    val effectiveBrushMaxSize: Double
+        get() {
+            val minL = brushMinSizeLimit.coerceAtLeast(0.5)
+            return if (brushSizeScalesWithCanvas) {
+                (maxOf(docWidth, docHeight) / 2.0).coerceAtLeast(minL + 0.1)
+            } else {
+                brushMaxSizeLimit.coerceAtLeast(minL + 0.1)
+            }
+        }
+
+    fun checkBrushSizeLimit() {
+        val maxL = effectiveBrushMaxSize
+        if (brushSize > maxL) {
+            updateBrushSize(maxL)
+        }
+    }
     var brushTipAsset by mutableStateOf("")
     var brushPaintOpId by mutableStateOf("paintbrush")
     var brushAirbrush by mutableStateOf(false)
@@ -1738,7 +1756,7 @@ class PaintViewModel : ViewModel() {
                     else -> 0.025f
                 }
                 val minL = brushMinSizeLimit.coerceAtLeast(0.5)
-                val maxL = brushMaxSizeLimit.coerceAtLeast(minL + 0.1)
+                val maxL = effectiveBrushMaxSize
                 val logMin = kotlin.math.ln(minL)
                 val logMax = kotlin.math.ln(maxL)
                 val range = (logMax - logMin).coerceAtLeast(1e-6)
@@ -2418,6 +2436,16 @@ class PaintViewModel : ViewModel() {
             eraserCursorMode = prefs.getInt("eraserCursorMode", 3)
             cursorStyleMode = prefs.getInt("cursorStyleMode", 5)
             quickShapeEnabled = false
+            try {
+                val rawView = prefs.getString("view_settings", null)
+                if (rawView != null) {
+                    val o = org.json.JSONObject(rawView)
+                    brushSizeScalesWithCanvas = o.optBoolean("brush_size_scales_with_canvas", true)
+                } else if (prefs.contains("brushSizeScalesWithCanvas")) {
+                    brushSizeScalesWithCanvas = prefs.getBoolean("brushSizeScalesWithCanvas", true)
+                }
+            } catch (_: Exception) {
+            }
             val savedPreset = prefs.getInt("pressureCurvePreset", 0)
             updatePressureCurvePreset(savedPreset)
             // Restore a user-drawn custom curve (preset 4) over the preset defaults

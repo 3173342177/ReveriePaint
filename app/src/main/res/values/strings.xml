@@ -693,6 +693,8 @@
     <string name="settings_layer_height_spacious">宽松</string>
     <string name="settings_panel_pinning_title">面板固定与自由平移</string>
     <string name="settings_panel_pinning_desc">允许固定图层与画笔面板并在画布上拖动平移</string>
+    <string name="settings_brush_size_scales_with_canvas_title">笔刷上限跟随画布</string>
+    <string name="settings_brush_size_scales_with_canvas_desc">笔刷最大尺寸自动设定为画布长边的 1/2</string>
     <string name="settings_canvas_rotation">画布可旋转</string>
     <string name="settings_canvas_rotation_snap">旋转吸附到正投射角</string>
     <string name="settings_canvas_rotation_snap_off">已关闭</string>

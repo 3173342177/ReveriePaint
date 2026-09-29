@@ -218,6 +218,7 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
             docHeight = if (coreH > 0) coreH else p.height
             docDpi = if (p.dpi > 0) p.dpi else 300
             docName = p.name
+            checkBrushSizeLimit()
 
             val masterFile = File(projectDir(), "${p.name}.revp")
             currentProjectFile = if (masterFile.exists() && masterFile.absolutePath != p.filePath) {
@@ -1055,6 +1056,7 @@ internal fun PaintViewModel.startPainting(
             docHeight = h
             docDpi = dpi
             docName = actualName
+            checkBrushSizeLimit()
             isBlockingLoading = false
             startPaintingTimer()
             if (animation) {
@@ -1133,6 +1135,7 @@ internal fun PaintViewModel.goReplay(p: com.reverie.paint.model.Project) {
             replaySession = s
             docWidth = s.docW
             docHeight = s.docH
+            checkBrushSizeLimit()
             s.currentMs = 0
             s.progress = 0f
             s.elapsedMs = 0L

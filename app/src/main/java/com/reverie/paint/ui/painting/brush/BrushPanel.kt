@@ -1870,7 +1870,7 @@ fun BrushPropertyPage(
                     label = stringResource(R.string.brush_param_size),
                     value = vm.brushSize,
                     min = vm.brushMinSizeLimit.coerceAtLeast(0.5),
-                    max = vm.brushMaxSizeLimit.coerceAtLeast(vm.brushMinSizeLimit.coerceAtLeast(0.5) + 0.1),
+                    max = vm.effectiveBrushMaxSize,
                     unit = ParamUnit.PIXEL,
                 ) { vm.updateBrushSize(it) }
 

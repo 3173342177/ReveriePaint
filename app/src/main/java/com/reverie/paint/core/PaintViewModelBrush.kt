@@ -445,7 +445,7 @@ import kotlinx.coroutines.withContext
 
     internal fun PaintViewModel.updateBrushMaxSizeLimit(v: Double) {
         brushMaxSizeLimit = v
-        if (brushSize > v) updateBrushSize(v)
+        if (brushSize > effectiveBrushMaxSize) updateBrushSize(effectiveBrushMaxSize)
         saveBrushParam()
     }
 
@@ -1456,6 +1456,7 @@ import kotlinx.coroutines.withContext
             // 主线程先写预设值, 再由 overlay 用当前工具记忆覆盖;
             // overlay 内部的引擎 setter 经 runCore 追加在预设 setter 之后, 写序确定。
             applyToolParamMemoryOverlay(preset?.name)
+            checkBrushSizeLimit()
         }) {
             if (ReverieCoreBridge.loadBrushPreset(index)) {
                 // 分组元数据覆盖 C++ 名字启发式; 必须在 loadBrushPreset 之后下发,
@@ -1571,7 +1572,7 @@ import kotlinx.coroutines.withContext
         if (mem.size < 3) return
         // 损坏数据防护: 每个值做 isFinite() 检查, 非有限值跳过该值, 防 NaN 流入引擎
         if (mem[0].isFinite()) {
-            brushSize = mem[0]
+            brushSize = mem[0].coerceAtMost(effectiveBrushMaxSize)
         }
         if (mem[1].isFinite()) {
             brushOpacity = mem[1]
@@ -1580,7 +1581,7 @@ import kotlinx.coroutines.withContext
             brushFlow = mem[2]
         }
         runCore(render = false) {
-            if (mem[0].isFinite()) ReverieCoreBridge.setBrushSize(mem[0])
+            if (mem[0].isFinite()) ReverieCoreBridge.setBrushSize(brushSize)
             if (mem[1].isFinite()) ReverieCoreBridge.setBrushOpacity(mem[1])
             if (mem[2].isFinite()) ReverieCoreBridge.setBrushFlow(mem[2])
         }
@@ -1608,7 +1609,7 @@ import kotlinx.coroutines.withContext
 
     internal fun PaintViewModel.updateBrushSize(v: Double, commit: Boolean = true) {
         val minL = brushMinSizeLimit.coerceAtLeast(0.5)
-        val maxL = brushMaxSizeLimit.coerceAtLeast(minL)
+        val maxL = effectiveBrushMaxSize.coerceAtLeast(minL)
         val clamped = v.coerceIn(minL, maxL)
         brushSize = clamped
         if (commit) {

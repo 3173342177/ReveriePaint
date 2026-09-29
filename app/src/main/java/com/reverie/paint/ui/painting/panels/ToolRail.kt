@@ -384,7 +384,7 @@ private fun BrushSizeGroup(
     }
 
     val minL = vm.brushMinSizeLimit.coerceAtLeast(0.5)
-    val maxL = vm.brushMaxSizeLimit.coerceAtLeast(minL + 0.1)
+    val maxL = vm.effectiveBrushMaxSize
     val logMin = kotlin.math.ln(minL)
     val logMax = kotlin.math.ln(maxL)
     val range = (logMax - logMin).coerceAtLeast(1e-6)
