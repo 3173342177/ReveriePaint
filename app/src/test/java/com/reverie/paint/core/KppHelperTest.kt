@@ -5,6 +5,7 @@
 package com.reverie.paint.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -177,5 +178,208 @@ class KppHelperTest {
         } finally {
             tempDir.deleteRecursively()
         }
+    }
+
+    @Test
+    fun `injectParamsIntoXml updates MaskGenerator attributes for auto_brush`() {
+        val originalXml = """<Preset name="Basic" paintopid="paintbrush">
+  <param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" spacing="0.1" angle="0.0"> <MaskGenerator diameter="20" hfade="0.5" vfade="0.5" id="default" spikes="2" type="circle" ratio="1.0" antialiasEdges="1"/> </Brush>]]></param>
+</Preset>"""
+        val params = BrushParams(
+            size = 120.0,
+            fade = 0.35,
+            softness = 0.0,
+            tipShape = 1, // square
+            spikes = 6,
+            ratio = 0.75,
+            antiAliasing = 0,
+        )
+
+        val updatedXml = KppHelper.injectParamsIntoXml(originalXml, "Basic", params)
+        assertTrue(updatedXml.contains("""type="rect""""))
+        // hfade/vfade 由 Fade 驱动，与 SoftnessValue 无关
+        assertTrue(updatedXml.contains("""hfade="0.35""""))
+        assertTrue(updatedXml.contains("""vfade="0.35""""))
+        assertTrue(updatedXml.contains("""spikes="6""""))
+        assertTrue(updatedXml.contains("""ratio="0.75""""))
+        assertTrue(updatedXml.contains("""antialiasEdges="0""""))
+        assertTrue(updatedXml.contains("""diameter="120.0""""))
+
+        val parsed = KppHelper.parseKppAttributes(updatedXml)
+        assertEquals(0.35, parsed.fade)
+        // softness 会被夹进 Krita 的量程 0.1~1.0
+        assertEquals(KppHelper.SOFTNESS_MIN, parsed.softness)
+        assertEquals(1, parsed.tipShape)
+        assertEquals(6, parsed.spikes)
+        assertEquals(0.75, parsed.ratio)
+        assertEquals(0, parsed.antiAliasing)
+    }
+
+    @Test
+    fun `Fade 只走 MaskGenerator，不再写入不存在的 PressureFade 与 FadeValue`() {
+        val originalXml = """<Preset name="Basic" paintopid="paintbrush">
+  <param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" spacing="0.1" angle="0.0"> <MaskGenerator diameter="20" hfade="0.5" vfade="0.5" id="default" spikes="2" type="circle" ratio="1.0" antialiasEdges="1"/> </Brush>]]></param>
+</Preset>"""
+
+        val updatedXml = KppHelper.injectParamsIntoXml(originalXml, "Basic", BrushParams(fade = 0.8))
+
+        // Krita 里 Fade 就是 MaskGenerator 的 hfade/vfade（KisPaintOpSettings::setPaintOpFade），
+        // PressureFade / FadeValue 这两个键在 248 个原生预设中出现 0 次，写进去只会变成无人读取的垃圾参数。
+        assertFalse(updatedXml.contains("PressureFade"))
+        assertFalse(updatedXml.contains("FadeValue"))
+        assertTrue(updatedXml.contains("""hfade="0.8""""))
+        assertTrue(updatedXml.contains("""vfade="0.8""""))
+    }
+
+    @Test
+    fun `SoftnessValue 必须配套 PressureSoftness 时才不会被引擎忽略`() {
+        val originalXml = """<Preset name="Basic" paintopid="paintbrush">
+  <param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" spacing="0.1" angle="0.0"> <MaskGenerator diameter="20" hfade="0.5" vfade="0.5" id="default" spikes="2" type="circle" ratio="1.0" antialiasEdges="1"/> </Brush>]]></param>
+</Preset>"""
+
+        val customized = KppHelper.injectParamsIntoXml(originalXml, "Basic", BrushParams(softness = 0.4))
+        assertTrue(customized.contains("""name="SoftnessValue"><![CDATA[0.4]]></param>"""))
+        assertTrue(customized.contains("""name="PressureSoftness"><![CDATA[true]]></param>"""))
+
+        // softness = 1.0 是 neutral（KisSoftnessOptionData 量程 0.1~1.0，1.0 表示不改动笔尖羽化），
+        // 此时必须把标志位写回 false，否则 apply() 会拿 1.0 之外的强度值污染笔尖。
+        val neutral = KppHelper.injectParamsIntoXml(originalXml, "Basic", BrushParams(softness = 1.0))
+        assertTrue(neutral.contains("""name="PressureSoftness"><![CDATA[false]]></param>"""))
+    }
+
+    @Test
+    fun `MaskGenerator 的 id 由预设自身决定，不被 Fade 改写`() {
+        val originalXml = """<Preset name="Gauss" paintopid="paintbrush">
+  <param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" spacing="0.1" angle="0.0"> <MaskGenerator diameter="20" hfade="0.5" vfade="0.5" id="gauss" spikes="2" type="circle" ratio="1.0" antialiasEdges="1"/> </Brush>]]></param>
+</Preset>"""
+
+        val updatedXml = KppHelper.injectParamsIntoXml(originalXml, "Gauss", BrushParams(fade = 0.9))
+
+        // id 是笔尖类型（default / soft / gauss），不该随羽化数值漂移
+        assertTrue(updatedXml.contains("""id="gauss""""))
+        assertEquals("gauss", Regex("""<MaskGenerator\b[^>]*\bid="([^"]+)"""").find(updatedXml)?.groupValues?.get(1))
+    }
+
+    @Test
+    fun `parseKppAttributes 把 fade 与 softness 分开解析`() {
+        val xml = """<Preset name="Basic" paintopid="paintbrush">
+  <param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" spacing="0.1" angle="0.0"> <MaskGenerator diameter="20" hfade="0.7" vfade="0.3" id="default" spikes="2" type="circle" ratio="1.0" antialiasEdges="1"/> </Brush>]]></param>
+  <param type="string" name="SoftnessValue"><![CDATA[0.4]]></param>
+</Preset>"""
+
+        val parsed = KppHelper.parseKppAttributes(xml)
+        // fade 取 hfade/vfade 的较大者，与 KisPaintOpSettings::paintOpFade 一致
+        assertEquals(0.7, parsed.fade)
+        assertEquals(0.4, parsed.softness)
+    }
+
+    @Test
+    fun `updateParam 就地替换 name 在前的参数, 不再追加重复键`() {
+        // Krita 写出的参数是 name 在前; 旧版正则要求 type 在前,
+        // 对这种写法一条都匹配不上, 只会把新值追加到文件尾部形成重复键
+        val originalXml = """<Preset name="Basic" paintopid="paintbrush">
+  <param name="SoftnessValue" type="string"><![CDATA[1]]></param>
+  <param name="SpacingValue" type="string"><![CDATA[0.1]]></param>
+</Preset>"""
+
+        val updatedXml = KppHelper.injectParamsIntoXml(originalXml, "Basic", BrushParams(softness = 0.4, spacing = 0.25))
+
+        assertEquals(1, Regex("""name="SoftnessValue"""").findAll(updatedXml).count())
+        assertEquals(1, Regex("""name="SpacingValue"""").findAll(updatedXml).count())
+        assertTrue(updatedXml.contains("""name="SpacingValue"><![CDATA[0.25]]></param>"""))
+        // 原生 name 在前的写法被就地收敛, 不留旧值
+        assertFalse(updatedXml.contains("""name="SoftnessValue" type="string""""))
+    }
+
+    @Test
+    fun `dedupeParamsXml 保留每个键的首次出现并清掉追加的重复键`() {
+        // 设备上真实出现的污染形态: Krita 原生值在前, 旧版追加的值在后;
+        // 引擎按文档序取最后一个, 于是旧默认 softness≈0.5 + PressureSoftness=true 生效 → 边缘发糊
+        val polluted = """<Preset name="Basic" paintopid="paintbrush">
+  <param name="SoftnessValue" type="string"><![CDATA[1]]></param>
+  <param name="PressureSoftness" type="string"><![CDATA[false]]></param>
+  <param type="string" name="SoftnessValue"><![CDATA[0.4988]]></param>
+  <param type="string" name="PressureSoftness"><![CDATA[true]]></param>
+  <param type="string" name="OpacityValue"><![CDATA[1]]></param>
+</Preset>"""
+
+        val cleaned = KppHelper.dedupeParamsXml(polluted)
+
+        assertEquals(1, Regex("""name="SoftnessValue"""").findAll(cleaned).count())
+        assertEquals(1, Regex("""name="PressureSoftness"""").findAll(cleaned).count())
+        assertTrue(cleaned.contains("""name="OpacityValue""""))
+        assertFalse(cleaned.contains("0.4988"))
+        // 保留的是首次出现 (Krita 原生值), 不是追加值
+        assertFalse(cleaned.contains("""<![CDATA[true]]></param>"""))
+    }
+
+    @Test
+    fun `笔尖属性只写主 brush_definition, 不碰 MaskingBrush 副本`() {
+        // Krita 预设里 MaskingBrush/Preset/brush_definition 是掩膜子预设的副本，
+        // 且文档序排在主 brush_definition 之前；引擎只读主条目
+        val originalXml = """<Preset name="Basic" paintopid="paintbrush">
+  <param name="MaskingBrush/Preset/brush_definition" type="string"><![CDATA[<Brush spacing="0.1" type="auto_brush"> <MaskGenerator diameter="40" hfade="0.2" vfade="0.2" id="default" spikes="2" type="circle" ratio="1.0" antialiasEdges="1"/> </Brush>]]></param>
+  <param name="brush_definition" type="string"><![CDATA[<Brush spacing="0.1" type="auto_brush"> <MaskGenerator diameter="40" hfade="0.2" vfade="0.2" id="default" spikes="2" type="circle" ratio="1.0" antialiasEdges="1"/> </Brush>]]></param>
+</Preset>"""
+
+        val updatedXml = KppHelper.injectParamsIntoXml(originalXml, "Basic", BrushParams(fade = 0.9, spacing = 0.3))
+
+        // 主条目被就地收敛为规范写法并更新
+        assertTrue(updatedXml.contains("""name="brush_definition"><![CDATA[<Brush spacing="0.3""""))
+        assertTrue(Regex("""name="brush_definition"[^>]*>.*?hfade="0.9"""", RegexOption.DOT_MATCHES_ALL)
+            .containsMatchIn(updatedXml))
+        // 掩膜副本原样保留
+        assertTrue(updatedXml.contains("""name="MaskingBrush/Preset/brush_definition""""))
+        assertTrue(Regex("""name="MaskingBrush/Preset/brush_definition"[^>]*>.*?hfade="0.2"""", RegexOption.DOT_MATCHES_ALL)
+            .containsMatchIn(updatedXml))
+        assertEquals(1, Regex("""hfade="0.9"""").findAll(updatedXml).count())
+    }
+
+    @Test
+    fun `parseKppAttributes 的 fade 读自主 brush_definition 而不是掩膜副本`() {
+        val xml = """<Preset name="Basic" paintopid="paintbrush">
+  <param name="MaskingBrush/Preset/brush_definition" type="string"><![CDATA[<Brush type="auto_brush"> <MaskGenerator diameter="40" hfade="0.0" vfade="0.0" id="default" spikes="2" type="circle" ratio="1.0" antialiasEdges="1"/> </Brush>]]></param>
+  <param name="brush_definition" type="string"><![CDATA[<Brush type="auto_brush"> <MaskGenerator diameter="20" hfade="0.8" vfade="0.8" id="default" spikes="2" type="circle" ratio="1.0" antialiasEdges="1"/> </Brush>]]></param>
+</Preset>"""
+
+        val parsed = KppHelper.parseKppAttributes(xml)
+        assertEquals(0.8, parsed.fade)
+        assertEquals(1, parsed.antiAliasing)
+    }
+
+    @Test
+    fun `injectParamsIntoXml updates texture and color jitter parameters`() {
+        val originalXml = """<Preset name="Textured" paintopid="paintbrush"></Preset>"""
+        val params = BrushParams(
+            textureEnabled = true,
+            textureScale = 2.5,
+            textureStrength = 0.85,
+            textureMode = "overlay",
+            hueJitter = 0.4,
+            satJitter = 0.3,
+            valJitter = 0.2,
+            secondaryMix = 0.6,
+        )
+
+        val updatedXml = KppHelper.injectParamsIntoXml(originalXml, "Textured", params)
+        assertTrue(updatedXml.contains("""name="Texture/Pattern/Enabled"><![CDATA[true]]></param>"""))
+        assertTrue(updatedXml.contains("""name="Texture/Pattern/Scale"><![CDATA[2.5]]></param>"""))
+        assertTrue(updatedXml.contains("""name="Texture/Pattern/Strength"><![CDATA[0.85]]></param>"""))
+        assertTrue(updatedXml.contains("""name="Texture/Pattern/TexturingMode"><![CDATA[4]]></param>"""))
+        assertTrue(updatedXml.contains("""name="Pressureh"><![CDATA[true]]></param>"""))
+        assertTrue(updatedXml.contains("""name="hValue"><![CDATA[0.4]]></param>"""))
+        assertTrue(updatedXml.contains("""name="sValue"><![CDATA[0.3]]></param>"""))
+        assertTrue(updatedXml.contains("""name="vValue"><![CDATA[0.2]]></param>"""))
+        assertTrue(updatedXml.contains("""name="MixValue"><![CDATA[0.6]]></param>"""))
+
+        val parsed = KppHelper.parseKppAttributes(updatedXml)
+        assertEquals(true, parsed.textureEnabled)
+        assertEquals(2.5, parsed.textureScale)
+        assertEquals(0.85, parsed.textureStrength)
+        assertEquals("overlay", parsed.textureMode)
+        assertEquals(0.4, parsed.hueJitter)
+        assertEquals(0.3, parsed.satJitter)
+        assertEquals(0.2, parsed.valJitter)
+        assertEquals(0.6, parsed.secondaryMix)
     }
 }
