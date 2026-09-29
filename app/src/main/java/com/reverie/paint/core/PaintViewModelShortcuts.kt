@@ -98,6 +98,9 @@ internal fun PaintViewModel.updateCanvasRotationEnabled(enabled: Boolean) {
 
 /** 设置双指旋转吸附阈值 (度); 0 表示关闭吸附, 上限见 [RotationSnap.MAX_THRESHOLD_DEGREES] */
 internal fun PaintViewModel.updateCanvasRotationSnapDegrees(degrees: Float) {
+    // coerceIn 对 NaN 会原样返回 (区间比较恒 false), 若不拦住会让 NaN 进入画布角度与
+    // 持久化路径, 因此这里直接丢弃非有限输入, 保持当前值
+    if (!degrees.isFinite()) return
     canvasRotationSnapDegrees = degrees.coerceIn(0f, RotationSnap.MAX_THRESHOLD_DEGREES)
     saveViewSettings()
 }
@@ -143,9 +146,14 @@ internal fun PaintViewModel.loadViewSettings() {
         val o = JSONObject(raw)
         quickSliderMode = o.optInt("quick_slider", 0)
         canvasRotationEnabled = o.optBoolean("canvas_rotation", true)
-        canvasRotationSnapDegrees = o.optDouble("canvas_rotation_snap", RotationSnap.DEFAULT_THRESHOLD_DEGREES.toDouble())
-            .toFloat()
-            .coerceIn(0f, RotationSnap.MAX_THRESHOLD_DEGREES)
+        // optDouble 可能解析出手工改写过的 "NaN"/"Infinity" 字符串, 这里同样拦一道,
+        // 回退到默认阈值而不是把 NaN 灌进画布角度
+        val savedSnap = o.optDouble("canvas_rotation_snap", RotationSnap.DEFAULT_THRESHOLD_DEGREES.toDouble()).toFloat()
+        canvasRotationSnapDegrees = if (savedSnap.isFinite()) {
+            savedSnap.coerceIn(0f, RotationSnap.MAX_THRESHOLD_DEGREES)
+        } else {
+            RotationSnap.DEFAULT_THRESHOLD_DEGREES
+        }
         magnificationInterpolation = o.optBoolean("mag_interpolation", true)
         pixelGridEnabled = o.optBoolean("pixel_grid", true)
         undoToastEnabled = o.optBoolean("undo_toast", true)

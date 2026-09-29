@@ -165,4 +165,45 @@ class RotationSnapTest {
         // 吸附只影响旋转角, 缩放比例保持不变
         assertEquals(canvasZoom * k, targetZoom, 1e-4f)
     }
+
+    @Test
+    fun `threshold above half step stays continuous at the midpoint`() {
+        // |Δ| 最大只有 45°(step/2); 阈值给到 60° 时若不做夹取, 45° 中点处会出现约 1.4° 的跳变
+        val stepSize = 0.01f
+        var raw = 40f
+        var prev = RotationSnap.apply(raw, 60f)
+        var maxJump = 0f
+        while (raw <= 50f) {
+            val cur = RotationSnap.apply(raw, 60f)
+            assertTrue("not monotonic at raw=$raw", cur >= prev - 1e-4f)
+            maxJump = maxOf(maxJump, abs(cur - prev))
+            prev = cur
+            raw += stepSize
+        }
+        // 单步 0.01° 时斜率上界 1.25 ⇒ 变化不超过 0.0125°, 留余量到 0.02°
+        assertTrue("discontinuity detected: $maxJump", maxJump <= 0.02f)
+
+        // 阈值 <= step/2 的既有配置行为不变
+        assertEquals(88.432f, RotationSnap.apply(88f, 5f), 0.01f)
+        assertEquals(84f, RotationSnap.apply(84f, 5f), 1e-5f)
+    }
+
+    @Test
+    fun `non finite inputs never throw and never snap`() {
+        // Float.roundToInt() 对 NaN 会抛异常, 而该函数位于 HUD 每帧渲染路径上
+        assertTrue(RotationSnap.nearestMultiple(Float.NaN).isNaN())
+        assertEquals(87f, RotationSnap.nearestMultiple(87f, Float.NaN), 0f)
+        assertEquals(87f, RotationSnap.nearestMultiple(87f, 0f), 0f)
+
+        // 非有限阈值/步长: 不做吸附, 原样返回
+        assertEquals(87f, RotationSnap.apply(87f, Float.NaN), 0f)
+        assertEquals(87f, RotationSnap.apply(87f, 5f, Float.NaN), 0f)
+        assertEquals(87f, RotationSnap.apply(87f, Float.POSITIVE_INFINITY), 0f)
+
+        // 非有限原始角: 判定一律保守 (不吸附 / 不收敛 / 不触发反馈)
+        assertFalse(RotationSnap.isWithinThreshold(Float.NaN, 5f))
+        assertFalse(RotationSnap.isWithinThreshold(90f, Float.NaN))
+        assertFalse(RotationSnap.isSnapEngaged(Float.NaN, 5f, prevEngaged = true))
+        assertFalse(RotationSnap.isSnapEngaged(90f, Float.NaN, prevEngaged = false))
+    }
 }

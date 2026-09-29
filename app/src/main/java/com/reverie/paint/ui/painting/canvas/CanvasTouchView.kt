@@ -192,6 +192,15 @@ class CanvasTouchView(context: Context) : View(context) {
     var isTransformActive = false
     var isPinchMotion = false
 
+    /**
+     * 双指专用"旋转已成运动"标记。
+     *
+     * 只用于抑制双指轻点撤销 (及双指连续撤销), **不参与三指重做的门控** —— 三指重做继续
+     * 只看 [isPinchMotion] (即改动前的三项旧判据), 因此三指路径逐点等价; 同时"双指落指
+     * 阶段的抖动"也不会再把随后落下的第三指轻点重做挡掉。
+     */
+    private var isTwoFingerRotation = false
+
     // 本地硬件光标状态 (0 Compose 开销)
     /** 局部失效时并入标尺块(debug 标尺专用; 正式版 [PerfHud.fillHudBounds] 恒 false)。 */
     private val hudBoundsScratch = android.graphics.Rect()
@@ -455,10 +464,14 @@ class CanvasTouchView(context: Context) : View(context) {
     // 手势结束后的"收敛到精确 90° 倍数"动画 (围绕最后双指中心, 不改变缩放/旋转中心)
     private var snapAnimator: android.animation.ValueAnimator? = null
 
+    // 画布变换的单一写入者仲裁 (新手势 / snap 动画 / fit 动画 三者只有一个能写)
+    private val transformWriterGuard = CanvasTransformWriterGuard()
+
     // 跨碎片延迟重置任务
     private val resetTransformRunnable = Runnable {
         isTransformActive = false
         isPinchMotion = false
+        isTwoFingerRotation = false
         isInteracting = false
         maxTouchPointers = 0
         lastPos0 = Offset.Zero
@@ -474,7 +487,7 @@ class CanvasTouchView(context: Context) : View(context) {
             val v = vm ?: return
             // 多指误触保护: 液化手势进行中(含场通路的"零解算"阶段)第二指落下**不得**触发
             // 连续撤销 —— 真机上这是"液化中手指一不小心碰到屏幕, 形变被连续撤销吃掉"的根源。
-            if (maxTouchPointers == 2 && !isPinchMotion && isInteracting && !isLiquifyGestureActive) {
+            if (maxTouchPointers == 2 && !isPinchMotion && !isTwoFingerRotation && isInteracting && !isLiquifyGestureActive) {
                 isContinuousUndoing = true
                 v.undo()
                 postDelayed(this, 110L)
@@ -521,9 +534,23 @@ class CanvasTouchView(context: Context) : View(context) {
     // 画布平滑复位动画 (Procreate Smooth Reset Animation)
     private var fitAnimator: android.animation.ValueAnimator? = null
 
-    private fun animateFitCanvas() {
+    /**
+     * 终止所有画布变换动画 (吸附收敛 / 满屏复位) 并失效其待执行帧, 返回新的写入者令牌。
+     *
+     * 新手势与任何新动画都必须先经此函数: 令牌递增后, 旧动画即使还有已入队的帧回调,
+     * 也会在自检处**整帧丢弃** (而不是"少写一部分"), 因此同一帧内只有一个写入者能改画布
+     * 变换, 且取消后不会留下延迟写入或半更新状态。
+     */
+    private fun cancelCanvasTransformAnimators(): Int {
         fitAnimator?.cancel()
+        fitAnimator = null
         snapAnimator?.cancel()
+        snapAnimator = null
+        return transformWriterGuard.invalidateAll()
+    }
+
+    private fun animateFitCanvas() {
+        val writerToken = cancelCanvasTransformAnimators()
         val startZoom = canvasZoom
         val startRot = canvasRotation
         val startPanX = canvasPanX
@@ -533,6 +560,8 @@ class CanvasTouchView(context: Context) : View(context) {
             duration = 240L
             interpolator = android.view.animation.DecelerateInterpolator(1.8f)
             addUpdateListener { anim ->
+                // 令牌失效 = 新手势或新动画已接管, 本帧整帧丢弃
+                if (!transformWriterGuard.isActive(writerToken)) return@addUpdateListener
                 val f = anim.animatedFraction
                 canvasZoom = startZoom + (1f - startZoom) * f
                 canvasRotation = startRot + (0f - startRot) * f
@@ -554,13 +583,15 @@ class CanvasTouchView(context: Context) : View(context) {
      * 避免自由旋转时突然被拽走。
      */
     private fun settleRotationToSnap(pivotX: Float, pivotY: Float) {
-        snapAnimator?.cancel()
         val v = vm ?: return
         if (gestureRotSpan < ROTATION_SNAP_ENGAGE_SPAN_DEG) return
         val threshold = v.canvasRotationSnapDegrees
         if (!v.canvasRotationEnabled || threshold <= 0f) return
         // 仅在吸附区内才收敛 (isWithinThreshold 已折叠角差, 天然处理 360°/0° 等价)
         if (!RotationSnap.isWithinThreshold(rawRotation, threshold)) return
+
+        // 确定要写画布变换了: 立刻终止其它动画并取得独占写入权
+        val writerToken = cancelCanvasTransformAnimators()
 
         val target = RotationSnap.nearestMultiple(rawRotation)
         val dSettle = RotationSnap.shortestDelta(canvasRotation, target)
@@ -586,6 +617,8 @@ class CanvasTouchView(context: Context) : View(context) {
             duration = 150L
             interpolator = android.view.animation.DecelerateInterpolator(2f)
             addUpdateListener { anim ->
+                // 令牌失效 = 新手势或新动画已接管, 本帧整帧丢弃
+                if (!transformWriterGuard.isActive(writerToken)) return@addUpdateListener
                 val dTheta = dSettle * anim.animatedFraction
                 val rad = Math.toRadians(dTheta.toDouble())
                 val cosR = kotlin.math.cos(rad).toFloat()
@@ -1104,8 +1137,7 @@ class CanvasTouchView(context: Context) : View(context) {
         cachedDriver?.feedbackManager?.setWritingHapticsEnabled(false)
         cachedDriver?.feedbackManager?.stopStrokeSound()
         cachedDriver = null
-        snapAnimator?.cancel()
-        snapAnimator = null
+        cancelCanvasTransformAnimators()
         oplusPredictor?.destroy()
         oplusPredictor = null
         androidMotionPredictor = null
@@ -2052,6 +2084,9 @@ class CanvasTouchView(context: Context) : View(context) {
         if (v.isSpacePanning) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    // 空格抓手平移同样写画布变换, 且此分支在统一取消点之前 return:
+                    // 这里先终止动画并失效待执行帧, 避免与旧动画同帧竞争
+                    cancelCanvasTransformAnimators()
                     spacePanStartPos = Offset(event.x, event.y)
                     spacePanInitialPan = Offset(canvasPanX, canvasPanY)
                     isSpaceDragging = true
@@ -2077,6 +2112,12 @@ class CanvasTouchView(context: Context) : View(context) {
                 }
             }
             return true
+        }
+        // 任何新的接触 (新手势第一个触点 / 新落下的触点) 都可能成为画布变换的新写入者:
+        // 先终止吸附收敛与满屏复位动画并失效其待执行帧, 避免与手势同帧竞争画布变换
+        val touchMask = event.actionMasked
+        if (touchMask == MotionEvent.ACTION_DOWN || touchMask == MotionEvent.ACTION_POINTER_DOWN) {
+            cancelCanvasTransformAnimators()
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val mask = event.actionMasked
@@ -2419,12 +2460,13 @@ class CanvasTouchView(context: Context) : View(context) {
                     initialDistance = distance
                     initialAngle = angle
                     touchDownTimeMs = nowMs
-                    // 新一段画布手势开始: 终止上一次吸附收敛动画, 并以当前生效角为原始角起点,
-                    // 避免残留动画与新手势互相拉扯
-                    snapAnimator?.cancel()
+                    // 新一段画布手势开始: 终止吸附收敛与满屏复位动画并失效其待执行帧, 同时以
+                    // 当前生效角为原始角起点, 避免残留动画与新手势互相拉扯
+                    cancelCanvasTransformAnimators()
                     rawRotation = canvasRotation
                     rotationSnapEngaged = false
                     gestureRotSpan = 0f
+                    isTwoFingerRotation = false
 
                     removeCallbacks(continuousUndoRunnable)
                     removeCallbacks(continuousRedoRunnable)
@@ -2491,8 +2533,11 @@ class CanvasTouchView(context: Context) : View(context) {
                         val dRot: Float
                         if (v.canvasRotationEnabled) {
                             val rawDelta = normalizeAngle(angle - prevAngle).coerceIn(-15f, 15f)
-                            rawRotation += rawDelta
-                            gestureRotSpan += abs(rawDelta)
+                            // 退化输入防御: 触控坐标若为非有限值, 不得把 NaN 累积进画布角度
+                            if (rawDelta.isFinite()) {
+                                rawRotation += rawDelta
+                                gestureRotSpan += abs(rawDelta)
+                            }
                             // 累计转过 ROTATION_SNAP_ENGAGE_SPAN_DEG 后才武装吸附:
                             // 纯捏合/平移手势不改变旋转角, 内容与旋转中心保持稳定
                             val magnetActive = snapThreshold > 0f && gestureRotSpan >= ROTATION_SNAP_ENGAGE_SPAN_DEG
@@ -2524,11 +2569,39 @@ class CanvasTouchView(context: Context) : View(context) {
                         // 间距张开时新旧阈值量级相当, 手感不变。
                         val spreadMoved = abs(distance - initialDistance) * 0.5f
                         val angleDiff = abs(normalizeAngle(angle - initialAngle))
-                        val arcMoved = Math.toRadians(angleDiff.toDouble()).toFloat() * initialDistance * 0.5f
-                        if (totalMoved > 6f * density || spreadMoved > 3f * density || arcMoved > 3f * density) {
+                        // 门控判据 (isPinchMotion) 保持改动前的三项旧判据逐点不变, 其中旋转项仍是旧
+                        // 公式 `角差 × 指距 × 0.5` —— 三指重做 (maxTouchPointers >= 3) 与三指手势
+                        // 消费的正是这个标记, 因此三指路径行为不发生任何漂移。
+                        val legacyArcMoved = Math.toRadians(angleDiff.toDouble()).toFloat() * initialDistance * 0.5f
+                        val isMotion = TwoFingerGesturePolicy.isMotion(
+                            centroidMovedPx = totalMoved,
+                            spreadMovedPx = spreadMoved,
+                            rotationArcPx = legacyArcMoved,
+                            moveTolerancePx = 6f * density,
+                            spreadTolerancePx = 3f * density,
+                            arcTolerancePx = 3f * density,
+                        )
+                        if (isMotion) {
                             isPinchMotion = true
                             removeCallbacks(continuousUndoRunnable)
                             removeCallbacks(continuousRedoRunnable)
+                        }
+                        // 双指专用修正: 旧公式在双指并拢时几乎失敏 —— 间距 40px 时可转 20° 以上仍被
+                        // 判成"轻点", 双指轻点撤销会吞掉旋转手势 (既多触发一次撤销, 又让旋转结束后
+                        // 的 90° 吸附收敛不执行)。这里给旋转弧长加参考半径下限, 结果只写入独立的
+                        // isTwoFingerRotation (仅抑制双指撤销, 不动 isPinchMotion); 判据内部对 >= 3 指
+                        // 仍返回旧公式, 双保险保证三指等价。
+                        if (
+                            TwoFingerGesturePolicy.isStrictTwoFingerRotation(
+                                angleDiffDegrees = angleDiff,
+                                spacingPx = initialDistance,
+                                density = density,
+                                arcTolerancePx = 3f * density,
+                                fingerCount = numFingers,
+                            )
+                        ) {
+                            isTwoFingerRotation = true
+                            removeCallbacks(continuousUndoRunnable)
                         }
 
                         // 围绕双指中心 (prevCentroid) 几何旋转与缩放补偿，保证手指标定点完全不动
@@ -2653,7 +2726,7 @@ class CanvasTouchView(context: Context) : View(context) {
                     } else if (isQuickPinchFit) {
                         animateFitCanvas()
                         v.showActionToast(context.getString(R.string.canvas_toast_fit_reset), R.drawable.ic_refresh)
-                    } else if (!isContinuousUndoing && !isPinchMotion && !filterSessionActive && maxTouchPointers == 2 && v.gestureTwoFingerUndo && durationMs < 360L) {
+                    } else if (!isContinuousUndoing && !isPinchMotion && !isTwoFingerRotation && !filterSessionActive && maxTouchPointers == 2 && v.gestureTwoFingerUndo && durationMs < 360L) {
                         v.undo()
                     } else if (!isContinuousUndoing && !isPinchMotion && !filterSessionActive && maxTouchPointers >= 3 && v.gestureThreeFingerRedo && durationMs < 380L) {
                         v.redo()
@@ -2665,6 +2738,7 @@ class CanvasTouchView(context: Context) : View(context) {
                     isContinuousUndoing = false
                     isTransformActive = false
                     isPinchMotion = false
+                    isTwoFingerRotation = false
                     maxTouchPointers = 0
                     lastPos0 = Offset.Zero
                     lastPos1 = Offset.Zero

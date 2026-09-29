@@ -45,7 +45,9 @@ object RotationSnap {
      * 采用未归一化的累计角 (可能为 400 或 -720), 结果仍落在同一"圈层", 保证连续。
      */
     fun nearestMultiple(angleDegrees: Float, step: Float = STEP_DEGREES): Float {
-        if (step <= 0f) return angleDegrees
+        // 非有限输入原样返回: Float.roundToInt() 对 NaN 会抛 IllegalArgumentException,
+        // 而本函数在角度 HUD 的每帧渲染路径上被调用, 必须保持无异常且不抛给 UI 线程。
+        if (step <= 0f || !step.isFinite() || !angleDegrees.isFinite()) return angleDegrees
         return (angleDegrees / step).roundToInt() * step
     }
 
@@ -72,10 +74,13 @@ object RotationSnap {
         thresholdDegrees: Float,
         step: Float = STEP_DEGREES,
     ): Float {
+        // 非有限输入不参与吸附, 原样返回 (调用方需保证不把非有限值喂进来, 见 View 的累加防护)
+        if (!rawDegrees.isFinite() || !thresholdDegrees.isFinite() || !step.isFinite()) return rawDegrees
         if (thresholdDegrees <= 0f || step <= 0f) return rawDegrees
+        val threshold = effectiveThreshold(thresholdDegrees, step)
         val target = nearestMultiple(rawDegrees, step)
         val delta = shortestDelta(target, rawDegrees)
-        val t = abs(delta) / thresholdDegrees
+        val t = abs(delta) / threshold
         if (t >= 1f) return rawDegrees
         val s = 1f - t
         val g = 1f - s * s * s
@@ -88,10 +93,21 @@ object RotationSnap {
         thresholdDegrees: Float,
         step: Float = STEP_DEGREES,
     ): Boolean {
-        if (thresholdDegrees <= 0f) return false
+        if (thresholdDegrees <= 0f || !thresholdDegrees.isFinite() || !step.isFinite()) return false
+        if (!rawDegrees.isFinite()) return false
         val target = nearestMultiple(rawDegrees, step)
-        return abs(shortestDelta(target, rawDegrees)) < thresholdDegrees
+        return abs(shortestDelta(target, rawDegrees)) < effectiveThreshold(thresholdDegrees, step)
     }
+
+    /**
+     * 生效阈值: 夹在 (0, step/2] 内。
+     *
+     * |Δ| 最大只有 step/2, 阈值超过它时"最近倍数"会在倍数中点切换而出现不连续跳变;
+     * 统一夹取后 [apply] / [isWithinThreshold] / [isSnapEngaged] 三者语义一致,
+     * 且对阈值 <= step/2 的配置 (含 UI 上限 30°) 行为完全不变。
+     */
+    private fun effectiveThreshold(thresholdDegrees: Float, step: Float): Float =
+        minOf(thresholdDegrees, step * 0.5f)
 
     /**
      * 带迟滞的吸附区判定: 进入用 [thresholdDegrees], 退出放宽到 1.15 倍。
@@ -105,9 +121,11 @@ object RotationSnap {
         prevEngaged: Boolean,
         step: Float = STEP_DEGREES,
     ): Boolean {
-        if (thresholdDegrees <= 0f) return false
+        if (thresholdDegrees <= 0f || !thresholdDegrees.isFinite() || !step.isFinite()) return false
+        if (!rawDegrees.isFinite()) return false
         val target = nearestMultiple(rawDegrees, step)
         val off = abs(shortestDelta(target, rawDegrees))
-        return if (prevEngaged) off < thresholdDegrees * 1.15f else off < thresholdDegrees
+        val threshold = effectiveThreshold(thresholdDegrees, step)
+        return if (prevEngaged) off < threshold * 1.15f else off < threshold
     }
 }
