@@ -2164,6 +2164,7 @@ class CanvasTouchView(context: Context) : View(context) {
                     // 笔尖接触瞬间立即启动绘图，彻底消除长按判定位移容差带来的起笔延迟
                     updateStylusSensors(event, stylusPointerIndex, isStylus = true)
                     handleToolDown(screenPos, docPos, pressure, isStylus = true, touchTiltX, touchTiltY, touchRotation)
+                    invalidate()
 
                     if (canEyedrop) {
                         isPendingLongPress = true
@@ -2708,15 +2709,15 @@ class CanvasTouchView(context: Context) : View(context) {
                             isPendingLongPress = false
                             localCursorPos = screenPos
                             localIsTouching = true
-                            invalidate()
                             handleToolDown(pendingDownScreenPos, pendingDownDocPos, pendingDownPressure, isStylus = false)
                             handleToolMove(event, 0, docPos, 1f, isStylus = false)
+                            invalidate()
                         }
                     } else {
                         localCursorPos = screenPos
                         localIsTouching = true
-                        invalidate()
                         handleToolMove(event, 0, docPos, 1f, isStylus = false)
+                        invalidate()
                     }
                     return true
                 }
@@ -2821,10 +2822,10 @@ class CanvasTouchView(context: Context) : View(context) {
 
                 if (hasSymmetry) {
                     updateSymmetryPressureLut(v)
-                    val symPts = computeAllSymmetricPoints(Point2D(docPos.x, docPos.y))
+                    val symPts = computeAllSymmetricPoints(Point2D(v.smoothedStrokeX, v.smoothedStrokeY))
                     ensureMirrorBranches(symPts.size)
                     for (idx in symPts.indices) {
-                        appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, pressure.toDouble())
+                        appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, v.smoothedStrokePressure)
                     }
                 } else {
                     resetMirrorBranches()
@@ -3090,10 +3091,10 @@ class CanvasTouchView(context: Context) : View(context) {
                         lastSoundTimeMs = 0L
                         if (hasSymmetry) {
                             updateSymmetryPressureLut(v)
-                            val symPts = computeAllSymmetricPoints(Point2D(startDoc.x, startDoc.y))
+                            val symPts = computeAllSymmetricPoints(Point2D(v.smoothedStrokeX, v.smoothedStrokeY))
                             ensureMirrorBranches(symPts.size)
                             for (idx in symPts.indices) {
-                                appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, pressure.toDouble())
+                                appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, v.smoothedStrokePressure)
                             }
                         }
                     }
@@ -3117,9 +3118,9 @@ class CanvasTouchView(context: Context) : View(context) {
                     updateStylusSensors(event, pointerIndex, isStylus, historyPos = i)
                     v.touchMove(hAssisted.x, hAssisted.y, hP.toDouble(), hTime, touchTiltX, touchTiltY, touchRotation)
                     if (hasSymmetry) {
-                        val symPts = computeAllSymmetricPoints(Point2D(hAssisted.x, hAssisted.y))
+                        val symPts = computeAllSymmetricPoints(Point2D(v.smoothedStrokeX, v.smoothedStrokeY))
                         for (idx in symPts.indices) {
-                            appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, hP.toDouble())
+                            appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, v.smoothedStrokePressure)
                         }
                     }
                 }
@@ -3139,9 +3140,9 @@ class CanvasTouchView(context: Context) : View(context) {
                 lastSoundTimeMs = event.eventTime
 
                 if (hasSymmetry) {
-                    val symPts = computeAllSymmetricPoints(Point2D(effectiveDocPos.x, effectiveDocPos.y))
+                    val symPts = computeAllSymmetricPoints(Point2D(v.smoothedStrokeX, v.smoothedStrokeY))
                     for (idx in symPts.indices) {
-                        appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, pressure.toDouble())
+                        appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, v.smoothedStrokePressure)
                     }
                 }
 

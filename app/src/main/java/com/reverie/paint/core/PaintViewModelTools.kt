@@ -87,7 +87,12 @@ internal fun PaintViewModel.computeEffectivePressure(raw: Double): Double {
 
 internal fun PaintViewModel.computeStrokePressureFraction(raw: Double): Float {
     val effP = computeEffectivePressure(raw).toFloat().coerceIn(0f, 1f)
-    return ReverieCoreBridge.brushPressureFraction(effP)
+    val bridgeFrac = try {
+        ReverieCoreBridge.brushPressureFraction(effP)
+    } catch (_: Throwable) {
+        effP
+    }
+    return if (bridgeFrac > 0f && bridgeFrac < 1.0f) bridgeFrac else effP
 }
 
 private fun PaintViewModel.computeDynamicColor(pressure: Double = 1.0): String {
