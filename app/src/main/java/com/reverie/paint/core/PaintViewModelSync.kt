@@ -59,6 +59,7 @@ internal class SyncState {
     var lastBackupUploaded by mutableIntStateOf(0)
     var lastBackupSkipped by mutableIntStateOf(0)
     var lastBackupDeleted by mutableIntStateOf(0)
+    var lastBackupRemoteChanged by mutableIntStateOf(0)
     var lastBackupFailed by mutableIntStateOf(0)
     var lastBackupBytes by mutableLongStateOf(0L)
     var lastBackupError by mutableStateOf("")
@@ -68,6 +69,7 @@ internal class SyncState {
     var restoreDone by mutableIntStateOf(0)
     var restoreTotal by mutableIntStateOf(0)
     var lastRestoreDownloaded by mutableIntStateOf(0)
+    var lastRestoreUpdated by mutableIntStateOf(0)
     var lastRestoreSkipped by mutableIntStateOf(0)
     var lastRestoreConflicts by mutableIntStateOf(0)
     var lastRestoreFailed by mutableIntStateOf(0)
@@ -373,8 +375,9 @@ internal fun PaintViewModel.backupToCloud() {
                         }
                     val sources = syncSources()
                     val local = SyncEngine.scan(sources)
+                    val remoteEntries = SyncEngine.listRemoteAll(client, sources)
                     val result =
-                        SyncEngine.backup(client, sources, local, manifest) { done, total ->
+                        SyncEngine.backup(client, sources, local, manifest, remoteEntries) { done, total ->
                             syncState.backupDone = done
                             syncState.backupTotal = total
                         }
@@ -399,6 +402,7 @@ internal fun PaintViewModel.backupToCloud() {
             syncState.lastBackupUploaded = result.uploaded
             syncState.lastBackupSkipped = result.skipped
             syncState.lastBackupDeleted = result.deleted
+            syncState.lastBackupRemoteChanged = result.remoteChanged
             syncState.lastBackupFailed = result.failed
             syncState.lastBackupBytes = result.bytes
             syncState.lastBackupError = result.errors.firstOrNull() ?: ""
@@ -464,6 +468,7 @@ internal fun PaintViewModel.restoreFromCloud(category: SyncCategory) {
         } else {
             syncState.restoreStatus = SyncRestoreStatus.DONE
             syncState.lastRestoreDownloaded = result.downloaded
+            syncState.lastRestoreUpdated = result.updated
             syncState.lastRestoreSkipped = result.skipped
             syncState.lastRestoreConflicts = result.conflicts
             syncState.lastRestoreFailed = result.failed

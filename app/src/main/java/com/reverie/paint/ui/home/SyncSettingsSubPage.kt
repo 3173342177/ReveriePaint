@@ -543,6 +543,7 @@ private fun SyncBackupStatusLine(vm: PaintViewModel) {
                             state.lastBackupUploaded,
                             state.lastBackupSkipped,
                             state.lastBackupDeleted,
+                            state.lastBackupRemoteChanged,
                             state.lastBackupFailed,
                         ),
                     color = if (state.lastBackupFailed > 0) Color(0xFFE05555) else colors.accent,
@@ -597,6 +598,7 @@ private fun SyncRestoreStatusLine(vm: PaintViewModel) {
                             stringResource(
                                 R.string.sync_restore_result,
                                 state.lastRestoreDownloaded,
+                                state.lastRestoreUpdated,
                                 state.lastRestoreSkipped,
                                 state.lastRestoreConflicts,
                                 state.lastRestoreFailed,
