@@ -196,9 +196,6 @@ class CanvasTouchView(context: Context) : View(context) {
 
     // 硬件加速直出渲染 Paint
     var checkerboardPaint: Paint? = null
-    private val shadowPaint = Paint().apply {
-        color = android.graphics.Color.argb(0x80, 0, 0, 0)
-    }
     private val pixelGridPaint = Paint().apply {
         style = Paint.Style.STROKE
     }
@@ -1080,14 +1077,6 @@ class CanvasTouchView(context: Context) : View(context) {
             val scale = (canvasZoom * canvasFitScale).coerceAtLeast(0.001f)
             val centerX = viewW / 2f + canvasPanX
             val centerY = viewH / 2f + canvasPanY
-
-            // 绘制底座投影
-            canvas.save()
-            canvas.translate(centerX + 8f, centerY + 8f)
-            canvas.rotate(canvasRotation)
-            canvas.scale(scale, scale)
-            canvas.drawRect(-imgW / 2f, -imgH / 2f, imgW / 2f, imgH / 2f, shadowPaint)
-            canvas.restore()
 
             canvas.save()
             canvas.translate(centerX, centerY)
