@@ -226,6 +226,13 @@
     <!-- Settings -->
     <string name="settings_title">设置</string>
     <string name="settings_main_desc">应用偏好设置、界面主题与绘图硬件配置</string>
+    <string name="settings_group_touch_stylus">触控与手写笔</string>
+    <string name="settings_group_canvas_display">显示与色彩</string>
+    <string name="settings_group_efficiency">效率与辅助</string>
+    <string name="settings_group_advanced">高级设置</string>
+    <string name="canvas_group_specs">画布规格</string>
+    <string name="canvas_group_project">工程与图层</string>
+    <string name="canvas_group_transform">变换与调整</string>
     <string name="settings_group_preferences">个性化与偏好</string>
     <string name="settings_group_tools">偏好与硬件</string>
     <string name="settings_group_creation_copyright">创作与版权</string>

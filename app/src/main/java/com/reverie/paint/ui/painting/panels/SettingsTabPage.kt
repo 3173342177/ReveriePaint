@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Spacer
@@ -86,327 +87,284 @@ internal fun SettingsTabPage(
         label = "SettingsSubPageTransition",
     ) { subPage ->
         when (subPage) {
-            // ---- 1. 视图显示 (参考图 1) ----
+            // ---- 1. 视图显示 ----
             "VIEW" -> {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    // Header with back button
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(36.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { currentSubPage = null }
-                                .padding(4.dp),
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_arrow_left),
-                                contentDescription = stringResource(R.string.common_back),
-                                tint = Morandi.text,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            stringResource(R.string.settings_view_display),
-                            color = Morandi.text,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
+                    SubPageHeader(
+                        title = stringResource(R.string.settings_view_display),
+                        onBack = { currentSubPage = null },
+                    )
 
-                    Spacer(Modifier.height(8.dp))
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border))
-                    Spacer(Modifier.height(8.dp))
-
-                    // 快捷滑块: 单选 流量 vs 不透明度
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(stringResource(R.string.settings_quick_slider), color = Morandi.text, fontSize = 13.sp)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            // 流量 (Flow)
-                            val isFlow = vm.quickSliderMode == 1
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable { vm.updateQuickSliderMode(1) },
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .border(
-                                            width = if (isFlow) 5.dp else 1.5.dp,
-                                            color = if (isFlow) Morandi.accent else Morandi.subText,
-                                            shape = CircleShape,
-                                        ),
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    stringResource(R.string.settings_quick_slider_flow),
-                                    color = if (isFlow) Morandi.text else Morandi.subText,
-                                    fontSize = 12.sp,
-                                )
-                            }
-
-                            // 不透明度 (Opacity)
-                            val isOpacity = vm.quickSliderMode == 0
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable { vm.updateQuickSliderMode(0) },
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .border(
-                                            width = if (isOpacity) 5.dp else 1.5.dp,
-                                            color = if (isOpacity) Morandi.accent else Morandi.subText,
-                                            shape = CircleShape,
-                                        ),
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    stringResource(R.string.settings_quick_slider_opacity),
-                                    color = if (isOpacity) Morandi.text else Morandi.subText,
-                                    fontSize = 12.sp,
-                                )
-                            }
-                        }
-                    }
-
-                    // 面板固定与自由平移 (画笔与图层面板)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                            Text(
-                                text = stringResource(R.string.settings_panel_pinning_title),
-                                color = Morandi.text,
-                                fontSize = 13.sp,
-                            )
-                            Text(
-                                text = stringResource(R.string.settings_panel_pinning_desc),
-                                color = Morandi.subText,
-                                fontSize = 11.sp,
-                            )
-                        }
-                        ReSwitch(
-                            checked = vm.panelPinningEnabled,
-                            onChecked = { vm.updatePanelPinningEnabled(it) },
-                        )
-                    }
-
-                    // 图层项高度: 分段卡片式控件 (避免单行挤压)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.settings_layer_row_height),
-                                color = Morandi.text,
-                                fontSize = 13.sp,
-                            )
-                            Text(
-                                text = "${vm.layerRowHeightDp} dp",
-                                color = Morandi.accent,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
+                    // 控件与交互设置卡片
+                    SettingsCard {
+                        // 快捷滑块: 单选 流量 vs 不透明度
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(44.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Morandi.panelHi)
-                                .padding(3.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            listOf(
-                                44 to R.string.settings_layer_height_compact,
-                                52 to R.string.settings_layer_height_standard,
-                                64 to R.string.settings_layer_height_spacious,
-                            ).forEach { (h, strRes) ->
-                                val selected = vm.layerRowHeightDp == h
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (selected) Morandi.accent else Color.Transparent)
-                                        .clickable { vm.updateLayerRowHeight(h) },
-                                    contentAlignment = Alignment.Center,
+                            Text(stringResource(R.string.settings_quick_slider), color = Morandi.text, fontSize = 13.sp)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                // 流量 (Flow)
+                                val isFlow = vm.quickSliderMode == 1
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable { vm.updateQuickSliderMode(1) },
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center,
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .border(
+                                                width = if (isFlow) 5.dp else 1.5.dp,
+                                                color = if (isFlow) Morandi.accent else Morandi.subText,
+                                                shape = CircleShape,
+                                            ),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        stringResource(R.string.settings_quick_slider_flow),
+                                        color = if (isFlow) Morandi.text else Morandi.subText,
+                                        fontSize = 12.sp,
+                                    )
+                                }
+
+                                // 不透明度 (Opacity)
+                                val isOpacity = vm.quickSliderMode == 0
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable { vm.updateQuickSliderMode(0) },
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .border(
+                                                width = if (isOpacity) 5.dp else 1.5.dp,
+                                                color = if (isOpacity) Morandi.accent else Morandi.subText,
+                                                shape = CircleShape,
+                                            ),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        stringResource(R.string.settings_quick_slider_opacity),
+                                        color = if (isOpacity) Morandi.text else Morandi.subText,
+                                        fontSize = 12.sp,
+                                    )
+                                }
+                            }
+                        }
+
+                        SettingsInnerDivider()
+
+                        // 面板固定与自由平移 (画笔与图层面板)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text(
+                                    text = stringResource(R.string.settings_panel_pinning_title),
+                                    color = Morandi.text,
+                                    fontSize = 13.sp,
+                                )
+                                Text(
+                                    text = stringResource(R.string.settings_panel_pinning_desc),
+                                    color = Morandi.subText,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                            ReSwitch(
+                                checked = vm.panelPinningEnabled,
+                                onChecked = { vm.updatePanelPinningEnabled(it) },
+                            )
+                        }
+
+                        SettingsInnerDivider()
+
+                        // 图层项高度
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.settings_layer_row_height),
+                                    color = Morandi.text,
+                                    fontSize = 13.sp,
+                                )
+                                Text(
+                                    text = "${vm.layerRowHeightDp} dp",
+                                    color = Morandi.accent,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Morandi.panel)
+                                    .padding(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                listOf(
+                                    44 to R.string.settings_layer_height_compact,
+                                    52 to R.string.settings_layer_height_standard,
+                                    64 to R.string.settings_layer_height_spacious,
+                                ).forEach { (h, strRes) ->
+                                    val selected = vm.layerRowHeightDp == h
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (selected) Morandi.accent else Color.Transparent)
+                                            .clickable { vm.updateLayerRowHeight(h) },
+                                        contentAlignment = Alignment.Center,
                                     ) {
-                                        Text(
-                                            text = stringResource(strRes),
-                                            color = if (selected) Color.White else Morandi.subText,
-                                            fontSize = 12.sp,
-                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                            maxLines = 1,
-                                        )
-                                        Text(
-                                            text = "${h}dp",
-                                            color = if (selected) Color.White.copy(alpha = 0.8f) else Morandi.subText.copy(alpha = 0.65f),
-                                            fontSize = 10.sp,
-                                            maxLines = 1,
-                                        )
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center,
+                                        ) {
+                                            Text(
+                                                text = stringResource(strRes),
+                                                color = if (selected) Color.White else Morandi.subText,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                                maxLines = 1,
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    // 画布可旋转
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(stringResource(R.string.settings_canvas_rotation), color = Morandi.text, fontSize = 13.sp)
-                        ReSwitch(
-                            checked = vm.canvasRotationEnabled,
-                            onChecked = { vm.updateCanvasRotationEnabled(it) },
-                        )
-                    }
+                    // 画布视口与辅助设置卡片
+                    SettingsCard {
+                        // 画布可旋转
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(stringResource(R.string.settings_canvas_rotation), color = Morandi.text, fontSize = 13.sp)
+                            ReSwitch(
+                                checked = vm.canvasRotationEnabled,
+                                onChecked = { vm.updateCanvasRotationEnabled(it) },
+                            )
+                        }
 
-                    // 放大插值
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(stringResource(R.string.settings_magnification_interpolation), color = Morandi.text, fontSize = 13.sp)
-                        ReSwitch(
-                            checked = vm.magnificationInterpolation,
-                            onChecked = { vm.updateMagnificationInterpolation(it) },
-                        )
-                    }
+                        SettingsInnerDivider()
 
-                    // 放大显示网格线
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(stringResource(R.string.settings_pixel_grid), color = Morandi.text, fontSize = 13.sp)
-                        ReSwitch(
-                            checked = vm.pixelGridEnabled,
-                            onChecked = { vm.updatePixelGridEnabled(it) },
-                        )
-                    }
+                        // 放大插值
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(stringResource(R.string.settings_magnification_interpolation), color = Morandi.text, fontSize = 13.sp)
+                            ReSwitch(
+                                checked = vm.magnificationInterpolation,
+                                onChecked = { vm.updateMagnificationInterpolation(it) },
+                            )
+                        }
 
-                    // 撤销操作提醒
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(stringResource(R.string.settings_undo_toast), color = Morandi.text, fontSize = 13.sp)
-                        ReSwitch(
-                            checked = vm.undoToastEnabled,
-                            onChecked = { vm.updateUndoToastEnabled(it) },
-                        )
-                    }
+                        SettingsInnerDivider()
 
-                    Spacer(Modifier.height(8.dp))
+                        // 放大显示网格线
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(stringResource(R.string.settings_pixel_grid), color = Morandi.text, fontSize = 13.sp)
+                            ReSwitch(
+                                checked = vm.pixelGridEnabled,
+                                onChecked = { vm.updatePixelGridEnabled(it) },
+                            )
+                        }
+
+                        SettingsInnerDivider()
+
+                        // 撤销操作提醒
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(stringResource(R.string.settings_undo_toast), color = Morandi.text, fontSize = 13.sp)
+                            ReSwitch(
+                                checked = vm.undoToastEnabled,
+                                onChecked = { vm.updateUndoToastEnabled(it) },
+                            )
+                        }
+                    }
                 }
             }
 
-            // ---- 2. 快捷键设置 (参考图 2) ----
+            // ---- 2. 快捷键设置 ----
             "SHORTCUTS" -> {
                 var activeCategory by remember { mutableStateOf(ShortcutCategory.PAINTING) }
 
                 Column(
                     modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    // Header: ✕ 快捷键设置 on left, 重置 on right
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(36.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable { currentSubPage = null }
-                                    .padding(4.dp),
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_x),
-                                    contentDescription = stringResource(R.string.common_close),
-                                    tint = Morandi.text,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                            Spacer(Modifier.width(6.dp))
+                    SubPageHeader(
+                        title = stringResource(R.string.settings_shortcuts_title),
+                        onBack = { currentSubPage = null },
+                        action = {
                             Text(
-                                stringResource(R.string.settings_shortcuts_title),
-                                color = Morandi.text,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
+                                stringResource(R.string.settings_shortcut_reset),
+                                color = Morandi.accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Morandi.panelHi)
+                                    .clickable { vm.resetShortcuts() }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
+                    )
 
-                        Text(
-                            stringResource(R.string.settings_shortcut_reset),
-                            color = Morandi.accent,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable { vm.resetShortcuts() }
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    // 4 Category Tabs
+                    // 4 Category Tabs in capsule bar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceAround,
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Morandi.panelHi.copy(alpha = 0.6f))
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         val tabs = listOf(
                             ShortcutCategory.PAINTING to R.drawable.ic_brush,
@@ -416,23 +374,30 @@ internal fun SettingsTabPage(
                         )
                         tabs.forEach { (cat, iconRes) ->
                             val isSel = activeCategory == cat
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                            Row(
                                 modifier = Modifier
+                                    .weight(1f)
                                     .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSel) Morandi.panel else Color.Transparent)
+                                    .then(
+                                        if (isSel) Modifier.border(1.dp, Morandi.border.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                        else Modifier
+                                    )
                                     .clickable { activeCategory = cat }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
                                     painter = painterResource(iconRes),
                                     contentDescription = stringResource(cat.titleRes),
                                     tint = if (isSel) Morandi.accent else Morandi.subText,
-                                    modifier = Modifier.size(20.dp),
+                                    modifier = Modifier.size(15.dp),
                                 )
-                                Spacer(Modifier.height(2.dp))
+                                Spacer(Modifier.width(4.dp))
                                 Text(
                                     stringResource(cat.titleRes),
-                                    color = if (isSel) Morandi.accent else Morandi.subText,
+                                    color = if (isSel) Morandi.text else Morandi.subText,
                                     fontSize = 11.sp,
                                     fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
                                 )
@@ -440,20 +405,20 @@ internal fun SettingsTabPage(
                         }
                     }
 
-                    Spacer(Modifier.height(6.dp))
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border))
-                    Spacer(Modifier.height(4.dp))
-
-                    // Shortcuts List
+                    // Shortcuts List Card
                     val items = ALL_SHORTCUT_DEFINITIONS.filter { it.category == activeCategory }
                     val noneStr = stringResource(R.string.shortcut_none)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(320.dp)
-                            .verticalScroll(rememberScrollState()),
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Morandi.panelHi.copy(alpha = 0.55f))
+                            .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
-                        items.forEach { def ->
+                        items.forEachIndexed { idx, def ->
                             val currentKey = vm.getShortcutKey(def.id)
                             val isNone = currentKey == "无" || currentKey == "None"
                             Row(
@@ -461,7 +426,7 @@ internal fun SettingsTabPage(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(6.dp))
                                     .clickable { recordingShortcut = def }
-                                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                                    .padding(horizontal = 4.dp, vertical = 7.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
@@ -474,16 +439,20 @@ internal fun SettingsTabPage(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(Morandi.panelHi)
-                                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                                        .background(Morandi.panel)
+                                        .border(1.dp, Morandi.border.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
                                 ) {
                                     Text(
                                         if (isNone) noneStr else currentKey,
-                                        color = if (isNone) Morandi.subText else Morandi.text,
+                                        color = if (isNone) Morandi.subText else Morandi.accent,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
                                     )
                                 }
+                            }
+                            if (idx < items.lastIndex) {
+                                SettingsInnerDivider()
                             }
                         }
                     }
@@ -496,120 +465,95 @@ internal fun SettingsTabPage(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    // Header with back button
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(36.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
+                    SubPageHeader(
+                        title = stringResource(R.string.settings_gestures),
+                        onBack = { currentSubPage = null },
+                    )
+
+                    SettingsCard {
+                        Row(
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { currentSubPage = null }
-                                .padding(4.dp),
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_arrow_left),
-                                contentDescription = stringResource(R.string.common_back),
-                                tint = Morandi.text,
-                                modifier = Modifier.size(18.dp),
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(stringResource(R.string.settings_two_finger_undo_title), color = Morandi.text, fontSize = 13.sp)
+                                Text(stringResource(R.string.settings_two_finger_undo_desc), color = Morandi.subText, fontSize = 11.sp)
+                            }
+                            ReSwitch(
+                                checked = vm.gestureTwoFingerUndo,
+                                onChecked = { vm.updateGestureTwoFingerUndo(it) },
                             )
                         }
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            stringResource(R.string.settings_gestures),
-                            color = Morandi.text,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
 
-                    Spacer(Modifier.height(8.dp))
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border))
-                    Spacer(Modifier.height(8.dp))
+                        SettingsInnerDivider()
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            Text(stringResource(R.string.settings_two_finger_undo_title), color = Morandi.text, fontSize = 13.sp)
-                            Text(stringResource(R.string.settings_two_finger_undo_desc), color = Morandi.subText, fontSize = 11.sp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(stringResource(R.string.settings_three_finger_redo_title), color = Morandi.text, fontSize = 13.sp)
+                                Text(stringResource(R.string.settings_three_finger_redo_desc), color = Morandi.subText, fontSize = 11.sp)
+                            }
+                            ReSwitch(
+                                checked = vm.gestureThreeFingerRedo,
+                                onChecked = { vm.updateGestureThreeFingerRedo(it) },
+                            )
                         }
-                        ReSwitch(
-                            checked = vm.gestureTwoFingerUndo,
-                            onChecked = { vm.updateGestureTwoFingerUndo(it) },
-                        )
-                    }
 
-                    Spacer(Modifier.height(6.dp))
+                        SettingsInnerDivider()
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            Text(stringResource(R.string.settings_three_finger_redo_title), color = Morandi.text, fontSize = 13.sp)
-                            Text(stringResource(R.string.settings_three_finger_redo_desc), color = Morandi.subText, fontSize = 11.sp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(stringResource(R.string.settings_quick_pinch_fit_title), color = Morandi.text, fontSize = 13.sp)
+                                Text(stringResource(R.string.settings_quick_pinch_fit_desc), color = Morandi.subText, fontSize = 11.sp)
+                            }
+                            ReSwitch(
+                                checked = vm.gestureQuickPinchFit,
+                                onChecked = { vm.updateGestureQuickPinchFit(it) },
+                            )
                         }
-                        ReSwitch(
-                            checked = vm.gestureThreeFingerRedo,
-                            onChecked = { vm.updateGestureThreeFingerRedo(it) },
-                        )
-                    }
 
-                    Spacer(Modifier.height(6.dp))
+                        SettingsInnerDivider()
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            Text(stringResource(R.string.settings_quick_pinch_fit_title), color = Morandi.text, fontSize = 13.sp)
-                            Text(stringResource(R.string.settings_quick_pinch_fit_desc), color = Morandi.subText, fontSize = 11.sp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(stringResource(R.string.settings_pen_mode_single_finger_pan_title), color = Morandi.text, fontSize = 13.sp)
+                                Text(stringResource(R.string.settings_pen_mode_single_finger_pan_desc), color = Morandi.subText, fontSize = 11.sp)
+                            }
+                            ReSwitch(
+                                checked = vm.penModeSingleFingerPanEnabled,
+                                onChecked = { vm.updatePenModeSingleFingerPan(it) },
+                            )
                         }
-                        ReSwitch(
-                            checked = vm.gestureQuickPinchFit,
-                            onChecked = { vm.updateGestureQuickPinchFit(it) },
-                        )
                     }
 
-                    Spacer(Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            Text(stringResource(R.string.settings_pen_mode_single_finger_pan_title), color = Morandi.text, fontSize = 13.sp)
-                            Text(stringResource(R.string.settings_pen_mode_single_finger_pan_desc), color = Morandi.subText, fontSize = 11.sp)
-                        }
-                        ReSwitch(
-                            checked = vm.penModeSingleFingerPanEnabled,
-                            onChecked = { vm.updatePenModeSingleFingerPan(it) },
-                        )
-                    }
-
-                    Spacer(Modifier.height(10.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Morandi.panelHi)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Morandi.panelHi.copy(alpha = 0.5f))
+                            .border(1.dp, Morandi.border.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
                             .padding(10.dp),
                     ) {
                         Text(
@@ -619,7 +563,6 @@ internal fun SettingsTabPage(
                             lineHeight = 16.sp,
                         )
                     }
-                    Spacer(Modifier.height(6.dp))
                 }
             }
 
@@ -629,160 +572,139 @@ internal fun SettingsTabPage(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(36.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { currentSubPage = null }
-                                .padding(4.dp),
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_arrow_left),
-                                contentDescription = stringResource(R.string.common_back),
-                                tint = Morandi.text,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            stringResource(R.string.settings_color_title),
-                            color = Morandi.text,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
+                    SubPageHeader(
+                        title = stringResource(R.string.settings_color_title),
+                        onBack = { currentSubPage = null },
+                    )
 
-                    Spacer(Modifier.height(8.dp))
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border))
-                    Spacer(Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            Text(stringResource(R.string.settings_eyedropper_long_press_title), color = Morandi.text, fontSize = 13.sp)
-                            Text(
-                                if (vm.penOnlyMode) stringResource(R.string.settings_eyedropper_long_press_stylus_desc)
-                                else stringResource(R.string.settings_eyedropper_long_press_finger_desc),
-                                color = Morandi.subText,
-                                fontSize = 11.sp,
-                            )
-                        }
-                        ReSwitch(
-                            checked = vm.longPressEyedropperEnabled,
-                            onChecked = { vm.updateLongPressEyedropperEnabled(it) },
-                        )
-                    }
-
-                    if (vm.longPressEyedropperEnabled) {
-                        Spacer(Modifier.height(10.dp))
-
-                        val sensitivityLabels = listOf(
-                            stringResource(R.string.settings_eyedropper_speed_lowest),
-                            stringResource(R.string.settings_eyedropper_speed_slow),
-                            stringResource(R.string.settings_eyedropper_speed_normal),
-                            stringResource(R.string.settings_eyedropper_speed_fast),
-                            stringResource(R.string.settings_eyedropper_speed_highest),
-                        )
-                        val sensitivityTimes = listOf("600ms", "520ms", "450ms", "380ms", "320ms")
-                        val curIdx = (vm.eyedropperSensitivity - 1).coerceIn(0, 4)
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(stringResource(R.string.settings_eyedropper_sensitivity), color = Morandi.text, fontSize = 13.sp)
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(Morandi.panel)
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                            ) {
-                                Text(
-                                    stringResource(
-                                        R.string.settings_eyedropper_level_summary,
-                                        vm.eyedropperSensitivity,
-                                        sensitivityLabels[curIdx],
-                                        sensitivityTimes[curIdx]
-                                    ),
-                                    color = Morandi.subText,
-                                    fontSize = 11.sp,
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-
+                    SettingsCard {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Morandi.panel)
-                                .padding(2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            for (i in 1..5) {
-                                val isSelected = vm.eyedropperSensitivity == i
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (isSelected) Morandi.accent else Color.Transparent)
-                                        .clickable { vm.updateEyedropperSensitivity(i) },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        stringResource(R.string.settings_eyedropper_level_suffix, i),
-                                        color = if (isSelected) Color.White else Morandi.subText,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                Text(stringResource(R.string.settings_eyedropper_offset_title), color = Morandi.text, fontSize = 13.sp)
+                                Text(stringResource(R.string.settings_eyedropper_long_press_title), color = Morandi.text, fontSize = 13.sp)
                                 Text(
-                                    stringResource(R.string.settings_eyedropper_offset_desc),
+                                    if (vm.penOnlyMode) stringResource(R.string.settings_eyedropper_long_press_stylus_desc)
+                                    else stringResource(R.string.settings_eyedropper_long_press_finger_desc),
                                     color = Morandi.subText,
                                     fontSize = 11.sp,
                                 )
                             }
                             ReSwitch(
-                                checked = vm.eyedropperOffsetEnabled,
-                                onChecked = { vm.updateEyedropperOffsetEnabled(it) },
+                                checked = vm.longPressEyedropperEnabled,
+                                onChecked = { vm.updateLongPressEyedropperEnabled(it) },
                             )
+                        }
+
+                        if (vm.longPressEyedropperEnabled) {
+                            SettingsInnerDivider()
+
+                            val sensitivityLabels = listOf(
+                                stringResource(R.string.settings_eyedropper_speed_lowest),
+                                stringResource(R.string.settings_eyedropper_speed_slow),
+                                stringResource(R.string.settings_eyedropper_speed_normal),
+                                stringResource(R.string.settings_eyedropper_speed_fast),
+                                stringResource(R.string.settings_eyedropper_speed_highest),
+                            )
+                            val sensitivityTimes = listOf("600ms", "520ms", "450ms", "380ms", "320ms")
+                            val curIdx = (vm.eyedropperSensitivity - 1).coerceIn(0, 4)
+
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(stringResource(R.string.settings_eyedropper_sensitivity), color = Morandi.text, fontSize = 13.sp)
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Morandi.panel)
+                                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                                    ) {
+                                        Text(
+                                            stringResource(
+                                                R.string.settings_eyedropper_level_summary,
+                                                vm.eyedropperSensitivity,
+                                                sensitivityLabels[curIdx],
+                                                sensitivityTimes[curIdx]
+                                            ),
+                                            color = Morandi.subText,
+                                            fontSize = 11.sp,
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Morandi.panel)
+                                        .padding(2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    for (i in 1..5) {
+                                        val isSelected = vm.eyedropperSensitivity == i
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxHeight()
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (isSelected) Morandi.accent else Color.Transparent)
+                                                .clickable { vm.updateEyedropperSensitivity(i) },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text(
+                                                stringResource(R.string.settings_eyedropper_level_suffix, i),
+                                                color = if (isSelected) Color.White else Morandi.subText,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            SettingsInnerDivider()
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(stringResource(R.string.settings_eyedropper_offset_title), color = Morandi.text, fontSize = 13.sp)
+                                    Text(
+                                        stringResource(R.string.settings_eyedropper_offset_desc),
+                                        color = Morandi.subText,
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                                ReSwitch(
+                                    checked = vm.eyedropperOffsetEnabled,
+                                    onChecked = { vm.updateEyedropperOffsetEnabled(it) },
+                                )
+                            }
                         }
                     }
 
-                    Spacer(Modifier.height(12.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Morandi.panelHi)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Morandi.panelHi.copy(alpha = 0.5f))
+                            .border(1.dp, Morandi.border.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
                             .padding(10.dp),
                     ) {
                         Text(
@@ -792,7 +714,6 @@ internal fun SettingsTabPage(
                             lineHeight = 16.sp,
                         )
                     }
-                    Spacer(Modifier.height(6.dp))
                 }
             }
 
@@ -802,166 +723,188 @@ internal fun SettingsTabPage(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    // 1. 笔模式 (快速切换)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(stringResource(R.string.settings_pen_mode), color = Morandi.text, fontSize = 13.sp)
-                        ReSwitch(
-                            checked = vm.penOnlyMode,
-                            onChecked = { vm.updatePenOnlyMode(it) },
-                        )
-                    }
-
-                    Spacer(Modifier.height(6.dp))
-
-                    // List item links with chevron
-                    SettingNavRow(stringResource(R.string.settings_view_display)) {
-                        currentSubPage = "VIEW"
-                    }
-                    SettingNavRow(stringResource(R.string.settings_gestures)) {
-                        currentSubPage = "GESTURE"
-                    }
-                    SettingNavRow(stringResource(R.string.settings_stylus)) {
-                        vm.openMoreSettings("STYLUS")
-                        onClose()
-                    }
-                    SettingNavRow(stringResource(R.string.settings_shortcuts_title)) {
-                        currentSubPage = "SHORTCUTS"
-                    }
-                    SettingNavRow(stringResource(R.string.settings_color_title)) {
-                        currentSubPage = "COLOR"
-                    }
-
-                    // 更多设置 -> 绘画页内全屏覆盖层（不退出画布）
-                    SettingNavRow(stringResource(R.string.settings_more_settings)) {
-                        vm.openMoreSettings("MAIN")
-                        onClose()
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    // 抖动修正 (Stroke Stabilizer)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(stringResource(R.string.settings_stroke_stabilizer), color = Morandi.text, fontSize = 13.sp)
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Morandi.panel)
-                                .padding(horizontal = 8.dp, vertical = 2.dp),
-                        ) {
-                            Text("${(vm.strokeStabilizer * 100).roundToInt()}%", color = Morandi.subText, fontSize = 12.sp)
-                        }
-                    }
-
-                    Spacer(Modifier.height(6.dp))
-
-                    // Interactive Stabilizer Slider
-                    BoxWithConstraints(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(24.dp)
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    val w = size.width.toFloat()
-                                    if (w <= 0f) return@awaitEachGesture
-
-                                    val thumbRadiusPx = 8.dp.toPx()
-                                    val usableWidthPx = (w - thumbRadiusPx * 2).coerceAtLeast(1f)
-                                    val touchSlop = viewConfiguration.touchSlop
-                                    var isDragging = false
-                                    var isScrollingVertically = false
-
-                                    fun updateFromX(x: Float) {
-                                        val frac = ((x - thumbRadiusPx) / usableWidthPx).coerceIn(0f, 1f)
-                                        vm.updateStrokeStabilizer(frac)
-                                    }
-
-                                    while (true) {
-                                        val event = awaitPointerEvent()
-                                        val change = event.changes.firstOrNull() ?: break
-                                        if (!change.pressed) {
-                                            if (!isScrollingVertically && !isDragging) {
-                                                updateFromX(change.position.x)
-                                            }
-                                            break
-                                        }
-
-                                        if (isScrollingVertically) break
-
-                                        val dx = change.position.x - down.position.x
-                                        val dy = change.position.y - down.position.y
-                                        val absDx = kotlin.math.abs(dx)
-                                        val absDy = kotlin.math.abs(dy)
-
-                                        if (!isDragging) {
-                                            if (absDy > touchSlop && absDy > absDx) {
-                                                isScrollingVertically = true
-                                                break
-                                            } else if (absDx > touchSlop && absDx >= absDy) {
-                                                isDragging = true
-                                            }
-                                        }
-
-                                        if (isDragging) {
-                                            change.consume()
-                                            updateFromX(change.position.x)
-                                        }
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        val trackWidth = maxWidth
-                        val thumbSize = 16.dp
-                        val maxTravel = (trackWidth - thumbSize).coerceAtLeast(0.dp)
-                        val thumbOffset = maxTravel * vm.strokeStabilizer.coerceIn(0f, 1f)
-                        val activeTrackWidth = if (vm.strokeStabilizer <= 0f) {
-                            0.dp
-                        } else {
-                            (thumbOffset + thumbSize / 2).coerceAtMost(trackWidth)
-                        }
-
-                        // Track
-                        Box(
+                    // 1. 触控与手写笔
+                    SettingsGroupCard(title = stringResource(R.string.settings_group_touch_stylus)) {
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(Morandi.panel),
-                        )
-                        // Active Track
-                        if (activeTrackWidth > 0.dp) {
-                            Box(
-                                modifier = Modifier
-                                    .width(activeTrackWidth)
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Morandi.accent),
+                                .height(40.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(stringResource(R.string.settings_pen_mode), color = Morandi.text, fontSize = 13.sp)
+                            ReSwitch(
+                                checked = vm.penOnlyMode,
+                                onChecked = { vm.updatePenOnlyMode(it) },
                             )
                         }
-                        // Thumb
-                        Box(
-                            modifier = Modifier
-                                .padding(start = thumbOffset)
-                                .size(thumbSize)
-                                .clip(CircleShape)
-                                .background(Morandi.text)
-                                .border(2.dp, Morandi.panelHi, CircleShape),
-                        )
+
+                        SettingsInnerDivider()
+
+                        SettingNavRow(stringResource(R.string.settings_gestures)) {
+                            currentSubPage = "GESTURE"
+                        }
+
+                        SettingsInnerDivider()
+
+                        SettingNavRow(stringResource(R.string.settings_stylus)) {
+                            vm.openMoreSettings("STYLUS")
+                            onClose()
+                        }
                     }
 
-                    Spacer(Modifier.height(6.dp))
+                    // 2. 显示与色彩
+                    SettingsGroupCard(title = stringResource(R.string.settings_group_canvas_display)) {
+                        SettingNavRow(stringResource(R.string.settings_view_display)) {
+                            currentSubPage = "VIEW"
+                        }
+
+                        SettingsInnerDivider()
+
+                        SettingNavRow(stringResource(R.string.settings_color_title)) {
+                            currentSubPage = "COLOR"
+                        }
+                    }
+
+                    // 3. 效率与辅助
+                    SettingsGroupCard(title = stringResource(R.string.settings_group_efficiency)) {
+                        SettingNavRow(stringResource(R.string.settings_shortcuts_title)) {
+                            currentSubPage = "SHORTCUTS"
+                        }
+
+                        SettingsInnerDivider()
+
+                        // 抖动修正 (Stroke Stabilizer)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(stringResource(R.string.settings_stroke_stabilizer), color = Morandi.text, fontSize = 13.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Morandi.panel)
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                ) {
+                                    Text("${(vm.strokeStabilizer * 100).roundToInt()}%", color = Morandi.subText, fontSize = 12.sp)
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            // Interactive Stabilizer Slider
+                            BoxWithConstraints(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(24.dp)
+                                    .pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown(requireUnconsumed = false)
+                                            val w = size.width.toFloat()
+                                            if (w <= 0f) return@awaitEachGesture
+
+                                            val thumbRadiusPx = 8.dp.toPx()
+                                            val usableWidthPx = (w - thumbRadiusPx * 2).coerceAtLeast(1f)
+                                            val touchSlop = viewConfiguration.touchSlop
+                                            var isDragging = false
+                                            var isScrollingVertically = false
+
+                                            fun updateFromX(x: Float) {
+                                                val frac = ((x - thumbRadiusPx) / usableWidthPx).coerceIn(0f, 1f)
+                                                vm.updateStrokeStabilizer(frac)
+                                            }
+
+                                            while (true) {
+                                                val event = awaitPointerEvent()
+                                                val change = event.changes.firstOrNull() ?: break
+                                                if (!change.pressed) {
+                                                    if (!isScrollingVertically && !isDragging) {
+                                                        updateFromX(change.position.x)
+                                                    }
+                                                    break
+                                                }
+
+                                                if (isScrollingVertically) break
+
+                                                val dx = change.position.x - down.position.x
+                                                val dy = change.position.y - down.position.y
+                                                val absDx = kotlin.math.abs(dx)
+                                                val absDy = kotlin.math.abs(dy)
+
+                                                if (!isDragging) {
+                                                    if (absDy > touchSlop && absDy > absDx) {
+                                                        isScrollingVertically = true
+                                                        break
+                                                    } else if (absDx > touchSlop && absDx >= absDy) {
+                                                        isDragging = true
+                                                    }
+                                                }
+
+                                                if (isDragging) {
+                                                    change.consume()
+                                                    updateFromX(change.position.x)
+                                                }
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                val trackWidth = maxWidth
+                                val thumbSize = 16.dp
+                                val maxTravel = (trackWidth - thumbSize).coerceAtLeast(0.dp)
+                                val thumbOffset = maxTravel * vm.strokeStabilizer.coerceIn(0f, 1f)
+                                val activeTrackWidth = if (vm.strokeStabilizer <= 0f) {
+                                    0.dp
+                                } else {
+                                    (thumbOffset + thumbSize / 2).coerceAtMost(trackWidth)
+                                }
+
+                                // Track
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(Morandi.panel),
+                                )
+                                // Active Track
+                                if (activeTrackWidth > 0.dp) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(activeTrackWidth)
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(Morandi.accent),
+                                    )
+                                }
+                                // Thumb
+                                Box(
+                                    modifier = Modifier
+                                        .padding(start = thumbOffset)
+                                        .size(thumbSize)
+                                        .clip(CircleShape)
+                                        .background(Morandi.text)
+                                        .border(2.dp, Morandi.panelHi, CircleShape),
+                                )
+                            }
+                        }
+                    }
+
+                    // 4. 高级设置
+                    SettingsGroupCard(title = stringResource(R.string.settings_group_advanced)) {
+                        SettingNavRow(stringResource(R.string.settings_more_settings)) {
+                            vm.openMoreSettings("MAIN")
+                            onClose()
+                        }
+                    }
                 }
             }
         }
@@ -1091,9 +1034,10 @@ internal fun SettingNavRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(38.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .clickable { onClick() },
+            .height(40.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -1102,7 +1046,7 @@ internal fun SettingNavRow(
             painter = painterResource(R.drawable.ic_chevron),
             contentDescription = null,
             tint = Morandi.subText,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
         )
     }
 }
@@ -1120,5 +1064,95 @@ internal fun SettingInfoRow(
     ) {
         Text(label, color = Morandi.subText, fontSize = 12.sp, modifier = Modifier.width(72.dp))
         Text(value, color = Morandi.text, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun SettingsGroupCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            color = Morandi.subText,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Morandi.panelHi.copy(alpha = 0.55f))
+                .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun SettingsCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Morandi.panelHi.copy(alpha = 0.55f))
+            .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun SettingsInnerDivider() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(Morandi.border.copy(alpha = 0.35f))
+    )
+}
+
+@Composable
+private fun SubPageHeader(
+    title: String,
+    onBack: () -> Unit,
+    action: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(36.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onBack() }
+                .padding(vertical = 4.dp, horizontal = 2.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_arrow_left),
+                contentDescription = stringResource(R.string.common_back),
+                tint = Morandi.text,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                title,
+                color = Morandi.text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        action?.invoke()
     }
 }

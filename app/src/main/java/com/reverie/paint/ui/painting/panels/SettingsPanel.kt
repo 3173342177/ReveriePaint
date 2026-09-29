@@ -119,7 +119,7 @@ fun SettingsPanel(
                     end = if (vm.leftHandMode) 0.dp else 8.dp,
                     bottom = 16.dp,
                 )
-                .width(340.dp)
+                .width(350.dp)
                 .heightIn(max = (LocalConfiguration.current.screenHeightDp - 60).coerceAtLeast(240).dp)
                 .shadow(16.dp, panelShape, spotColor = Color.Black.copy(alpha = 0.5f))
                 .clip(panelShape)
@@ -141,33 +141,38 @@ fun SettingsPanel(
                     onClick = {}
                 ),
         ) {
-            // Top tab icons (3 tabs: 画布, 导出, 设置)
+            // Segmented Capsule Tab Bar (3 tabs: 画布, 导出, 设置)
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Morandi.panelHi.copy(alpha = 0.6f))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                TabHeaderItem(
+                TabCapsuleItem(
                     icon = R.drawable.ic_canvas_tab,
                     label = stringResource(R.string.panel_tab_canvas),
                     selected = currentTab == SettingsTab.CANVAS,
-                    onClick = { currentTab = SettingsTab.CANVAS }
+                    onClick = { currentTab = SettingsTab.CANVAS },
+                    modifier = Modifier.weight(1f),
                 )
-                TabHeaderItem(
+                TabCapsuleItem(
                     icon = R.drawable.ic_export_tab,
                     label = stringResource(R.string.panel_tab_export),
                     selected = currentTab == SettingsTab.EXPORT,
-                    onClick = { currentTab = SettingsTab.EXPORT }
+                    onClick = { currentTab = SettingsTab.EXPORT },
+                    modifier = Modifier.weight(1f),
                 )
-                TabHeaderItem(
+                TabCapsuleItem(
                     icon = R.drawable.ic_settings,
                     label = stringResource(R.string.panel_tab_settings),
                     selected = currentTab == SettingsTab.SETTINGS,
-                    onClick = { currentTab = SettingsTab.SETTINGS }
+                    onClick = { currentTab = SettingsTab.SETTINGS },
+                    modifier = Modifier.weight(1f),
                 )
             }
-            
-            Spacer(Modifier.height(10.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border))
+
             Spacer(Modifier.height(10.dp))
 
             AnimatedContent(
@@ -190,36 +195,41 @@ fun SettingsPanel(
 }
 
 @Composable
-private fun TabHeaderItem(
+private fun TabCapsuleItem(
     icon: Int,
     label: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val activeColor = Morandi.accent
-    val inactiveColor = Morandi.icon
-    val textColor = if (selected) activeColor else Morandi.text
+    val interaction = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(9.dp)
 
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(if (selected) Morandi.panel else Color.Transparent)
+            .then(
+                if (selected) Modifier.border(1.dp, Morandi.border.copy(alpha = 0.6f), shape)
+                else Modifier
+            )
+            .clickable(interactionSource = interaction, indication = null) { onClick() }
+            .padding(vertical = 7.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             painter = painterResource(icon),
             contentDescription = label,
-            tint = if (selected) activeColor else inactiveColor,
-            modifier = Modifier.size(20.dp)
+            tint = if (selected) Morandi.accent else Morandi.subText,
+            modifier = Modifier.size(16.dp),
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.width(5.dp))
         Text(
-            label,
-            color = textColor,
-            fontSize = 11.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            text = label,
+            color = if (selected) Morandi.text else Morandi.subText,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         )
     }
 }

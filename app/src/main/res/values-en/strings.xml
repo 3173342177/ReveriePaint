@@ -226,6 +226,13 @@
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_main_desc">Application preferences, interface themes, and drawing hardware settings</string>
+    <string name="settings_group_touch_stylus">Touch &amp; Stylus</string>
+    <string name="settings_group_canvas_display">Display &amp; Color</string>
+    <string name="settings_group_efficiency">Efficiency &amp; Aids</string>
+    <string name="settings_group_advanced">Advanced Settings</string>
+    <string name="canvas_group_specs">Specifications</string>
+    <string name="canvas_group_project">Project &amp; Layers</string>
+    <string name="canvas_group_transform">Transform &amp; Adjust</string>
     <string name="settings_group_preferences">Preferences</string>
     <string name="settings_group_tools">Preferences &amp; Hardware</string>
     <string name="settings_group_creation_copyright">Creation &amp; Copyright</string>

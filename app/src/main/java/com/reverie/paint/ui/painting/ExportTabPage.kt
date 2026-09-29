@@ -304,139 +304,194 @@ private fun StaticExportSection(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
+        // 格式选择控制台 (Compact Capsule Switcher)
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(stringResource(R.string.export_select_format), color = Morandi.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.export_pixel_dimension, vm.coreW, vm.coreH), color = Morandi.subText, fontSize = 11.sp)
-        }
+            val row1 = exportFormats.take(4)
+            val row2 = exportFormats.drop(4)
 
-        // 格式芯片列表
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            exportFormats.forEach { item ->
-                val isSel = selectedFormat == item.format
-                val chipInteraction = remember { MutableInteractionSource() }
-                Box(
-                    modifier = Modifier
-                        .pressScale(chipInteraction, pressedScale = 0.94f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .liquidHighlight(chipInteraction, Color.White, radius = 30.dp)
-                        .background(if (isSel) Morandi.accent.copy(alpha = 0.12f) else Morandi.panel)
-                        .border(
-                            width = if (isSel) 1.dp else 0.dp,
-                            color = if (isSel) Morandi.accent else Color.Transparent,
-                            shape = RoundedCornerShape(10.dp),
-                        )
-                        .clickable(interactionSource = chipInteraction, indication = null) {
-                            selectedFormat = item.format
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                row1.forEach { item ->
+                    val isSel = selectedFormat == item.format
+                    val chipInteraction = remember { MutableInteractionSource() }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .pressScale(chipInteraction, pressedScale = 0.94f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSel) Morandi.panel else Morandi.panelHi.copy(alpha = 0.5f))
+                            .then(
+                                if (isSel) Modifier.border(1.dp, Morandi.accent, RoundedCornerShape(8.dp))
+                                else Modifier.border(1.dp, Morandi.border.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            )
+                            .clickable(interactionSource = chipInteraction, indication = null) {
+                                selectedFormat = item.format
+                            }
+                            .padding(vertical = 7.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = item.format,
+                                color = if (isSel) Morandi.accent else Morandi.text,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                            )
+                            if (item.isLayered) {
+                                Spacer(Modifier.width(3.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(4.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSel) Morandi.accent else Morandi.subText),
+                                )
+                            }
                         }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = item.format,
-                        color = if (isSel) Morandi.accent else Morandi.text,
-                        fontSize = 13.sp,
-                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
-                    )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                row2.forEach { item ->
+                    val isSel = selectedFormat == item.format
+                    val chipInteraction = remember { MutableInteractionSource() }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .pressScale(chipInteraction, pressedScale = 0.94f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSel) Morandi.panel else Morandi.panelHi.copy(alpha = 0.5f))
+                            .then(
+                                if (isSel) Modifier.border(1.dp, Morandi.accent, RoundedCornerShape(8.dp))
+                                else Modifier.border(1.dp, Morandi.border.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            )
+                            .clickable(interactionSource = chipInteraction, indication = null) {
+                                selectedFormat = item.format
+                            }
+                            .padding(vertical = 7.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = item.format,
+                                color = if (isSel) Morandi.accent else Morandi.text,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                            )
+                            if (item.isLayered) {
+                                Spacer(Modifier.width(3.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(4.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSel) Morandi.accent else Morandi.subText),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        // 选中格式说明
+        // 格式参数与属性控制台卡片 (Unified Console Parameters Card)
         val detail = exportFormats.firstOrNull { it.format == selectedFormat } ?: exportFormats.first()
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(Morandi.panelHi)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .background(Morandi.panelHi.copy(alpha = 0.55f))
+                .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Morandi.subText.copy(alpha = 0.12f))
-                    .padding(horizontal = 7.dp, vertical = 2.dp),
-            ) {
-                Text(stringResource(detail.tagRes), color = Morandi.subText, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(detail.nameRes),
-                    color = Morandi.text,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = stringResource(detail.descriptionRes),
-                    color = Morandi.subText,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                )
-            }
-            if (detail.isLayered) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_layerstack),
-                    contentDescription = stringResource(R.string.export_has_layers),
-                    tint = Morandi.icon,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        }
-
-        // 嵌入作者元数据卡片
-        if (vm.authorProfile.isNotEmpty()) {
+            // Row 1: Format Details
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Morandi.panelHi)
-                    .clickable { embedAuthor = !embedAuthor }
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Morandi.accent.copy(alpha = 0.12f))
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                ) {
+                    Text(stringResource(detail.tagRes), color = Morandi.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(detail.nameRes),
+                        color = Morandi.text,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(1.dp))
+                    Text(
+                        text = stringResource(detail.descriptionRes),
+                        color = Morandi.subText,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                    )
+                }
+                if (detail.isLayered) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_layerstack),
+                        contentDescription = stringResource(R.string.export_has_layers),
+                        tint = Morandi.accent,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border.copy(alpha = 0.35f)))
+
+            // Row 2: 紧凑两栏设置项 (Specs + Optional Author Profile)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_author),
-                        contentDescription = null,
-                        tint = Morandi.accent,
-                        modifier = Modifier.size(18.dp),
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.export_select_format), color = Morandi.subText, fontSize = 11.sp)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        stringResource(R.string.export_pixel_dimension, vm.coreW, vm.coreH),
+                        color = Morandi.text,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
                     )
-                    Column {
+                }
+
+                if (vm.authorProfile.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                         Text(
                             text = stringResource(R.string.export_author_meta),
                             color = Morandi.text,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
                         )
-                        val authorSummary = vm.authorProfile.name.ifBlank { vm.authorProfile.nickname }
-                        if (authorSummary.isNotBlank()) {
-                            Text(
-                                text = stringResource(R.string.export_creator_meta, authorSummary),
-                                color = Morandi.subText,
-                                fontSize = 11.sp,
-                            )
-                        }
+                        ReSwitch(
+                            checked = embedAuthor,
+                            onChecked = { embedAuthor = it },
+                        )
                     }
                 }
-                ReSwitch(
-                    checked = embedAuthor,
-                    onChecked = { embedAuthor = it },
-                )
             }
         }
 
@@ -717,58 +772,48 @@ private fun AnimationExportSection(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // 动画格式胶囊切换栏 (Compact Capsule Switcher)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(stringResource(R.string.export_anim_select_format), color = Morandi.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.export_anim_fps_frames_format, vm.anim.framerate, totalDrawn), color = Morandi.subText, fontSize = 11.sp)
-        }
-
-        // 格式芯片选择
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             animFormats.forEach { item ->
                 val isSel = selectedFormat == item.format
                 val chipInteraction = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
+                        .weight(1f)
                         .pressScale(chipInteraction, pressedScale = 0.94f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .liquidHighlight(chipInteraction, Color.White, radius = 30.dp)
-                        .background(if (isSel) Morandi.accent.copy(alpha = 0.12f) else Morandi.panel)
-                        .border(
-                            width = if (isSel) 1.dp else 0.dp,
-                            color = if (isSel) Morandi.accent else Color.Transparent,
-                            shape = RoundedCornerShape(10.dp),
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSel) Morandi.panel else Morandi.panelHi.copy(alpha = 0.5f))
+                        .then(
+                            if (isSel) Modifier.border(1.dp, Morandi.accent, RoundedCornerShape(8.dp))
+                            else Modifier.border(1.dp, Morandi.border.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                         )
                         .clickable(interactionSource = chipInteraction, indication = null) {
                             selectedFormat = item.format
                         }
-                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                        .padding(vertical = 7.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = item.format,
                         color = if (isSel) Morandi.accent else Morandi.text,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
                     )
                 }
             }
         }
 
-        // 选中格式介绍卡
+        // 选中格式介绍卡 (Unified Card)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(Morandi.panelHi)
-                .padding(horizontal = 14.dp, vertical = 11.dp),
+                .background(Morandi.panelHi.copy(alpha = 0.55f))
+                .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -778,7 +823,7 @@ private fun AnimationExportSection(
                     .background(Morandi.accent.copy(alpha = 0.12f))
                     .padding(horizontal = 7.dp, vertical = 2.dp),
             ) {
-                Text(stringResource(currentItem.tagRes), color = Morandi.accent, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(currentItem.tagRes), color = Morandi.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             Column(Modifier.weight(1f)) {
                 Text(
@@ -787,7 +832,7 @@ private fun AnimationExportSection(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(1.dp))
                 Text(
                     text = stringResource(currentItem.descriptionRes),
                     color = Morandi.subText,
@@ -795,6 +840,11 @@ private fun AnimationExportSection(
                     maxLines = 1,
                 )
             }
+            Text(
+                stringResource(R.string.export_anim_fps_frames_format, vm.anim.framerate, totalDrawn),
+                color = Morandi.subText,
+                fontSize = 11.sp,
+            )
         }
 
         // 参数配置卡片

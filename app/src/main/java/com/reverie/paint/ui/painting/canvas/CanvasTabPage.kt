@@ -164,7 +164,8 @@ internal fun CanvasTabPage(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         // Dynamic Document Info in a sleek Morandi card
         val sdf = remember { SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()) }
@@ -180,67 +181,204 @@ internal fun CanvasTabPage(
             context.getString(R.string.duration_secs, secs)
         }
 
+        // 1. 画布规格信息卡 (Specs Dashboard Card)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(Morandi.panelHi.copy(alpha = 0.5f))
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Morandi.panelHi.copy(alpha = 0.55f))
+                .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            SettingInfoRow(stringResource(R.string.canvas_info_created_time), createdStr)
-            SettingInfoRow(stringResource(R.string.canvas_info_canvas_size), "${vm.docWidth}×${vm.docHeight} - ${vm.docDpi}ppi")
-            SettingInfoRow(stringResource(R.string.canvas_info_total_drawn), stringResource(R.string.canvas_info_strokes_layers, vm.totalStrokes, vm.layerCount))
-            SettingInfoRow(stringResource(R.string.canvas_info_drawing_time), durationStr)
-            SettingInfoRow(stringResource(R.string.canvas_info_color_mode), vm.colorMode)
-        }
-        
-        Spacer(Modifier.height(12.dp))
-
-        // Action Grid (Equal 4-column modern card buttons, 2 rows of 4)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            ReMenuItem(R.drawable.ic_save, stringResource(R.string.common_save), {
-                onClose()
-                vm.saveProject(vm.docName) {
-                    android.widget.Toast.makeText(context, context.getString(R.string.canvas_toast_project_saved, vm.docName), android.widget.Toast.LENGTH_SHORT).show()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_canvas_tab),
+                        contentDescription = null,
+                        tint = Morandi.accent,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.canvas_group_specs),
+                        color = Morandi.text,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
-            }, modifier = Modifier.weight(1f))
-            ReMenuItem(R.drawable.ic_save_as, stringResource(R.string.canvas_action_save_as), {
-                saveAsName = vm.docName + "_copy"
-                showSaveAsDialog = true
-            }, modifier = Modifier.weight(1f))
-            ReMenuItem(R.drawable.ic_canvas_resize, stringResource(R.string.canvas_action_resize), {
-                onClose()
-                vm.enterCanvasAdjustMode(com.reverie.paint.model.CanvasAdjustMode.CROP_EXPAND)
-            }, modifier = Modifier.weight(1f))
-            ReMenuItem(R.drawable.ic_image, stringResource(R.string.canvas_action_import_image), {
-                imagePickerLauncher.launch("image/*")
-            }, modifier = Modifier.weight(1f))
+                Text(
+                    text = createdStr,
+                    color = Morandi.subText,
+                    fontSize = 11.sp,
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border.copy(alpha = 0.35f)))
+            Spacer(Modifier.height(8.dp))
+
+            // 2-Column Specs Grid
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1.1f)) {
+                    Text(stringResource(R.string.canvas_info_canvas_size), color = Morandi.subText, fontSize = 11.sp)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "${vm.docWidth} × ${vm.docHeight} (${vm.docDpi} PPI)",
+                        color = Morandi.text,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                Column(modifier = Modifier.weight(0.9f)) {
+                    Text(stringResource(R.string.canvas_info_color_mode), color = Morandi.subText, fontSize = 11.sp)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        vm.colorMode,
+                        color = Morandi.text,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1.1f)) {
+                    Text(stringResource(R.string.canvas_info_total_drawn), color = Morandi.subText, fontSize = 11.sp)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        stringResource(R.string.canvas_info_strokes_layers, vm.totalStrokes, vm.layerCount),
+                        color = Morandi.text,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                Column(modifier = Modifier.weight(0.9f)) {
+                    Text(stringResource(R.string.canvas_info_drawing_time), color = Morandi.subText, fontSize = 11.sp)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        durationStr,
+                        color = Morandi.text,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
         }
-        Spacer(Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            ReMenuItem(R.drawable.ic_image_adjust, stringResource(R.string.canvas_action_filters), {
-                onClose()
-                onOpenFilters?.invoke(vm.editTargetLayers())
-            }, modifier = Modifier.weight(1f))
-            ReMenuItem(R.drawable.ic_stamp, stringResource(R.string.canvas_action_stamp), {
-                vm.stampVisibleLayers()
-                android.widget.Toast.makeText(context, context.getString(R.string.canvas_toast_stamp_success), android.widget.Toast.LENGTH_SHORT).show()
-                onClose()
-            }, modifier = Modifier.weight(1f))
-            ReMenuItem(R.drawable.ic_flip_horizontal, stringResource(R.string.canvas_action_flip_h), {
-                vm.flipCanvasHorizontal()
-                onClose()
-            }, modifier = Modifier.weight(1f))
-            ReMenuItem(R.drawable.ic_flip_vertical, stringResource(R.string.canvas_action_flip_v), {
-                vm.flipCanvasVertical()
-                onClose()
-            }, modifier = Modifier.weight(1f))
+
+        // 2. 工程与图层卡片 (Project & Layers Group)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.canvas_group_project),
+                color = Morandi.subText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ReMenuItem(
+                    icon = R.drawable.ic_save,
+                    label = stringResource(R.string.common_save),
+                    onTap = {
+                        onClose()
+                        vm.saveProject(vm.docName) {
+                            android.widget.Toast.makeText(context, context.getString(R.string.canvas_toast_project_saved, vm.docName), android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                ReMenuItem(
+                    icon = R.drawable.ic_save_as,
+                    label = stringResource(R.string.canvas_action_save_as),
+                    onTap = {
+                        saveAsName = vm.docName + "_copy"
+                        showSaveAsDialog = true
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                ReMenuItem(
+                    icon = R.drawable.ic_image,
+                    label = stringResource(R.string.canvas_action_import_image),
+                    onTap = { imagePickerLauncher.launch("image/*") },
+                    modifier = Modifier.weight(1f),
+                )
+                ReMenuItem(
+                    icon = R.drawable.ic_stamp,
+                    label = stringResource(R.string.canvas_action_stamp),
+                    onTap = {
+                        vm.stampVisibleLayers()
+                        android.widget.Toast.makeText(context, context.getString(R.string.canvas_toast_stamp_success), android.widget.Toast.LENGTH_SHORT).show()
+                        onClose()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        // 3. 变换与调整卡片 (Transform & Adjust Group)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.canvas_group_transform),
+                color = Morandi.subText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ReMenuItem(
+                    icon = R.drawable.ic_canvas_resize,
+                    label = stringResource(R.string.canvas_action_resize),
+                    onTap = {
+                        onClose()
+                        vm.enterCanvasAdjustMode(com.reverie.paint.model.CanvasAdjustMode.CROP_EXPAND)
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                ReMenuItem(
+                    icon = R.drawable.ic_flip_horizontal,
+                    label = stringResource(R.string.canvas_action_flip_h),
+                    onTap = {
+                        vm.flipCanvasHorizontal()
+                        onClose()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                ReMenuItem(
+                    icon = R.drawable.ic_flip_vertical,
+                    label = stringResource(R.string.canvas_action_flip_v),
+                    onTap = {
+                        vm.flipCanvasVertical()
+                        onClose()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                ReMenuItem(
+                    icon = R.drawable.ic_image_adjust,
+                    label = stringResource(R.string.canvas_action_filters),
+                    onTap = {
+                        onClose()
+                        onOpenFilters?.invoke(vm.editTargetLayers())
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
