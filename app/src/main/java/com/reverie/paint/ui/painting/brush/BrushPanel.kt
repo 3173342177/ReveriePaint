@@ -69,9 +69,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.hazeEffect
 import com.reverie.paint.ui.theme.Glass
-import com.reverie.paint.ui.theme.glassBorder
 import androidx.compose.ui.unit.sp
 import com.reverie.paint.core.*
 import com.reverie.paint.ui.theme.Morandi
@@ -260,7 +259,7 @@ fun BrushPanel(
         }
     }
 
-    val panelShape = RoundedCornerShape(12.dp)
+    val panelShape = RoundedCornerShape(16.dp)
     val density = LocalDensity.current
     val baseStartOffsetPx = remember(density) { with(density) { 48.dp.roundToPx() } }
 
@@ -270,11 +269,11 @@ fun BrushPanel(
                 .systemHoverIcon(context)
                 .width(320.dp)
                 .fillMaxHeight(0.75f)
-                .shadow(16.dp, panelShape, spotColor = Color.Black.copy(alpha = 0.5f))
+                .shadow(16.dp, panelShape, spotColor = Color.Black.copy(alpha = 0.45f))
                 .clip(panelShape)
                 .then(
                     if (vm.blurBackground && hazeState != null) {
-                        Modifier.hazeChild(
+                        Modifier.hazeEffect(
                             state = hazeState,
                             style = Glass.barStyle(if (opacity >= 0.99f) 0.92f else opacity),
                         )
@@ -282,7 +281,6 @@ fun BrushPanel(
                         Modifier.background(Morandi.panel.copy(alpha = opacity))
                     }
                 )
-                .glassBorder(panelShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -469,42 +467,24 @@ fun BrushPanel(
                                             Text(
                                                 brushCategoryDisplayName(selectedCategory),
                                                 color = Morandi.text,
-                                                fontSize = 16.sp,
+                                                fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            if (selectedCategory !in listOf("全部", "常用", "最近")) {
-                                                Spacer(Modifier.width(4.dp))
-                                                IconButton(
-                                                    onClick = { categoryMenuTarget = selectedCategory },
-                                                    modifier = Modifier.size(28.dp)
-                                                ) {
-                                                    Icon(
-                                                        painter = painterResource(R.drawable.ic_dots_vertical),
-                                                        contentDescription = stringResource(R.string.brush_group_more_options),
-                                                        tint = Morandi.icon,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
+                                            Spacer(Modifier.width(2.dp))
+                                            IconButton(
+                                                onClick = { categoryMenuTarget = selectedCategory },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_dots_vertical),
+                                                    contentDescription = stringResource(R.string.brush_group_more_options),
+                                                    tint = Morandi.icon,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
                                             }
                                             Spacer(Modifier.weight(1f))
-                                            if (filtered.isNotEmpty()) {
-                                                Text(
-                                                    stringResource(R.string.brush_batch_manage),
-                                                    color = Morandi.accent,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .clickable {
-                                                            isBatchMode = true
-                                                            selectedPresets = emptySet()
-                                                        }
-                                                        .padding(horizontal = 6.dp, vertical = 4.dp)
-                                                )
-                                                Spacer(Modifier.width(6.dp))
-                                            }
                                             Text(
                                                 stringResource(R.string.brush_presets_count, filtered.size),
                                                 color = Morandi.subText,
@@ -513,17 +493,17 @@ fun BrushPanel(
                                             Spacer(Modifier.width(8.dp))
                                             Box(
                                                 modifier = Modifier
-                                                    .size(30.dp)
+                                                    .size(28.dp)
                                                     .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (vm.brushPanelGridView) Morandi.panelHi else Color.Transparent)
+                                                    .background(if (vm.brushPanelGridView) Morandi.accent.copy(alpha = 0.14f) else Morandi.panelHi.copy(alpha = 0.5f))
                                                     .clickable { vm.toggleBrushPanelGridView() },
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
                                                     painter = painterResource(if (vm.brushPanelGridView) R.drawable.ic_menu else R.drawable.ic_grid),
                                                     contentDescription = stringResource(if (vm.brushPanelGridView) R.string.brush_switch_to_list else R.string.brush_switch_to_grid),
-                                                    tint = if (vm.brushPanelGridView) Morandi.accent else Morandi.subText,
-                                                    modifier = Modifier.size(16.dp)
+                                                    tint = if (vm.brushPanelGridView) Morandi.accent else Morandi.icon,
+                                                    modifier = Modifier.size(15.dp)
                                                 )
                                             }
                                         }
@@ -676,16 +656,16 @@ fun BrushPanel(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .height(44.dp)
                                     .background(Morandi.panel.copy(alpha = opacity))
-                                    .padding(horizontal = 14.dp),
+                                    .padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 if (isBatchMode) {
                                     val hasSelection = selectedPresets.isNotEmpty()
                                     Row(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(if (hasSelection) Morandi.panelHi else Morandi.panelHi.copy(alpha = 0.4f))
                                             .clickable(enabled = hasSelection) { showBatchMoveDialog = true }
                                             .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -710,7 +690,7 @@ fun BrushPanel(
 
                                     Row(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(if (hasSelection) Color(0xFFC86464).copy(alpha = 0.15f) else Morandi.panelHi.copy(alpha = 0.4f))
                                             .clickable(enabled = hasSelection) { showBatchDeleteConfirm = true }
                                             .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -733,40 +713,49 @@ fun BrushPanel(
                                 } else {
                                     Row(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Morandi.panelHi)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Morandi.panelHi.copy(alpha = 0.65f))
                                             .clickable { showNewBrushDialog = true }
-                                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                                            .padding(horizontal = 10.dp, vertical = 5.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Icon(painterResource(R.drawable.ic_plus), contentDescription = null, tint = Morandi.text, modifier = Modifier.size(14.dp))
-                                        Text(stringResource(R.string.brush_action_new), color = Morandi.text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                        Icon(painterResource(R.drawable.ic_plus), contentDescription = null, tint = Morandi.icon, modifier = Modifier.size(13.dp))
+                                        Text(stringResource(R.string.brush_action_new), color = Morandi.text, fontSize = 11.5.sp, fontWeight = FontWeight.Medium)
                                     }
 
                                     Spacer(Modifier.width(8.dp))
 
                                     Row(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Morandi.panelHi)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Morandi.panelHi.copy(alpha = 0.65f))
                                             .clickable { importBrushLauncher.launch(arrayOf("*/*")) }
-                                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                                            .padding(horizontal = 10.dp, vertical = 5.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Icon(painterResource(R.drawable.ic_export_tab), contentDescription = null, tint = Morandi.text, modifier = Modifier.size(14.dp))
-                                        Text(stringResource(R.string.brush_action_import), color = Morandi.text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                        Icon(painterResource(R.drawable.ic_export_tab), contentDescription = null, tint = Morandi.icon, modifier = Modifier.size(13.dp))
+                                        Text(stringResource(R.string.brush_action_import), color = Morandi.text, fontSize = 11.5.sp, fontWeight = FontWeight.Medium)
                                     }
 
                                     Spacer(Modifier.weight(1f))
 
-                                    Icon(
-                                        painterResource(R.drawable.ic_folder_plus),
-                                        contentDescription = stringResource(R.string.brush_action_new_group),
-                                        tint = Morandi.icon,
-                                        modifier = Modifier.size(18.dp).clickable { showNewGroupDialog = true }
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Morandi.panelHi.copy(alpha = 0.65f))
+                                            .clickable { showNewGroupDialog = true },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            painterResource(R.drawable.ic_folder_plus),
+                                            contentDescription = stringResource(R.string.brush_action_new_group),
+                                            tint = Morandi.icon,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -860,6 +849,7 @@ fun BrushPanel(
         CategoryMenuDialog(
             categoryName = cat,
             isBuiltIn = isBuiltIn,
+            isSpecialPinned = isSpecialPinned,
             canMoveUp = !isSpecialPinned && catIdx > 3,
             canMoveDown = !isSpecialPinned && catIdx >= 3 && catIdx < categories.size - 1,
             onDismiss = { categoryMenuTarget = null },
@@ -1088,7 +1078,7 @@ private fun PresetGridCard(
     val cellBg = when {
         isBatchMode && isChecked -> Morandi.accent.copy(alpha = 0.22f)
         isSelected -> Morandi.accent.copy(alpha = 0.18f)
-        else -> Color.Transparent
+        else -> Morandi.panelHi.copy(alpha = 0.45f)
     }
 
     Column(
@@ -1189,20 +1179,20 @@ private fun PresetListRow(
     val cellBg = when {
         isBatchMode && isChecked -> Morandi.accent.copy(alpha = 0.2f)
         isSelected -> Morandi.accent.copy(alpha = 0.16f)
-        else -> Color.Transparent
+        else -> Morandi.panelHi.copy(alpha = 0.35f)
     }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp)
+            .height(48.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(cellBg)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
             )
-            .padding(start = 8.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
+            .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isBatchMode) {
@@ -1305,6 +1295,7 @@ private fun PresetListRow(
 private fun CategoryMenuDialog(
     categoryName: String,
     isBuiltIn: Boolean,
+    isSpecialPinned: Boolean = false,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onDismiss: () -> Unit,
@@ -1336,12 +1327,14 @@ private fun CategoryMenuDialog(
                 if (canMoveDown) {
                     menuItems.add(moveDownText to onMoveDown)
                 }
-                menuItems.add(exportGroupText to onExportGroup)
+                if (!isSpecialPinned) {
+                    menuItems.add(exportGroupText to onExportGroup)
+                }
                 menuItems.add(batchManageText to onBatchManage)
                 if (!isBuiltIn) {
                     menuItems.add(renameText to onRename)
                     menuItems.add(deleteText to onDelete)
-                } else {
+                } else if (!isSpecialPinned) {
                     menuItems.add(builtinTagText to {})
                 }
                 menuItems.forEach { (label, act) ->
@@ -1350,7 +1343,7 @@ private fun CategoryMenuDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable(enabled = !isHint) {
                                 onDismiss()
                                 act()
@@ -1371,6 +1364,7 @@ private fun CategoryMenuDialog(
         dismissButton = {
             ReTextButton(stringResource(R.string.common_cancel), onDismiss, textColor = Morandi.subText)
         },
+        shape = RoundedCornerShape(14.dp),
         containerColor = Morandi.panelHi,
     )
 }
