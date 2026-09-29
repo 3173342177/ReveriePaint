@@ -2008,6 +2008,12 @@
     <string name="sync_time_days">%1$d 天前</string>
     <string name="sync_status_waiting_wifi">等待 Wi-Fi</string>
     <string name="sync_backup_locked_hint">连接云存储后可备份</string>
+    <string name="sync_category_restore">恢复</string>
+    <string name="sync_restore_now">从云端恢复</string>
+    <string name="sync_restore_hint">只补齐本地缺少的工程, 不会覆盖或删除本地文件</string>
+    <string name="sync_restore_running">正在恢复 %1$d/%2$d</string>
+    <string name="sync_restore_result">恢复 %1$d 个, 跳过 %2$d 个, 冲突 %3$d 个, 失败 %4$d 个</string>
+    <string name="sync_conflict_suffix"> (云端)</string>
 </resources>
 
 

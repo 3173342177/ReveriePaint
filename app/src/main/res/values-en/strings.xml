@@ -2008,6 +2008,12 @@
     <string name="sync_time_days">%1$d d ago</string>
     <string name="sync_status_waiting_wifi">Waiting for Wi-Fi</string>
     <string name="sync_backup_locked_hint">Connect cloud storage to enable backups</string>
+    <string name="sync_category_restore">Restore</string>
+    <string name="sync_restore_now">Restore from cloud</string>
+    <string name="sync_restore_hint">Adds only projects missing locally; never overwrites or deletes local files</string>
+    <string name="sync_restore_running">Restoring %1$d/%2$d</string>
+    <string name="sync_restore_result">Restored %1$d, skipped %2$d, conflicts %3$d, failed %4$d</string>
+    <string name="sync_conflict_suffix"> (cloud)</string>
 </resources>
 
 

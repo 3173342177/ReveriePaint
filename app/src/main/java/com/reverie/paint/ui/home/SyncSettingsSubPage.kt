@@ -265,6 +265,27 @@ internal fun SyncSettingsSubPage(
             Spacer(Modifier.height(8.dp))
             SyncBackupStatusLine(vm)
 
+            Spacer(Modifier.height(8.dp))
+            SettingCategoryTitle(stringResource(R.string.sync_category_restore))
+            SettingGroup {
+                SyncActionRow(
+                    index = 0,
+                    total = 1,
+                    text = stringResource(R.string.sync_restore_now),
+                    color = colors.accent,
+                    enabled = state.connected,
+                ) { vm.restoreFromCloud() }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.sync_restore_hint),
+                color = colors.subText,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            SyncRestoreStatusLine(vm)
+
             Spacer(Modifier.height(16.dp))
             SettingInfoCard(
                 title = stringResource(R.string.sync_backup_info_title),
@@ -508,6 +529,54 @@ private fun SyncBackupStatusLine(vm: PaintViewModel) {
         SyncBackupStatus.FAILED -> {
             Text(
                 text = stringResource(R.string.sync_status_failed) + " (" + state.lastBackupError + ")",
+                color = Color(0xFFE05555),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SyncRestoreStatusLine(vm: PaintViewModel) {
+    val colors = Theme.current
+    val state = vm.syncState
+    when (state.restoreStatus) {
+        SyncRestoreStatus.IDLE -> Unit
+
+        SyncRestoreStatus.RUNNING -> {
+            Text(
+                text = stringResource(R.string.sync_restore_running, state.restoreDone, state.restoreTotal),
+                color = colors.subText,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+        }
+
+        SyncRestoreStatus.DONE -> {
+            Column(modifier = Modifier.padding(start = 6.dp)) {
+                Text(
+                    text =
+                        stringResource(
+                            R.string.sync_restore_result,
+                            state.lastRestoreDownloaded,
+                            state.lastRestoreSkipped,
+                            state.lastRestoreConflicts,
+                            state.lastRestoreFailed,
+                        ),
+                    color = if (state.lastRestoreFailed > 0) Color(0xFFE05555) else colors.accent,
+                    fontSize = 12.sp,
+                )
+                if (state.lastRestoreError.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(text = state.lastRestoreError, color = Color(0xFFE05555), fontSize = 11.sp)
+                }
+            }
+        }
+
+        SyncRestoreStatus.FAILED -> {
+            Text(
+                text = stringResource(R.string.sync_status_failed) + " (" + state.lastRestoreError + ")",
                 color = Color(0xFFE05555),
                 fontSize = 12.sp,
                 modifier = Modifier.padding(start = 6.dp),

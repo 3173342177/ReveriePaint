@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
+import com.reverie.paint.R
 import com.reverie.paint.core.sync.SyncCredentialStore
 import com.reverie.paint.core.sync.SyncCredentials
 import com.reverie.paint.core.sync.SyncEngine
@@ -23,6 +24,8 @@ import kotlinx.coroutines.withContext
 internal enum class SyncConnectionStatus { IDLE, TESTING, OK, FAILED }
 
 internal enum class SyncBackupStatus { IDLE, RUNNING, DONE, FAILED, WAITING_WIFI }
+
+internal enum class SyncRestoreStatus { IDLE, RUNNING, DONE, FAILED }
 
 internal class SyncState {
     var serverUrl by mutableStateOf("")
@@ -46,6 +49,15 @@ internal class SyncState {
     var lastBackupFailed by mutableIntStateOf(0)
     var lastBackupBytes by mutableLongStateOf(0L)
     var lastBackupError by mutableStateOf("")
+
+    var restoreStatus by mutableStateOf(SyncRestoreStatus.IDLE)
+    var restoreDone by mutableIntStateOf(0)
+    var restoreTotal by mutableIntStateOf(0)
+    var lastRestoreDownloaded by mutableIntStateOf(0)
+    var lastRestoreSkipped by mutableIntStateOf(0)
+    var lastRestoreConflicts by mutableIntStateOf(0)
+    var lastRestoreFailed by mutableIntStateOf(0)
+    var lastRestoreError by mutableStateOf("")
 }
 
 private const val PREF_SERVER_URL = "sync_server_url"
@@ -226,6 +238,8 @@ internal fun PaintViewModel.disconnectSync() {
     syncState.statusDetail = ""
     syncState.backupStatus = SyncBackupStatus.IDLE
     syncState.lastBackupError = ""
+    syncState.restoreStatus = SyncRestoreStatus.IDLE
+    syncState.lastRestoreError = ""
 }
 
 internal fun PaintViewModel.backupToCloud() {
@@ -264,7 +278,7 @@ internal fun PaintViewModel.backupToCloud() {
                             syncState.backupTotal = total
                         }
                     try {
-                        manifestFile.writeText(SyncEngine.encodeManifest(result.manifest))
+                        SyncEngine.writeTextAtomically(manifestFile, SyncEngine.encodeManifest(result.manifest))
                     } catch (e: Exception) {
                         android.util.Log.e("ReverieSync", "写入同步清单失败", e)
                     }
@@ -288,6 +302,70 @@ internal fun PaintViewModel.backupToCloud() {
             syncState.lastBackupError = result.errors.firstOrNull() ?: ""
             syncState.lastBackupAtMs = System.currentTimeMillis()
             persistSyncSettings()
+        }
+    }
+}
+
+internal fun PaintViewModel.restoreFromCloud() {
+    if (!isSyncConfigValid()) {
+        syncState.status = SyncConnectionStatus.FAILED
+        syncState.statusDetail = SYNC_DETAIL_NOT_CONFIGURED
+        return
+    }
+    if (!hasAppContext()) return
+    val url = SyncCredentials.normalizeServerUrl(syncState.serverUrl)
+    val user = syncState.username
+    val pass = savedPassword()
+    val rootDir = File(appContext.filesDir, "projects")
+    val manifestFile = syncManifestFile()
+    val conflictSuffix = getString(R.string.sync_conflict_suffix)
+
+    syncState.restoreStatus = SyncRestoreStatus.RUNNING
+    syncState.restoreDone = 0
+    syncState.restoreTotal = 0
+    syncState.lastRestoreError = ""
+
+    viewModelScope.launch {
+        val outcome =
+            withContext(Dispatchers.IO) {
+                try {
+                    val client = WebDavSyncClient(url, user, pass)
+                    val manifest =
+                        if (manifestFile.exists()) {
+                            SyncEngine.decodeManifest(manifestFile.readText())
+                        } else {
+                            emptyMap()
+                        }
+                    val local = SyncEngine.scan(rootDir)
+                    val result =
+                        SyncEngine.restore(client, rootDir, local, manifest, conflictSuffix) { done, total ->
+                            syncState.restoreDone = done
+                            syncState.restoreTotal = total
+                        }
+                    try {
+                        SyncEngine.writeTextAtomically(manifestFile, SyncEngine.encodeManifest(result.manifest))
+                    } catch (e: Exception) {
+                        android.util.Log.e("ReverieSync", "写入同步清单失败", e)
+                    }
+                    result to null
+                } catch (e: SyncException) {
+                    null to e.kind.name
+                } catch (e: Exception) {
+                    null to e.javaClass.simpleName
+                }
+            }
+        val result = outcome.first
+        if (result == null) {
+            syncState.restoreStatus = SyncRestoreStatus.FAILED
+            syncState.lastRestoreError = outcome.second ?: ""
+        } else {
+            syncState.restoreStatus = SyncRestoreStatus.DONE
+            syncState.lastRestoreDownloaded = result.downloaded
+            syncState.lastRestoreSkipped = result.skipped
+            syncState.lastRestoreConflicts = result.conflicts
+            syncState.lastRestoreFailed = result.failed
+            syncState.lastRestoreError = result.errors.firstOrNull() ?: ""
+            refreshProjects()
         }
     }
 }
