@@ -48,6 +48,7 @@ internal class SyncState {
     var backupTotal by mutableIntStateOf(0)
     var lastBackupUploaded by mutableIntStateOf(0)
     var lastBackupSkipped by mutableIntStateOf(0)
+    var lastBackupDeleted by mutableIntStateOf(0)
     var lastBackupFailed by mutableIntStateOf(0)
     var lastBackupBytes by mutableLongStateOf(0L)
     var lastBackupError by mutableStateOf("")
@@ -298,9 +299,10 @@ internal fun PaintViewModel.backupToCloud() {
                         } else {
                             emptyMap()
                         }
-                    val local = SyncEngine.scan(syncSources())
+                    val sources = syncSources()
+                    val local = SyncEngine.scan(sources)
                     val result =
-                        SyncEngine.backup(client, local, manifest) { done, total ->
+                        SyncEngine.backup(client, sources, local, manifest) { done, total ->
                             syncState.backupDone = done
                             syncState.backupTotal = total
                         }
@@ -324,6 +326,7 @@ internal fun PaintViewModel.backupToCloud() {
             syncState.backupStatus = SyncBackupStatus.DONE
             syncState.lastBackupUploaded = result.uploaded
             syncState.lastBackupSkipped = result.skipped
+            syncState.lastBackupDeleted = result.deleted
             syncState.lastBackupFailed = result.failed
             syncState.lastBackupBytes = result.bytes
             syncState.lastBackupError = result.errors.firstOrNull() ?: ""

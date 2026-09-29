@@ -17,6 +17,7 @@ internal data class LocalProject(
 internal data class BackupOutcome(
     val uploaded: Int,
     val skipped: Int,
+    val deleted: Int,
     val failed: Int,
     val bytes: Long,
     val errors: List<String>,
@@ -226,16 +227,31 @@ internal object SyncEngine {
         return out.sortedBy { it.path }
     }
 
+    fun planDeletions(
+        sources: List<SyncSource>,
+        local: List<LocalProject>,
+        manifest: Map<String, String>,
+    ): List<String> {
+        val localPaths = local.mapTo(HashSet()) { it.relativePath }
+        return manifest.keys
+            .filter { it !in localPaths }
+            .filter { path -> assignSource(sources, path)?.localDir?.isDirectory == true }
+            .sorted()
+    }
+
     fun backup(
         client: SyncClient,
+        sources: List<SyncSource>,
         local: List<LocalProject>,
         manifest: Map<String, String>,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BackupOutcome {
         val uploads = planUploads(local, manifest)
+        val deletions = planDeletions(sources, local, manifest)
         val newManifest = LinkedHashMap(manifest)
         val errors = ArrayList<String>()
         var uploaded = 0
+        var deleted = 0
         var bytes = 0L
 
         for (dir in requiredRemoteDirs(local.map { it.relativePath })) {
@@ -259,9 +275,29 @@ internal object SyncEngine {
             onProgress(index + 1, total)
         }
 
+        for (path in deletions) {
+            try {
+                client.delete(path)
+                newManifest.remove(path)
+                deleted++
+            } catch (e: Exception) {
+                errors.add("$path: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+
+        val keepDirs = requiredRemoteDirs(local.map { it.relativePath }).toSet()
+        val staleDirs = requiredRemoteDirs(deletions).filter { it !in keepDirs }.sortedByDescending { it.length }
+        for (dir in staleDirs) {
+            try {
+                client.delete(dir)
+            } catch (_: Exception) {
+            }
+        }
+
         return BackupOutcome(
             uploaded = uploaded,
             skipped = local.size - uploads.size,
+            deleted = deleted,
             failed = errors.size,
             bytes = bytes,
             errors = errors,
