@@ -1171,7 +1171,12 @@ internal fun PaintViewModel.loadBrushPresets(force: Boolean = false) {
     // 改为 IO 线程执行, 完成后再回主线程走后面的流程 (Compose 状态写入必须在
     // 主线程, JNI 读取仍在渲染线程)。
     viewModelScope.launch {
-        val dirs = withContext(Dispatchers.IO) { copyBundledBrushAssets() }
+        val dirs = withContext(Dispatchers.IO) {
+            val d = copyBundledBrushAssets()
+            // 必须在引擎加载任何预设之前清掉历史重复参数键
+            migrateDuplicatedPresetParams(d.first)
+            d
+        }
         loadBrushPresetsAfterAssets(dirs.first, dirs.second)
     }
 }
