@@ -234,6 +234,11 @@ class AbrParserTest {
         val abr = buildAbr(10, uuid, 2, 2, ByteArray(4))
         val result = ByteArrayInputStream(abr).use { AbrParser.parse(it, basePackName = "v10") }
         assertEquals(10, result.version)
+        // Asserting the version field alone would also pass on the old dispatch, which for
+        // anything other than v6 returned AbrParseResult(version, 0, emptyList(), emptyList()).
+        // The tip count is what proves the file was actually parsed.
+        assertEquals("v10 must really be parsed, not just echo its version", 1, result.tips.size)
+        assertEquals(2, result.subversion)
     }
 
     // ---------------------------------------------------------------------------------------------
