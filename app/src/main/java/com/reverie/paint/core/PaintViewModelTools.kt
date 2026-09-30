@@ -597,9 +597,18 @@ internal fun PaintViewModel.replaySymmetricBranches(
     mirroredSamples: List<FloatArray>,
     mirroredSizes: IntArray,
     branchCount: Int = mirroredSamples.size,
+    onComplete: (() -> Unit)? = null,
 ) {
-    if (branchCount <= 0) return
-    val h = renderHandler ?: return
+    if (branchCount <= 0) {
+        runCore(render = false) { ReverieCoreBridge.endUndoMacro() }
+        onComplete?.invoke()
+        return
+    }
+    val h = renderHandler ?: run {
+        runCore(render = false) { ReverieCoreBridge.endUndoMacro() }
+        onComplete?.invoke()
+        return
+    }
 
     // Snapshot branch slices on the calling thread so subsequent touches never race
     val activeBranches = ArrayList<FloatArray>(branchCount)
@@ -616,7 +625,11 @@ internal fun PaintViewModel.replaySymmetricBranches(
             totalActive++
         }
     }
-    if (totalActive == 0) return
+    if (totalActive == 0) {
+        runCore(render = false) { ReverieCoreBridge.endUndoMacro() }
+        onComplete?.invoke()
+        return
+    }
 
     totalStrokes += totalActive
     isModified = true
@@ -660,12 +673,12 @@ internal fun PaintViewModel.replaySymmetricBranches(
                 isCustomized = isPresetCustomized,
             )
             recorder.captureBrushFade(brushFade)
-            val effStartP = computeEffectivePressure(buf[2].toDouble().coerceIn(0.0, 1.0))
-            recorder.strokeStart(buf[0], buf[1], effStartP.toFloat())
+            val effStartP = buf[2].coerceIn(0f, 1f)
+            recorder.strokeStart(buf[0], buf[1], effStartP)
             for (i in 1 until count) {
                 val base = i * 3
-                val effP = computeEffectivePressure(buf[base + 2].toDouble().coerceIn(0.0, 1.0))
-                recorder.strokeMove(buf[base], buf[base + 1], effP.toFloat())
+                val effP = buf[base + 2].coerceIn(0f, 1f)
+                recorder.strokeMove(buf[base], buf[base + 1], effP)
             }
             recorder.strokeEnd()
         }
@@ -690,8 +703,8 @@ internal fun PaintViewModel.replaySymmetricBranches(
                 val startY = buf[1]
                 if (!startX.isFinite() || !startY.isFinite()) continue
                 ReverieCoreBridge.setToolMode(mode)
-                val effStartP = computeEffectivePressure(buf[2].toDouble().coerceIn(0.0, 1.0))
-                ReverieCoreBridge.touchStrokeStart(startX.toDouble(), startY.toDouble(), effStartP)
+                val startP = buf[2].toDouble().coerceIn(0.0, 1.0)
+                ReverieCoreBridge.touchStrokeStart(startX.toDouble(), startY.toDouble(), startP)
 
                 var sampleIdx = 1
                 while (sampleIdx < count) {
@@ -705,9 +718,7 @@ internal fun PaintViewModel.replaySymmetricBranches(
                         val offset = validCount * PaintViewModel.STROKE_SAMPLE_STRIDE
                         chunkBuffer[offset] = px
                         chunkBuffer[offset + 1] = py
-                        val p = buf[base + 2].toDouble().coerceIn(0.0, 1.0)
-                        val effP = computeEffectivePressure(p).toFloat().coerceIn(0f, 1f)
-                        chunkBuffer[offset + 2] = effP
+                        chunkBuffer[offset + 2] = buf[base + 2].coerceIn(0f, 1f)
                         chunkBuffer[offset + 3] = 0f
                         chunkBuffer[offset + 4] = 0f
                         chunkBuffer[offset + 5] = 0f
@@ -724,8 +735,14 @@ internal fun PaintViewModel.replaySymmetricBranches(
         } catch (t: Throwable) {
             android.util.Log.e("ReverieCore", "replaySymmetricBranches error", t)
         } finally {
+            try {
+                ReverieCoreBridge.endUndoMacro()
+            } catch (_: Throwable) {}
             scheduleRender(immediate = true)
-            mainHandler.post { refreshLayerThumbs() }
+            mainHandler.post {
+                refreshLayerThumbs()
+                onComplete?.invoke()
+            }
         }
     }
 }
