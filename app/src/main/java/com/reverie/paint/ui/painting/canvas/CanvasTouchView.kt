@@ -768,6 +768,7 @@ class CanvasTouchView(context: Context) : View(context) {
     private val viewTransform = CanvasViewTransform()
     private val pointScratch = FloatArray(2)
     private val boundsScratch = IntArray(4)
+    private val renderBoundsScratch = IntArray(4)
     private val pixelScratch = IntArray(1)
 
     /** 画笔颜色的解析缓存 (brushColor 是字符串, 每帧 parseColor 纯属浪费) */
@@ -985,7 +986,7 @@ class CanvasTouchView(context: Context) : View(context) {
             val d = try { display } catch (_: Throwable) { null }
             d?.supportedModes?.maxOfOrNull { it.refreshRate } ?: 144f
         } else 144f
-        if (oplusPredictor == null) {
+        if (oplusPredictor == null && com.reverie.paint.core.stylus.OppoOcsStylusClient.isDeviceSupported()) {
             try {
                 val p = OplusMotionPredictor()
                 if (p.isValid) {
@@ -1720,6 +1721,10 @@ class CanvasTouchView(context: Context) : View(context) {
      * 宁可多画一次, 也不允许出现边缘残影。
      */
     fun invalidateFromRender() {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            postInvalidate()
+            return
+        }
         val v = vm
         val snap = v?.renderDirtySnapshot
         if (!partialInvalidateEnabled || v == null || snap == null) {
@@ -1738,12 +1743,12 @@ class CanvasTouchView(context: Context) : View(context) {
             snap[1].toFloat(),
             (snap[0] + dw).toFloat(),
             (snap[1] + dh).toFloat(),
-            boundsScratch,
+            renderBoundsScratch,
         )
-        var left = boundsScratch[0].coerceAtLeast(0)
-        var top = boundsScratch[1].coerceAtLeast(0)
-        var right = boundsScratch[2].coerceAtMost(viewW)
-        var bottom = boundsScratch[3].coerceAtMost(viewH)
+        var left = renderBoundsScratch[0].coerceAtLeast(0)
+        var top = renderBoundsScratch[1].coerceAtLeast(0)
+        var right = renderBoundsScratch[2].coerceAtMost(viewW)
+        var bottom = renderBoundsScratch[3].coerceAtMost(viewH)
         if (right <= left || bottom <= top) {
             postInvalidate()
             return

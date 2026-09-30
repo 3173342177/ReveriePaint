@@ -298,7 +298,7 @@
     <string name="settings_licenses_sub">查看使用的开源库与许可证</string>
     <string name="settings_export_log">导出日志</string>
     <string name="settings_export_log_sub">导出应用运行日志以供调试</string>
-    <string name="settings_export_log_toast">运行日志已准备完毕</string>
+    <string name="settings_export_log_toast">日志已复制到剪贴板</string>
     <string name="settings_intro_title">软件介绍</string>
     <string name="settings_version_summary">v%s · 支持 Mirror 酱高速通道</string>
     <string name="settings_auto_save">自动保存</string>

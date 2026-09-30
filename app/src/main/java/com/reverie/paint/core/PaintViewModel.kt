@@ -3539,12 +3539,28 @@ class PaintViewModel : ViewModel() {
         val sizeMismatch = backBuffer == null || backBuffer?.width != w || backBuffer?.height != h
         val reallocated = sizeMismatch || displayBufferInvalid
         if (reallocated) {
-            frontBuffer = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            backBuffer = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            displayBufferInvalid = false
-            hasWrittenRect = false
-            // 缓冲重分配后旧脏区已无意义, 清掉免得 UI 侧拿它做局部失效
-            renderDirtySnapshot = null
+            try {
+                frontBuffer = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                backBuffer = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                displayBufferInvalid = false
+                hasWrittenRect = false
+                // 缓冲重分配后旧脏区已无意义, 清掉免得 UI 侧拿它做局部失效
+                renderDirtySnapshot = null
+            } catch (oom: OutOfMemoryError) {
+                android.util.Log.e("PaintViewModel", "OOM allocating front/back buffers ($w x $h)", oom)
+                releaseReclaimableCaches(aggressive = true)
+                System.gc()
+                try {
+                    frontBuffer = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    backBuffer = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    displayBufferInvalid = false
+                    hasWrittenRect = false
+                    renderDirtySnapshot = null
+                } catch (retryOom: OutOfMemoryError) {
+                    android.util.Log.e("PaintViewModel", "OOM retry failed, aborting frame", retryOom)
+                    return
+                }
+            }
         }
 
         val front = frontBuffer

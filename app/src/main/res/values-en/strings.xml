@@ -298,7 +298,7 @@
     <string name="settings_licenses_sub">View third-party open source licenses</string>
     <string name="settings_export_log">Export Logs</string>
     <string name="settings_export_log_sub">Export app runtime logs for debugging</string>
-    <string name="settings_export_log_toast">Runtime logs ready</string>
+    <string name="settings_export_log_toast">Log copied to clipboard</string>
     <string name="settings_intro_title">Introduction</string>
     <string name="settings_version_summary">v%s · MirrorChyan CDN supported</string>
     <string name="settings_auto_save">Auto-save</string>
