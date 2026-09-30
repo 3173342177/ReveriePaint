@@ -2517,6 +2517,7 @@ class PaintViewModel : ViewModel() {
             brushSecondaryColor = prefs.getString("brushSecondaryColor", "#ffffff") ?: "#ffffff"
             runCore {
                 ReverieCoreBridge.setBrushColor(brushColor)
+                ReverieCoreBridge.setBrushSecondaryColor(brushSecondaryColor)
             }
 
             brushSizePresets = loadSliderPresets("brushSizePresets")

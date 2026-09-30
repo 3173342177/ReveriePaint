@@ -672,6 +672,7 @@ import kotlinx.coroutines.withContext
                         if (ReverieCoreBridge.loadBrushPreset(targetIdx)) {
                             ReverieCoreBridge.setPresetIsEraser(isEraserPreset)
                             ReverieCoreBridge.setBrushColor(brushColor)
+                            ReverieCoreBridge.setBrushSecondaryColor(brushSecondaryColor)
                             ReverieCoreBridge.setBrushSize(pSnapshot.size)
                             ReverieCoreBridge.setBrushOpacity(pSnapshot.opacity)
                             ReverieCoreBridge.setBrushFlow(pSnapshot.flow)
@@ -1507,6 +1508,7 @@ import kotlinx.coroutines.withContext
                 ReverieCoreBridge.setPresetIsEraser(currentToolId == "eraser" || isEraserPreset)
                 ReverieCoreBridge.setBrushCompositeOp(effectiveCompOp)
                 ReverieCoreBridge.setBrushColor(brushColor)
+                ReverieCoreBridge.setBrushSecondaryColor(brushSecondaryColor)
                 try {
                     prefs().edit().putInt("last_brush_preset_index", index).apply()
                 } catch (_: Exception) {
@@ -1682,6 +1684,7 @@ import kotlinx.coroutines.withContext
             appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
                 .edit().putString("brushSecondaryColor", c).apply()
         }
+        runCore(render = false) { ReverieCoreBridge.setBrushSecondaryColor(c) }
     }
 
     internal fun PaintViewModel.swapColors() {

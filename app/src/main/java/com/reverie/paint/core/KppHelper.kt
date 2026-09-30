@@ -692,46 +692,54 @@ object KppHelper {
         val hasHue = params.hueJitter > 0.001
         xml = updateParam(xml, "Pressureh", hasHue.toString())
         xml = updateParam(xml, "hValue", params.hueJitter.toString())
-        xml = updateParam(xml, "Customh", "true")
-        xml = updateParam(xml, "Curveh", "0,0;1,1;")
-        xml = updateParam(xml, "hUseCurve", "true")
-        xml = updateParam(xml, "hUseSameCurve", "true")
-        if (hasHue) {
-            xml = updateParam(xml, "hSensor", """<!DOCTYPE params><params id="fuzzy"><curve>0,0;1,1;</curve></params>""")
+        if (!originalXml.contains("""name="hSensor"""")) {
+            xml = updateParam(xml, "Customh", "true")
+            xml = updateParam(xml, "Curveh", "0,0;1,1;")
+            xml = updateParam(xml, "hUseCurve", "true")
+            xml = updateParam(xml, "hUseSameCurve", "true")
+            if (hasHue) {
+                xml = updateParam(xml, "hSensor", """<!DOCTYPE params><params id="fuzzy"><curve>0,0;1,1;</curve></params>""")
+            }
         }
 
         val hasSat = params.satJitter > 0.001
         xml = updateParam(xml, "Pressures", hasSat.toString())
         xml = updateParam(xml, "sValue", params.satJitter.toString())
-        xml = updateParam(xml, "Customs", "true")
-        xml = updateParam(xml, "Curves", "0,0;1,1;")
-        xml = updateParam(xml, "sUseCurve", "true")
-        xml = updateParam(xml, "sUseSameCurve", "true")
-        if (hasSat) {
-            xml = updateParam(xml, "sSensor", """<!DOCTYPE params><params id="fuzzy"><curve>0,0;1,1;</curve></params>""")
+        if (!originalXml.contains("""name="sSensor"""")) {
+            xml = updateParam(xml, "Customs", "true")
+            xml = updateParam(xml, "Curves", "0,0;1,1;")
+            xml = updateParam(xml, "sUseCurve", "true")
+            xml = updateParam(xml, "sUseSameCurve", "true")
+            if (hasSat) {
+                xml = updateParam(xml, "sSensor", """<!DOCTYPE params><params id="fuzzy"><curve>0,0;1,1;</curve></params>""")
+            }
         }
 
         val hasVal = params.valJitter > 0.001
         xml = updateParam(xml, "Pressurev", hasVal.toString())
         xml = updateParam(xml, "vValue", params.valJitter.toString())
-        xml = updateParam(xml, "Customv", "true")
-        xml = updateParam(xml, "Curvev", "0,0;1,1;")
-        xml = updateParam(xml, "vUseCurve", "true")
-        xml = updateParam(xml, "vUseSameCurve", "true")
-        if (hasVal) {
-            xml = updateParam(xml, "vSensor", """<!DOCTYPE params><params id="fuzzy"><curve>0,0;1,1;</curve></params>""")
+        if (!originalXml.contains("""name="vSensor"""")) {
+            xml = updateParam(xml, "Customv", "true")
+            xml = updateParam(xml, "Curvev", "0,0;1,1;")
+            xml = updateParam(xml, "vUseCurve", "true")
+            xml = updateParam(xml, "vUseSameCurve", "true")
+            if (hasVal) {
+                xml = updateParam(xml, "vSensor", """<!DOCTYPE params><params id="fuzzy"><curve>0,0;1,1;</curve></params>""")
+            }
         }
 
         val hasMix = params.secondaryMix > 0.001 || params.pressureColorMix
         xml = updateParam(xml, "PressureMix", hasMix.toString())
         xml = updateParam(xml, "MixValue", params.secondaryMix.toString())
-        xml = updateParam(xml, "CurveMix", "0,0;1,1;")
-        xml = updateParam(xml, "CustomMix", "true")
-        xml = updateParam(xml, "MixUseCurve", "true")
-        xml = updateParam(xml, "MixUseSameCurve", "true")
-        if (hasMix) {
-            val mixSensorId = if (params.pressureColorMix) "pressure" else "fuzzy"
-            xml = updateParam(xml, "MixSensor", """<!DOCTYPE params><params id="$mixSensorId"><curve>0,0;1,1;</curve></params>""")
+        if (!originalXml.contains("""name="MixSensor"""")) {
+            xml = updateParam(xml, "CurveMix", "0,0;1,1;")
+            xml = updateParam(xml, "CustomMix", "true")
+            xml = updateParam(xml, "MixUseCurve", "true")
+            xml = updateParam(xml, "MixUseSameCurve", "true")
+            if (hasMix) {
+                val mixSensorId = if (params.pressureColorMix) "pressure" else "fuzzy"
+                xml = updateParam(xml, "MixSensor", """<!DOCTYPE params><params id="$mixSensorId"><curve>0,0;1,1;</curve></params>""")
+            }
         }
 
         // 14. Update Mirror & Rotation dynamics & Scatter sensor

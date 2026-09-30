@@ -270,6 +270,7 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
                 // 新文档的撤销栈是 C++ 侧新建的, 每次都要重新应用历史上限
                 ReverieCoreBridge.setUndoLimit(maxUndoSteps)
                 ReverieCoreBridge.setBrushColor(brushColor)
+                ReverieCoreBridge.setBrushSecondaryColor(brushSecondaryColor)
                 refreshSavedSelections()
 
                 // 恢复退出时选中的图层
@@ -1103,6 +1104,7 @@ internal fun PaintViewModel.startPainting(
                 syncLayersFromNative()
                 ReverieCoreBridge.setUndoLimit(maxUndoSteps)
                 ReverieCoreBridge.setBrushColor(brushColor)
+                ReverieCoreBridge.setBrushSecondaryColor(brushSecondaryColor)
                 if (animation) {
                     // 动画画布: 为最上面的可动画图层建关键帧通道并设帧率
                     nativeInitAnimation(animationFps)
