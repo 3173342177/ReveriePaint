@@ -1039,6 +1039,7 @@ fun PaintingPage(
                         moreToolsOpen = !moreToolsOpen
                     },
                     brushSize = vm.brushSize,
+                    canvasScale = (zoom * fitScale).coerceAtLeast(0.001f),
                     onBrushSize = { size, commit -> vm.updateBrushSize(size, commit) },
                     popupOpacity = vm.popupPanelOpacity,
                     brushOpacity = vm.brushOpacity,

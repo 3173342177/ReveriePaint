@@ -580,7 +580,7 @@ import kotlinx.coroutines.withContext
     ) {
         val preset = brushPresets.firstOrNull { it.index == brushPresetIndex } ?: return
         val name = preset.name
-        val isEraserPreset = preset.group == "橡皮擦" || name.startsWith("a)") || name.contains("Eraser", ignoreCase = true)
+        val isEraserPreset = preset.group == "橡皮擦" || name.startsWith("a)_Eraser", ignoreCase = true) || name.contains("Eraser", ignoreCase = true)
         val existing = brushParams[name]
         val dc = dynamicsChanged || (existing?.dynamicsCustomized == true)
         val sc = smudgeChanged || (existing?.smudgeCustomized == true)
@@ -597,7 +597,7 @@ import kotlinx.coroutines.withContext
             ratio = brushRatio,
             sharpness = brushSharpness,
             rotation = brushRotation,
-            compositeOp = brushCompositeOp,
+            compositeOp = if (isEraserPreset) "erase" else if (brushCompositeOp != "erase") brushCompositeOp else (existing?.compositeOp?.takeIf { it != "erase" } ?: "normal"),
             antiAliasing = brushAntiAliasing,
             tipShape = brushTipShape,
             randomFlipX = brushRandomFlipX,
@@ -1277,7 +1277,7 @@ import kotlinx.coroutines.withContext
             recordRecentBrush(preset.name)
         }
         val isBuiltIn = preset?.isBuiltIn == true
-        val isEraserPreset = preset?.group == "橡皮擦" || preset?.name?.startsWith("a)") == true || preset?.name?.contains("Eraser", ignoreCase = true) == true
+        val isEraserPreset = preset?.group == "橡皮擦" || preset?.name?.startsWith("a)_Eraser", ignoreCase = true) == true || preset?.name?.contains("Eraser", ignoreCase = true) == true
 
         if (preset != null && recorder.recording) {
             // Replay resolves the preset by NAME (the native table may be
@@ -1991,27 +1991,28 @@ import kotlinx.coroutines.withContext
                 val packBaseName = filename.substringBeforeLast(".").trim().ifBlank { "ABR" }
                 val targetGroupName = chosenGroup ?: packBaseName
 
+                val safeGroupPrefix = packBaseName.replace(Regex("""[^\w\u4e00-\u9fa5]"""), "_")
+                val tipFileNameMap = mutableMapOf<Int, String>()
+                val tipUuidToFileName = mutableMapOf<String, String>()
+
                 val parseResult = resolver.openInputStream(uri)?.use { inStream ->
-                    AbrParser.parse(inStream, basePackName = targetGroupName)
+                    AbrParser.parse(inStream, basePackName = targetGroupName) { decodedTip ->
+                        // Stream decoded tip PNG directly to disk, freeing the raw full-res byte array immediately
+                        val tipFileName = "${safeGroupPrefix}_tip_${decodedTip.index}.png"
+                        val tipFile = File(brushDir, tipFileName)
+                        val tipBytes = AbrParser.encodeTipPng(decodedTip)
+                        tipFile.writeBytes(tipBytes)
+                        tipFileNameMap[decodedTip.index] = tipFileName
+                        tipUuidToFileName[decodedTip.uuid] = tipFileName
+                    }
                 }
 
                 if (parseResult == null || (parseResult.tips.isEmpty() && parseResult.presets.isEmpty())) {
                     return BrushImportResult(success = false)
                 }
 
-                val safeGroupPrefix = packBaseName.replace(Regex("""[^\w\u4e00-\u9fa5]"""), "_")
                 val tipsByUuid = parseResult.tips.associateBy { it.uuid }
                 val tipsByIndex = parseResult.tips.associateBy { it.index }
-
-                // 1. Export decoded tip PNG files to filesDir/brushes/
-                val tipFileNameMap = mutableMapOf<Int, String>()
-                for (tip in parseResult.tips) {
-                    val tipFileName = "${safeGroupPrefix}_tip_${tip.index}.png"
-                    val tipFile = File(brushDir, tipFileName)
-                    val tipBytes = AbrParser.encodeTipPng(tip)
-                    tipFile.writeBytes(tipBytes)
-                    tipFileNameMap[tip.index] = tipFileName
-                }
 
                 // 2. Export preset .kpp files to filesDir/paintoppresets/
                 val totalPresets = parseResult.presets.size
@@ -2026,7 +2027,9 @@ import kotlinx.coroutines.withContext
                     val matchedTip = (preset.tipUuid?.let { tipsByUuid[it] })
                         ?: tipsByIndex[preset.tipIndex]
                         ?: parseResult.tips.firstOrNull()
-                    val matchedTipFileName = matchedTip?.let { tipFileNameMap[it.index] } ?: ""
+                    val matchedTipFileName = (preset.tipUuid?.let { tipUuidToFileName[it] })
+                        ?: (matchedTip?.let { tipFileNameMap[it.index] })
+                        ?: ""
 
                     val rawName = preset.name.trim().ifBlank { "$targetGroupName ${idx + 1}" }
                     var candidateName = rawName.replace(Regex("""[\\/:*?"<>|]"""), "_")
@@ -2062,6 +2065,7 @@ import kotlinx.coroutines.withContext
                         pressureFlow = if (preset.pressureFlow) 1.0 else 0.0,
                         tipAsset = matchedTipFileName,
                         paintOpId = "paintbrush",
+                        compositeOp = "normal",
                         author = "外部创作者 (ABR)",
                         isAuthorLocked = true,
                         description = "导入自 Photoshop ABR 笔刷包: $packBaseName",

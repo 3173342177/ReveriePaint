@@ -659,8 +659,8 @@ internal fun PaintViewModel.applyTool(toolId: String) {
 
         val defaultBrushIdx = brushPresets.firstOrNull { it.name == "b)_Basic-5_Size_default" }?.index
             ?: brushPresets.firstOrNull { it.name == "b)_Basic-5_Size_Opacity" }?.index
-            ?: brushPresets.firstOrNull { it.group == "基础" && !it.name.startsWith("a)") && !it.name.contains("Eraser", ignoreCase = true) }?.index
-            ?: brushPresets.firstOrNull { it.group != "橡皮擦" && !it.name.startsWith("a)") && !it.name.contains("Eraser", ignoreCase = true) }?.index
+            ?: brushPresets.firstOrNull { it.group == "基础" && !it.name.startsWith("a)_Eraser", ignoreCase = true) && !it.name.contains("Eraser", ignoreCase = true) }?.index
+            ?: brushPresets.firstOrNull { it.group != "橡皮擦" && !it.name.startsWith("a)_Eraser", ignoreCase = true) && !it.name.contains("Eraser", ignoreCase = true) }?.index
             ?: -1
 
         val defaultEraserIdx = brushPresets.firstOrNull { it.name == "a)_Eraser_Circle" }?.index
@@ -723,7 +723,7 @@ internal fun PaintViewModel.applyTool(toolId: String) {
             } else {
                 // Force refresh Krita param for this specific tool even if it's the same index
                 val curPreset = brushPresets.firstOrNull { it.index == state.presetIndex }
-                val isCurEraser = isEraserTool || (curPreset?.group == "橡皮擦" || curPreset?.name?.startsWith("a)") == true || curPreset?.name?.contains("Eraser", ignoreCase = true) == true)
+                val isCurEraser = isEraserTool || (curPreset?.group == "橡皮擦" || curPreset?.name?.startsWith("a)_Eraser", ignoreCase = true) == true || curPreset?.name?.contains("Eraser", ignoreCase = true) == true)
                 val saved = brushParams[curPreset?.name]
                 val savedOp = saved?.compositeOp
                 val nativeOp = if (state.presetIndex >= 0) ReverieCoreBridge.brushPresetCompositeOp(state.presetIndex) else "normal"

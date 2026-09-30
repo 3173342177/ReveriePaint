@@ -1271,9 +1271,9 @@ private fun PaintViewModel.loadBrushPresetsAfterAssets(
             } ?: ordered.firstOrNull {
                 it.name == "b)_Basic-5_Size_Opacity"
             } ?: ordered.firstOrNull {
-                it.group == "基础" && !it.name.startsWith("a)") && !it.name.contains("Eraser", ignoreCase = true)
+                it.group == "基础" && !it.name.startsWith("a)_Eraser", ignoreCase = true) && !it.name.contains("Eraser", ignoreCase = true)
             } ?: ordered.firstOrNull {
-                it.group != "橡皮擦" && !it.name.startsWith("a)") && !it.name.contains("Eraser", ignoreCase = true)
+                it.group != "橡皮擦" && !it.name.startsWith("a)_Eraser", ignoreCase = true) && !it.name.contains("Eraser", ignoreCase = true)
             } ?: ordered[0]
 
             val defaultEraserPreset = ordered.firstOrNull {
@@ -1294,7 +1294,7 @@ private fun PaintViewModel.loadBrushPresetsAfterAssets(
                 if (savedToolState != null && ordered.any { it.index == savedToolState.presetIndex }) {
                     val candidate = ordered.first { it.index == savedToolState.presetIndex }
                     val isCandidateEraser = candidate.group == "橡皮擦" ||
-                            candidate.name.startsWith("a)") ||
+                            candidate.name.startsWith("a)_Eraser", ignoreCase = true) ||
                             candidate.name.contains("Eraser", ignoreCase = true)
                     if (!isEraserTool && isCandidateEraser) {
                         fallbackPreset.index
@@ -1306,7 +1306,7 @@ private fun PaintViewModel.loadBrushPresetsAfterAssets(
                     if (savedPresetIdx >= 0 && ordered.any { it.index == savedPresetIdx }) {
                         val candidate = ordered.first { it.index == savedPresetIdx }
                         val isCandidateEraser = candidate.group == "橡皮擦" ||
-                                candidate.name.startsWith("a)") ||
+                                candidate.name.startsWith("a)_Eraser", ignoreCase = true) ||
                                 candidate.name.contains("Eraser", ignoreCase = true)
                         if (!isEraserTool && isCandidateEraser) {
                             fallbackPreset.index

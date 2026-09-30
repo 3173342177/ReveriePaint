@@ -3793,7 +3793,7 @@ enum class Page { HOME, CREATE, PAINTING, REPLAY }
 /** Krita-style brush grouping: strictly aligned with Krita default presets. */
 fun inferBrushGroup(name: String): String =
     when {
-        name.startsWith("a)") || name.contains("Eraser", ignoreCase = true) -> "橡皮擦"
+        name.startsWith("a)_Eraser", ignoreCase = true) || name.contains("Eraser", ignoreCase = true) -> "橡皮擦"
         name.startsWith("e)") || name.contains("Marker", ignoreCase = true) -> "马克笔"
         name.startsWith("t)") || name.contains("Shape", ignoreCase = true) || (name.contains("Fill", ignoreCase = true) && !name.contains("starfield", ignoreCase = true)) -> "形状"
         name.startsWith("u)") || name.contains("Pixel", ignoreCase = true) || name.contains("pixel") -> "像素画"

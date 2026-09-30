@@ -653,6 +653,8 @@ object KppHelper {
             } else {
                 xml = xml.replace("</Preset>", " $brushDef\n</Preset>")
             }
+            xml = updateParam(xml, "requiredBrushFile", tipFile)
+            xml = updateParam(xml, "requiredBrushFilesList", tipFile)
         } else if (mainBrushDefPattern.containsMatchIn(xml)) {
             // Retain original tip or auto_brush, and sync spacing/angle/MaskGenerator attrs.
             // 只动主 brush_definition 的 CDATA —— 文档序里排在它前面的
@@ -786,7 +788,9 @@ object KppHelper {
         val tipDef = if (params.tipAsset.isNotBlank()) {
             val ext = params.tipAsset.substringAfterLast(".").lowercase()
             val tipType = if (ext == "gbr") "gbr_brush" else "png_brush"
-            """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="$tipType" useAutoSpacing="0" BrushVersion="2" filename="${params.tipAsset}" spacing="${params.spacing}" angle="${params.angle}"/> ]]></param>"""
+            """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="$tipType" useAutoSpacing="0" BrushVersion="2" filename="${params.tipAsset}" spacing="${params.spacing}" angle="${params.angle}" brushApplication="0"/> ]]></param>
+  <param type="string" name="requiredBrushFile"><![CDATA[${params.tipAsset}]]></param>
+  <param type="string" name="requiredBrushFilesList"><![CDATA[${params.tipAsset}]]></param>"""
         } else {
             """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" BrushVersion="2" spacing="${params.spacing}" angle="${params.angle}"> <MaskGenerator diameter="${params.size}" hfade="$fadeVal" vfade="$fadeVal" id="default" spikes="$spikesVal" type="$tipShapeType" ratio="${params.ratio}" antialiasEdges="$aaVal"/> </Brush> ]]></param>"""
         }
