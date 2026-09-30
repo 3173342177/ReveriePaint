@@ -2533,6 +2533,7 @@ class CanvasTouchView(context: Context) : View(context) {
                         initialDistance = distance
                         initialAngle = angle
                         touchDownTimeMs = nowMs
+                        onTransform?.invoke(canvasZoom, canvasRotation, canvasPanX, canvasPanY)
                     }
                     isContinuousUndoing = false
                     prevCentroid = centroid
@@ -2602,10 +2603,11 @@ class CanvasTouchView(context: Context) : View(context) {
                         invalidate()
                     } else {
                         val k = (distance / prevDistance).coerceIn(0.7f, 1.4f)
-                        val snapThreshold = if (v.canvasRotationEnabled) v.canvasRotationSnapDegrees else 0f
+                        val isLocked = v.isViewTransformLocked
+                        val snapThreshold = if (v.canvasRotationEnabled && !isLocked) v.canvasRotationSnapDegrees else 0f
                         // 用实际生效角增量补偿平移；净转角判定和激活连续性由模型管理。
                         val dRot: Float
-                        if (v.canvasRotationEnabled) {
+                        if (v.canvasRotationEnabled && !isLocked) {
                             val rawDelta = normalizeAngle(angle - prevAngle).coerceIn(-15f, 15f)
                             // 退化输入防御: 非有限增量按 0 处理, 不得把 NaN 累积进吸附状态与画布角度
                             val safeDelta = if (rawDelta.isFinite()) rawDelta else 0f
@@ -2677,7 +2679,7 @@ class CanvasTouchView(context: Context) : View(context) {
                         val vx = prevCentroid.x - (viewW / 2f + canvasPanX)
                         val vy = prevCentroid.y - (viewH / 2f + canvasPanY)
 
-                        val targetZoom = (canvasZoom * k).coerceIn(0.02f, 128f)
+                        val targetZoom = if (isLocked) canvasZoom else (canvasZoom * k).coerceIn(0.02f, 128f)
                         val actualK = if (canvasZoom > 0.0001f) targetZoom / canvasZoom else 1f
 
                         val vRotX = actualK * (vx * cosR - vy * sinR)
@@ -2799,7 +2801,7 @@ class CanvasTouchView(context: Context) : View(context) {
                         v.undo()
                     } else if (!isContinuousUndoing && !isPinchMotion && !filterSessionActive && maxTouchPointers >= 3 && v.gestureThreeFingerRedo && durationMs < 380L) {
                         v.redo()
-                    } else if (rotationSnapGesture.isActive) {
+                    } else if (rotationSnapGesture.isActive && !v.isViewTransformLocked) {
                         // 正常画布手势结束: 若停在 90° 倍数吸附区内, 平滑收敛到精确倍数
                         settleRotationToSnap(prevCentroid.x, prevCentroid.y)
                     }

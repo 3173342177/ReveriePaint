@@ -2099,5 +2099,26 @@
     <string name="canvas_edit_copied">Copied</string>
     <string name="canvas_edit_failed">Action failed; check the current layer and selection</string>
     <string name="toast_project_save_failed">Save failed. Your changes are still unsaved. Please try again.</string>
+
+    <!-- Canvas View Lock & Krita Weighted Smoothing -->
+    <string name="toast_view_locked">View locked</string>
+    <string name="toast_view_unlocked">View unlocked</string>
+    <string name="canvas_view_lock">Lock View</string>
+    <string name="canvas_view_unlock">Unlock View</string>
+    <string name="settings_stroke_smoothing_advanced">Advanced</string>
+    <string name="settings_smoothing_mode">Smoothing Algorithm</string>
+    <string name="settings_smoothing_mode_off">Off</string>
+    <string name="settings_smoothing_mode_basic">Basic</string>
+    <string name="settings_smoothing_mode_weighted">Weighted (Krita)</string>
+    <string name="settings_smoothing_distance">Distance</string>
+    <string name="settings_smoothing_distance_min">Min Distance</string>
+    <string name="settings_smoothing_distance_max">Max Distance</string>
+    <string name="settings_smoothing_lock_distance">Link Min/Max Distance</string>
+    <string name="settings_smoothing_scalable">Scale with Zoom</string>
+    <string name="settings_smoothing_scalable_desc">Adjust smoothing radius with canvas zoom level</string>
+    <string name="settings_smoothing_pressure">Smooth Pressure</string>
+    <string name="settings_smoothing_pressure_desc">Apply Gaussian smoothing to stylus pressure</string>
+    <string name="settings_smoothing_tail_aggressiveness">Tail Aggressiveness</string>
+    <string name="settings_smoothing_tail_aggressiveness_desc">Reduce tail latency when lifting the stylus</string>
 </resources>
 

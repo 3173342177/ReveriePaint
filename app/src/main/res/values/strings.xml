@@ -2099,5 +2099,26 @@
     <string name="canvas_edit_copied">已复制</string>
     <string name="canvas_edit_failed">操作未完成，请检查当前图层与选区</string>
     <string name="toast_project_save_failed">保存失败，修改尚未保存，请重试</string>
+
+    <!-- Canvas View Lock & Krita Weighted Smoothing -->
+    <string name="toast_view_locked">视图已锁定</string>
+    <string name="toast_view_unlocked">视图已解锁</string>
+    <string name="canvas_view_lock">锁定视图</string>
+    <string name="canvas_view_unlock">解锁视图</string>
+    <string name="settings_stroke_smoothing_advanced">高级</string>
+    <string name="settings_smoothing_mode">平滑算法</string>
+    <string name="settings_smoothing_mode_off">关闭</string>
+    <string name="settings_smoothing_mode_basic">基础平滑</string>
+    <string name="settings_smoothing_mode_weighted">加权平滑 (Krita)</string>
+    <string name="settings_smoothing_distance">平滑距离</string>
+    <string name="settings_smoothing_distance_min">最小距离</string>
+    <string name="settings_smoothing_distance_max">最大距离</string>
+    <string name="settings_smoothing_lock_distance">锁定最小与最大距离</string>
+    <string name="settings_smoothing_scalable">随画布缩放自适应</string>
+    <string name="settings_smoothing_scalable_desc">平滑距离随画布缩放比例换算像素</string>
+    <string name="settings_smoothing_pressure">平滑压感</string>
+    <string name="settings_smoothing_pressure_desc">对落笔压感进行高斯平滑滤波</string>
+    <string name="settings_smoothing_tail_aggressiveness">笔尾敏锐度</string>
+    <string name="settings_smoothing_tail_aggressiveness_desc">笔尖离屏时加速收束，消除拖尾迟滞</string>
 </resources>
 

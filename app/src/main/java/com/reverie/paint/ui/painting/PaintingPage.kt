@@ -1522,15 +1522,15 @@ fun PaintingPage(
             Box(
                 modifier =
                     Modifier
-                        .shadow(12.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.35f))
-                        .clip(RoundedCornerShape(12.dp))
+                        .shadow(8.dp, RoundedCornerShape(10.dp), spotColor = Color.Black.copy(alpha = 0.3f))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Morandi.panelHi.copy(alpha = 0.94f))
-                        .glassBorder(RoundedCornerShape(12.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .glassBorder(RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (iconRes != null) {
@@ -1538,13 +1538,13 @@ fun PaintingPage(
                             painter = painterResource(iconRes),
                             contentDescription = msg,
                             tint = Morandi.text,
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(15.dp),
                         )
                     }
                     Text(
                         msg,
                         color = Morandi.text,
-                        fontSize = 12.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                     )
                 }
@@ -1577,7 +1577,7 @@ fun PaintingPage(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 56.dp)
+                    .padding(top = 48.dp)
                     .zIndex(20f),
         ) {
             val zoomPct = (zoom * fitScale * 100).toInt()
@@ -1588,34 +1588,61 @@ fun PaintingPage(
             Box(
                 modifier =
                     Modifier
-                        .shadow(12.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.35f))
-                        .clip(RoundedCornerShape(12.dp))
+                        .shadow(8.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.3f))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(Morandi.panelHi.copy(alpha = 0.94f))
-                        .glassBorder(RoundedCornerShape(12.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .glassBorder(RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.5.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         stringResource(R.string.canvas_zoom_format, zoomPct),
                         color = Morandi.text,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                     )
                     Box(
                         Modifier
-                            .size(3.dp)
+                            .size(2.5.dp)
                             .background(Morandi.border, CircleShape),
                     )
                     Text(
                         stringResource(R.string.canvas_rotation_format, rotDeg),
                         color = if (rotSnapped) Morandi.accent else Morandi.text,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                     )
+                    Box(
+                        Modifier
+                            .size(2.5.dp)
+                            .background(Morandi.border, CircleShape),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (vm.isViewTransformLocked) Morandi.accent.copy(alpha = 0.2f) else Color.Transparent)
+                            .clickable {
+                                vm.toggleViewTransformLocked()
+                                flashIndicator()
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(
+                                if (vm.isViewTransformLocked) R.drawable.ic_lock else R.drawable.ic_lock_open
+                            ),
+                            contentDescription = stringResource(
+                                if (vm.isViewTransformLocked) R.string.canvas_view_unlock else R.string.canvas_view_lock
+                            ),
+                            tint = if (vm.isViewTransformLocked) Morandi.accent else Morandi.subText,
+                            modifier = Modifier.size(11.dp),
+                        )
+                    }
                 }
             }
         }
