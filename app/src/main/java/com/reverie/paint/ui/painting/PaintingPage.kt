@@ -119,6 +119,7 @@ import com.reverie.paint.ui.painting.layers.FilterSessionController
 import com.reverie.paint.ui.painting.layers.FilterTopPillHUD
 import com.reverie.paint.ui.painting.layers.FilterBottomDock
 import com.reverie.paint.model.CanvasAdjustMode
+import com.reverie.paint.model.BackKeyAction
 import com.reverie.paint.model.RotationSnap
 import com.reverie.paint.ui.painting.canvas.CanvasAdjustOverlay
 import com.reverie.paint.ui.painting.panels.CanvasAdjustPanel
@@ -859,8 +860,12 @@ fun PaintingPage(
                 selectionPropsOpen -> selectionPropsOpen = false
                 tfState.active -> cancelTransform()
                 vm.currentToolId != "brush" -> vm.applyTool("brush")
+                // 画布已处于干净状态: 由"返回键行为"设置决定兜底动作
+                // (历史行为为忽略返回, 防误触退出画布)
+                vm.backKeyAction == BackKeyAction.OPEN_SETTINGS -> settingsPanelOpen = true
+                vm.backKeyAction == BackKeyAction.EXIT -> requestExit()
                 else -> {
-                    // 全局禁用返回退出: 在绘画主界面下，忽略系统返回手势/返回键，防止误触退出画布；
+                    // 无行为: 忽略系统返回手势/返回键，防止误触退出画布；
                     // 用户必须点击顶栏的关闭 (X) 按钮退出
                 }
             }

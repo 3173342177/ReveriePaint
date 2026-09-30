@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.reverie.paint.R
 import com.reverie.paint.core.*
+import com.reverie.paint.model.BackKeyAction
 import com.reverie.paint.model.RotationSnap
 import com.reverie.paint.ui.components.ReSlider
 import com.reverie.paint.ui.components.ReSwitch
@@ -638,6 +639,53 @@ internal fun SettingsTabPage(
                                 checked = vm.penModeSingleFingerPanEnabled,
                                 onChecked = { vm.updatePenModeSingleFingerPan(it) },
                             )
+                        }
+
+                        SettingsInnerDivider()
+
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                            Text(
+                                stringResource(R.string.settings_back_key_title),
+                                color = Morandi.text,
+                                fontSize = 13.sp,
+                            )
+                            Text(
+                                stringResource(R.string.settings_back_key_desc),
+                                color = Morandi.subText,
+                                fontSize = 11.sp,
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Morandi.panel)
+                                    .padding(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                for (action in BackKeyAction.entries) {
+                                    val isSelected = vm.backKeyAction == action
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (isSelected) Morandi.accent else Color.Transparent)
+                                            .clickable { vm.updateBackKeyAction(action) },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            stringResource(action.labelRes()),
+                                            color = if (isSelected) Color.White else Morandi.subText,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 

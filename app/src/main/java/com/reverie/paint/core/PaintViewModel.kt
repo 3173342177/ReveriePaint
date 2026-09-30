@@ -1597,6 +1597,21 @@ class PaintViewModel : ViewModel() {
         }
     }
 
+    /** 绘画主界面返回键的兜底行为 (浮层都已关闭时才生效), 见 [BackKeyAction] */
+    var backKeyAction by mutableStateOf(BackKeyAction.NONE)
+
+    fun updateBackKeyAction(action: BackKeyAction) {
+        if (backKeyAction == action) return
+        backKeyAction = action
+        if (::appContext.isInitialized) {
+            appContext
+                .getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString("backKeyAction", action.id)
+                .apply()
+        }
+    }
+
     var actionToastMessage by mutableStateOf<String?>(null)
     var actionToastIcon by mutableStateOf<Int?>(null)
     var actionToastRevision by mutableLongStateOf(0L)
@@ -2447,6 +2462,7 @@ class PaintViewModel : ViewModel() {
             gestureThreeFingerEditMenu = prefs.getBoolean("gestureThreeFingerEditMenu", true)
             gesturePinchTransform = prefs.getBoolean("gesturePinchTransform", true)
             gestureQuickPinchFit = prefs.getBoolean("gestureQuickPinchFit", true)
+            backKeyAction = BackKeyAction.fromId(prefs.getString("backKeyAction", BackKeyAction.NONE.id))
             longPressEyedropperEnabled = prefs.getBoolean("longPressEyedropperEnabled", true)
             eyedropperSensitivity = prefs.getInt("eyedropperSensitivity", 3).coerceIn(1, 5)
             eyedropperOffsetEnabled = prefs.getBoolean("eyedropperOffsetEnabled", true)
