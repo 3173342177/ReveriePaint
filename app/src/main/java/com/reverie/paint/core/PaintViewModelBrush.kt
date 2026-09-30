@@ -1267,6 +1267,28 @@ import kotlinx.coroutines.withContext
         }
     }
 
+    /**
+     * Picks the brush size to show when a preset is selected.
+     *
+     * The engine can report a literal `1.0` that does **not** mean "1 pixel". Two paths produce
+     * it: `KisBrushBasedPaintOpSettings::paintOpSize()` returns
+     * `KIS_SAFE_ASSERT_RECOVER_RETURN_VALUE(this->brush(), 1.0)` when the brush failed to parse,
+     * and the `auto_brush` that `KisBrush::fromXML` falls back to has no `<MaskGenerator>`, whose
+     * diameter default happens to be `1.0` as well (`KisAutoBrushFactory` reads
+     * `attr("diameter", "1.0")`). Either way "the brush did not resolve" is reported as 1px, and
+     * because 1.0 satisfies the generic `size > 0` guard the UI happily parks at the minimum —
+     * which is exactly why every imported brush had to be re-adjusted by hand.
+     *
+     * Only when the engine value is <= 1.0 **and** we actually remember a size > 1.0 for this
+     * preset do we substitute the remembered one. A user who deliberately set 1px is not
+     * overridden, and built-in presets (no remembered entry) behave exactly as before.
+     */
+    internal fun resolvePresetSize(engineSize: Double, savedSize: Double?): Double {
+        if (engineSize.isFinite() && engineSize > 1.0) return engineSize
+        if (savedSize == null || !savedSize.isFinite() || savedSize <= 1.0) return engineSize
+        return savedSize
+    }
+
     internal fun PaintViewModel.selectBrushPreset(index: Int) {
         // brushPresetIndex and every native API are indexed by the NATIVE
         // preset table (filename-sorted). Resolve by BrushPresetInfo.index,
@@ -1394,7 +1416,7 @@ import kotlinx.coroutines.withContext
                 val parsed = if (kppFile?.exists() == true) KppHelper.parseKppFile(kppFile) else KppHelper.KppParsedAttributes()
 
                 if (d.size >= 8) {
-                    brushSize = d[0]
+                    brushSize = resolvePresetSize(d[0], saved?.size)
                     brushOpacity = d[1].coerceIn(0.0, 1.0)
                     brushFlow = d[2].coerceIn(0.0, 1.0)
                     val rawSp = d[3]
@@ -1405,7 +1427,7 @@ import kotlinx.coroutines.withContext
                     brushSmudgeRate = d[6]
                     brushSmudgeLength = d[7]
                 } else if (d.size >= 3) {
-                    brushSize = d[0]
+                    brushSize = resolvePresetSize(d[0], saved?.size)
                     brushOpacity = d[1].coerceIn(0.0, 1.0)
                     brushFlow = d[2].coerceIn(0.0, 1.0)
                     brushSpacing = 0.1
@@ -2024,9 +2046,10 @@ import kotlinx.coroutines.withContext
                 val existingKppNames = (presetDir.list() ?: emptyArray()).map { it.removeSuffix(".kpp") }.toMutableSet()
 
                 for ((idx, preset) in parseResult.presets.withIndex()) {
-                    val matchedTip = (preset.tipUuid?.let { tipsByUuid[it] })
-                        ?: tipsByIndex[preset.tipIndex]
-                        ?: parseResult.tips.firstOrNull()
+                    // Computed presets must NOT bind a sampled tip; see AbrParser.matchTipForPreset.
+                    val matchedTip = AbrParser.matchTipForPreset(
+                        preset, tipsByUuid, tipsByIndex, parseResult.tips,
+                    )
                     val matchedTipFileName = (preset.tipUuid?.let { tipUuidToFileName[it] })
                         ?: (matchedTip?.let { tipFileNameMap[it.index] })
                         ?: ""
@@ -2075,7 +2098,20 @@ import kotlinx.coroutines.withContext
                     )
 
                     val kppFile = File(presetDir, "$candidateName.kpp")
-                    val kppBytes = KppHelper.updateKppBytes(previewBytes, candidateName, bp)
+                    // File-backed tips report `max(tipW, tipH) * scale` as the brush size
+                    // (KisScalingSizeBrush::userEffectiveSize), so `scale` is the only way to
+                    // make that number match the diameter the ABR declares. Without this the
+                    // size silently becomes the raw tip pixel size, and a preset declaring
+                    // diameter=80 shows up as 282 for a 282x282 tip.
+                    val tipScale = if (matchedTip != null && preset.diameter > 0.0 &&
+                        matchedTip.width > 0 && matchedTip.height > 0
+                    ) {
+                        (preset.diameter / maxOf(matchedTip.width, matchedTip.height))
+                            .coerceIn(0.01, 8.0)
+                    } else {
+                        null
+                    }
+                    val kppBytes = KppHelper.updateKppBytes(previewBytes, candidateName, bp, tipScale)
                     kppFile.writeBytes(kppBytes)
 
                     brushParams[candidateName] = bp
