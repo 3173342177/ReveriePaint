@@ -81,18 +81,23 @@ internal fun PaintViewModel.computeEffectivePressure(raw: Double): Double {
         3 -> g * g * (3.0 - 2.0 * g) // S-Curve
         else -> g // Linear
     }
-    // Stage 3: brushPressureSize dynamic scaling
-    return (1.0 - brushPressureSize) + brushPressureSize * curveP
+    return curveP
 }
 
 internal fun PaintViewModel.computeStrokePressureFraction(raw: Double): Float {
+    if (!brushPressureEnabled || brushPressureSize <= 0.001) return 1.0f
     val effP = computeEffectivePressure(raw).toFloat().coerceIn(0f, 1f)
     val bridgeFrac = try {
         ReverieCoreBridge.brushPressureFraction(effP)
     } catch (_: Throwable) {
         effP
     }
-    return if (bridgeFrac > 0f && bridgeFrac < 1.0f) bridgeFrac else effP
+    val rawFrac = (1.0f - brushPressureSize.toFloat()) + brushPressureSize.toFloat() * effP
+    return if (bridgeFrac > 0f && bridgeFrac < 1.0f) {
+        (1.0f - brushPressureSize.toFloat()) + brushPressureSize.toFloat() * bridgeFrac
+    } else {
+        rawFrac
+    }
 }
 
 
