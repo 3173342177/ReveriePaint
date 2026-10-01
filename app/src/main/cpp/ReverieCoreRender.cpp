@@ -141,7 +141,7 @@ bool ReverieCore::renderToBuffer(quint8 *buffer, int w, int h, bool forceFull)
                 break;
             }
         }
-        if (m_drawing || hasVisibleStrokeLayer) {
+        if (m_drawing || hasVisibleStrokeLayer || !m_dirtyRect.isEmpty()) {
             // Non-blocking in-stroke rendering: bypass Krita background scheduler completely.
             // Synchronously composite the exact dirty sub-region across visible layers in <0.05ms.
             const QRect r = m_dirtyRect.intersected(QRect(0, 0, iw, ih));
