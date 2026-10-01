@@ -699,6 +699,9 @@ internal fun PaintViewModel.replaySymmetricBranches(
 }
 
 internal fun PaintViewModel.applyTool(toolId: String) {
+    if (toolId == currentToolId && !isTemporaryPicker) {
+        return
+    }
     if (toolId != currentToolId) {
         lastToolId = currentToolId
     }
@@ -1241,14 +1244,18 @@ internal fun PaintViewModel.undo() {
     }
     if (currentToolId == "lasso" && lassoMultiPoints.isNotEmpty()) {
         undoLassoPoint()
-        showActionToast(R.string.toast_undo_lasso_point, R.drawable.ic_undo)
+        if (undoToastEnabled) {
+            showActionToast(R.string.toast_undo_lasso_point, R.drawable.ic_undo)
+        }
         return
     }
     stopAirbrush()
     disarmStrokeStartKick()
     clearPendingStrokeSamples()
-    showActionToast(R.string.toast_undo, R.drawable.ic_undo)
-    runCore(after = {
+    if (undoToastEnabled) {
+        showActionToast(R.string.toast_undo, R.drawable.ic_undo)
+    }
+    runCore(render = false, after = {
         val nw = ReverieCoreBridge.docWidth()
         val nh = ReverieCoreBridge.docHeight()
         coreW = nw
@@ -1279,8 +1286,10 @@ internal fun PaintViewModel.redo() {
     stopAirbrush()
     disarmStrokeStartKick()
     clearPendingStrokeSamples()
-    showActionToast(R.string.toast_redo, R.drawable.ic_redo)
-    runCore(after = {
+    if (undoToastEnabled) {
+        showActionToast(R.string.toast_redo, R.drawable.ic_redo)
+    }
+    runCore(render = false, after = {
         val nw = ReverieCoreBridge.docWidth()
         val nh = ReverieCoreBridge.docHeight()
         coreW = nw

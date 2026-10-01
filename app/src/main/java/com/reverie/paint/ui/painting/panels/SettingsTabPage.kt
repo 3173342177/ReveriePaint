@@ -1335,6 +1335,12 @@ internal fun SettingsTabPage(
 
     // ---- Key Recording Dialog ----
     recordingShortcut?.let { def ->
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            vm.isShortcutRecordingActive = true
+            onDispose {
+                vm.isShortcutRecordingActive = false
+            }
+        }
         var recordedKey by remember { mutableStateOf(vm.getShortcutKey(def.id)) }
         val dialogFocusRequester = remember { FocusRequester() }
 
