@@ -199,6 +199,37 @@ internal fun LayerListView(
             if (res.isEmpty() && n > 0) vm.layers.reversed() else res
         }
 
+    // Auto-scroll to newly added layer when list length requires scrolling
+    var prevLayerCount by remember { mutableIntStateOf(vm.layers.size) }
+    LaunchedEffect(displayRows, vm.currentLayerIndex) {
+        if (vm.layers.size > prevLayerCount) {
+            val newLayer = vm.layers.getOrNull(vm.currentLayerIndex)
+            if (newLayer != null && newLayer.depth > 0) {
+                var currentDepth = newLayer.depth
+                var idx = vm.currentLayerIndex - 1
+                val toExpand = mutableSetOf<String>()
+                while (idx >= 0 && currentDepth > 0) {
+                    val candidate = vm.layers.getOrNull(idx) ?: break
+                    if (candidate.depth == currentDepth - 1 && candidate.isGroup) {
+                        if (candidate.name in vm.collapsedGroupNames) {
+                            toExpand.add(candidate.name)
+                        }
+                        currentDepth = candidate.depth
+                    }
+                    idx--
+                }
+                if (toExpand.isNotEmpty()) {
+                    vm.collapsedGroupNames = vm.collapsedGroupNames - toExpand
+                }
+            }
+            val visualIdx = displayRows.indexOfFirst { it.index == vm.currentLayerIndex }
+            if (visualIdx >= 0) {
+                listState.animateScrollToItem(visualIdx)
+            }
+        }
+        prevLayerCount = vm.layers.size
+    }
+
     val activeDrag = vm.activeLayerDrag
     val isDraggingActive = draggingFrom >= 0 || activeDrag != null
     val targetSlot = when {
