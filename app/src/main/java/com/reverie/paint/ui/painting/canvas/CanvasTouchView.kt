@@ -2909,7 +2909,7 @@ class CanvasTouchView(context: Context) : View(context) {
         val screenPos = Offset(event.getX(singleFingerIdx), event.getY(singleFingerIdx))
         val docPos = screenToDoc(screenPos)
         val isDrawingTool = tool == Tool.BRUSH || tool == Tool.ERASER || tool == Tool.SMUDGE || tool == Tool.LIQUIFY
-        val canEyedrop = v.longPressEyedropperEnabled && !v.penOnlyMode && isDrawingTool
+        val canEyedrop = v.longPressEyedropperEnabled && isDrawingTool
         val isPenOnlyPan = v.penOnlyMode && v.penModeSingleFingerPanEnabled && (
             tool.group == ToolGroup.BRUSH ||
             tool.group == ToolGroup.SELECTION ||
@@ -2945,11 +2945,13 @@ class CanvasTouchView(context: Context) : View(context) {
                     pendingDownPressure = 1f
                     val delayMs = (520L - (v.eyedropperSensitivity - 1) * 70L).coerceIn(200L, 600L)
                     postDelayed(longPressRunnable, delayMs)
-                    localCursorPos = screenPos
-                    localIsTouching = true
-                    localIsHovering = false
-                    localPressure = 1f
-                    invalidate()
+                    if (!v.penOnlyMode) {
+                        localCursorPos = screenPos
+                        localIsTouching = true
+                        localIsHovering = false
+                        localPressure = 1f
+                        invalidate()
+                    }
                 } else if (!isPenOnlyPan) {
                     if (v.penOnlyMode) {
                         // 笔模式下且未开启单指平移：忽略单指触控输入，防止手掌误触作画
@@ -2978,6 +2980,27 @@ class CanvasTouchView(context: Context) : View(context) {
                 if (isLongPressPickerActive) {
                     sampleColorAtScreenPos(screenPos)
                     return true
+                }
+
+                if (isPendingLongPress) {
+                    val moveSlopPx = (1.5f + (v.eyedropperSensitivity.coerceIn(1, 5) - 3) * 0.3f).coerceIn(0.6f, 2.5f) * density
+                    val moveDist = hypot(screenPos.x - pendingDownScreenPos.x, screenPos.y - pendingDownScreenPos.y)
+                    if (moveDist > moveSlopPx) {
+                        removeCallbacks(longPressRunnable)
+                        longPressToken++
+                        isPendingLongPress = false
+                        if (!v.penOnlyMode) {
+                            localCursorPos = screenPos
+                            localIsTouching = true
+                            handleToolDown(pendingDownScreenPos, pendingDownDocPos, pendingDownPressure, isStylus = false)
+                            handleToolMove(event, 0, docPos, 1f, isStylus = false)
+                            invalidate()
+                            return true
+                        }
+                    } else {
+                        // 处于长按吸色等待期，位移未超容差，防止手指微动误触发平移或画线
+                        return true
+                    }
                 }
 
                 val isShiftTraceAlign = v.anim.shiftTraceActive && v.anim.shiftTraceGestureMode == ShiftTraceGestureMode.ALIGN_FRAME
@@ -3017,25 +3040,10 @@ class CanvasTouchView(context: Context) : View(context) {
                         // 笔模式下且未开启单指平移：忽略单指移动
                         return true
                     }
-                    if (isPendingLongPress) {
-                        val moveSlopPx = (1.5f + (v.eyedropperSensitivity.coerceIn(1, 5) - 3) * 0.3f).coerceIn(0.6f, 2.5f) * density
-                        val moveDist = hypot(screenPos.x - pendingDownScreenPos.x, screenPos.y - pendingDownScreenPos.y)
-                        if (moveDist > moveSlopPx) {
-                            removeCallbacks(longPressRunnable)
-                            longPressToken++
-                            isPendingLongPress = false
-                            localCursorPos = screenPos
-                            localIsTouching = true
-                            handleToolDown(pendingDownScreenPos, pendingDownDocPos, pendingDownPressure, isStylus = false)
-                            handleToolMove(event, 0, docPos, 1f, isStylus = false)
-                            invalidate()
-                        }
-                    } else {
-                        localCursorPos = screenPos
-                        localIsTouching = true
-                        handleToolMove(event, 0, docPos, 1f, isStylus = false)
-                        invalidate()
-                    }
+                    localCursorPos = screenPos
+                    localIsTouching = true
+                    handleToolMove(event, 0, docPos, 1f, isStylus = false)
+                    invalidate()
                     return true
                 }
             }
@@ -3068,6 +3076,18 @@ class CanvasTouchView(context: Context) : View(context) {
                     return true
                 }
 
+                if (isPendingLongPress) {
+                    isPendingLongPress = false
+                    if (!v.penOnlyMode) {
+                        handleToolDown(pendingDownScreenPos, pendingDownDocPos, pendingDownPressure, isStylus = false)
+                        handleToolUp(event, pendingDownDocPos, isCancel = (event.actionMasked == MotionEvent.ACTION_CANCEL))
+                    }
+                    localIsTouching = false
+                    localCursorPos = null
+                    invalidate()
+                    return true
+                }
+
                 if (!isPenOnlyPan) {
                     if (v.penOnlyMode) {
                         localIsTouching = false
@@ -3075,13 +3095,7 @@ class CanvasTouchView(context: Context) : View(context) {
                         invalidate()
                         return true
                     }
-                    if (isPendingLongPress) {
-                        isPendingLongPress = false
-                        handleToolDown(pendingDownScreenPos, pendingDownDocPos, pendingDownPressure, isStylus = false)
-                        handleToolUp(event, pendingDownDocPos, isCancel = (event.actionMasked == MotionEvent.ACTION_CANCEL))
-                    } else {
-                        handleToolUp(event, docPos, isCancel = (event.actionMasked == MotionEvent.ACTION_CANCEL))
-                    }
+                    handleToolUp(event, docPos, isCancel = (event.actionMasked == MotionEvent.ACTION_CANCEL))
                     localIsTouching = false
                     localCursorPos = null
                     invalidate()

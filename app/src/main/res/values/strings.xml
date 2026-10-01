@@ -733,8 +733,8 @@
     <string name="settings_back_key_exit">返回</string>
     <string name="settings_gesture_pen_hint">提示：多指触控手势不受笔模式影响，手写笔模式下依然可以直接使用双指撤销与三指重做</string>
     <string name="settings_eyedropper_long_press_title">长按画布吸色</string>
-    <string name="settings_eyedropper_long_press_stylus_desc">笔模式已开启：手写笔长按画布取色</string>
-    <string name="settings_eyedropper_long_press_finger_desc">长按画布取色，开启笔模式后由手写笔长按取色</string>
+    <string name="settings_eyedropper_long_press_stylus_desc">笔模式已开启：支持手指或手写笔长按画布取色</string>
+    <string name="settings_eyedropper_long_press_finger_desc">长按画布取色，笔模式下支持手指与手写笔取色</string>
     <string name="settings_eyedropper_sensitivity">拾色灵敏度</string>
     <string name="settings_eyedropper_level_summary">%1$d 段 · %2$s (%3$s)</string>
     <string name="settings_eyedropper_level_suffix">%d段</string>
