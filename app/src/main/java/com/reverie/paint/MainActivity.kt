@@ -174,6 +174,8 @@ class MainActivity : ComponentActivity() {
         currentViewModel = vm
         vm.appContext = applicationContext
         vm.syncSettingsFromPrefs()
+        // 提前在 onCreate 启动笔刷加载，与 Compose UI 挂载和首帧渲染并发执行，彻底消除冷启动进入画布时笔刷面板的延迟与白屏
+        vm.loadBrushPresets()
         applyImmersive(vm.immersiveMode, vm.extendToCutout)
         val initialIsDark = vm.isCurrentlyDark()
         val initialColors = if (initialIsDark) com.reverie.paint.ui.theme.MorandiDarkColors else com.reverie.paint.ui.theme.MorandiLightColors

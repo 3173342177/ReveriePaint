@@ -1008,6 +1008,7 @@
     <string name="brush_cat_import">导入</string>
     <string name="brush_library_title">笔刷库</string>
     <string name="brush_presets_count">%d 预设</string>
+    <string name="brush_presets_loading">正在载入笔刷库...</string>
     <string name="brush_switch_to_list">切换为列表视图</string>
     <string name="brush_switch_to_grid">切换为网格视图</string>
     <string name="brush_empty_fav_title">暂无常用笔刷</string>

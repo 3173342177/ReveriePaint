@@ -1707,7 +1707,7 @@ import kotlinx.coroutines.withContext
     internal fun PaintViewModel.reloadBrushPresets(selectName: String? = null) {
         val dir = File(appContext.filesDir, "paintoppresets")
         val brushDir = File(appContext.filesDir, "brushes")
-        val builtInNames = appContext.assets.list("paintoppresets")?.map { it.removeSuffix(".kpp") }?.toSet() ?: emptySet()
+        val builtInNames = getBuiltInBrushNames()
         val list = ArrayList<BrushPresetInfo>()
         runCore(after = {
             // Every reload re-assigns native indices, so keep the selection

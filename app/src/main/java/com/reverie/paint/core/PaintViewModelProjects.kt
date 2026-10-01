@@ -1193,10 +1193,25 @@ internal fun PaintViewModel.refreshDisplay() {
 }
 
 private var brushPresetsLoaded = false
+private var cachedBuiltInNames: Set<String>? = null
+
+internal fun PaintViewModel.getBuiltInBrushNames(): Set<String> {
+    cachedBuiltInNames?.let { return it }
+    val names = try {
+        appContext.assets.list("paintoppresets")?.map { it.removeSuffix(".kpp") }?.toSet() ?: emptySet()
+    } catch (_: Throwable) {
+        emptySet()
+    }
+    if (names.isNotEmpty()) {
+        cachedBuiltInNames = names
+    }
+    return names
+}
 
 internal fun PaintViewModel.loadBrushPresets(force: Boolean = false) {
     if (brushPresetsLoaded && !force) return
     brushPresetsLoaded = true
+    isBrushPresetsLoading = true
     loadToolOptions()
     loadViewSettings()
     loadShortcuts()
@@ -1223,9 +1238,22 @@ internal fun PaintViewModel.loadBrushPresets(force: Boolean = false) {
  */
 private fun PaintViewModel.copyBundledBrushAssets(): Pair<File, File> {
     val dir = java.io.File(appContext.filesDir, "paintoppresets")
-    val assets = appContext.assets
+    val brushDir = java.io.File(appContext.filesDir, "brushes")
     val prefs = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
     val needsFactoryRestore = !prefs.getBoolean("brush_kpp_factory_restored_v5", false)
+    val lastInstalledVersion = prefs.getInt("brush_assets_installed_version", -1)
+    val isVersionMatched = lastInstalledVersion == com.reverie.paint.BuildConfig.VERSION_CODE
+
+    // 若当前版本已拷贝过资源且目标目录健全，直接秒级快速返回，免去对 500+ 个 assets 文件的解压与遍历检查
+    if (!needsFactoryRestore && isVersionMatched && dir.exists() && brushDir.exists()) {
+        val presetCount = dir.list()?.size ?: 0
+        val brushCount = brushDir.list()?.size ?: 0
+        if (presetCount >= 100 && brushCount >= 100) {
+            return dir to brushDir
+        }
+    }
+
+    val assets = appContext.assets
     try {
         if (!dir.exists()) dir.mkdirs()
         for (name in assets.list("paintoppresets") ?: emptyArray()) {
@@ -1246,7 +1274,6 @@ private fun PaintViewModel.copyBundledBrushAssets(): Pair<File, File> {
     // Copy the bundled brush resource files (.gbr/.gih/.png/.svg) from
     // assets to filesDir once, so presets can resolve their
     // brush_definition files via the shared KisLocalStrokeResources.
-    val brushDir = java.io.File(appContext.filesDir, "brushes")
     try {
         if (!brushDir.exists()) brushDir.mkdirs()
         for (name in assets.list("brushes") ?: emptyArray()) {
@@ -1259,6 +1286,11 @@ private fun PaintViewModel.copyBundledBrushAssets(): Pair<File, File> {
         }
     } catch (e: Exception) {
         android.util.Log.e("ReveriePaint", "brush copy failed", e)
+    }
+
+    try {
+        prefs.edit().putInt("brush_assets_installed_version", com.reverie.paint.BuildConfig.VERSION_CODE).apply()
+    } catch (_: Exception) {
     }
     return dir to brushDir
 }
@@ -1348,6 +1380,7 @@ private fun PaintViewModel.loadBrushPresetsAfterAssets(
             applyTool(savedToolId)
             selectBrushPreset(targetIndex)
         }
+        isBrushPresetsLoading = false
     }) {
         android.util.Log.d("ReveriePaint", "loadBrushPresets runCore start")
         val nrb = ReverieCoreBridge.loadBrushResources(brushDir.absolutePath)
@@ -1361,7 +1394,7 @@ private fun PaintViewModel.loadBrushPresetsAfterAssets(
         }
         val n = ReverieCoreBridge.loadBrushPresetsFromDir(dir.absolutePath)
         android.util.Log.d("ReveriePaint", "loadBrushPresets count=$n")
-        val builtInNames = appContext.assets.list("paintoppresets")?.map { it.removeSuffix(".kpp") }?.toSet() ?: emptySet()
+        val builtInNames = getBuiltInBrushNames()
         list.clear()
         for (i in 0 until n) {
             val nm = ReverieCoreBridge.brushPresetName(i)

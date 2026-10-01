@@ -1008,6 +1008,7 @@
     <string name="brush_cat_import">Imported</string>
     <string name="brush_library_title">Brush Library</string>
     <string name="brush_presets_count">%d Presets</string>
+    <string name="brush_presets_loading">Loading brush library...</string>
     <string name="brush_switch_to_list">Switch to List View</string>
     <string name="brush_switch_to_grid">Switch to Grid View</string>
     <string name="brush_empty_fav_title">No Favorite Brushes</string>

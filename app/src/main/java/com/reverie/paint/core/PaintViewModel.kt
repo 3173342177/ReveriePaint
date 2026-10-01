@@ -491,6 +491,7 @@ class PaintViewModel : ViewModel() {
     var brushSecondaryColor by mutableStateOf("#ffffff")
     var brushOpacity by mutableDoubleStateOf(1.0)
     var brushPresets by mutableStateOf<List<BrushPresetInfo>>(emptyList())
+    var isBrushPresetsLoading by mutableStateOf(false)
     var brushPresetIndex by mutableIntStateOf(-1)
 
     // User-defined brush groups: preset name -> group name; and the list of
