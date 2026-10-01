@@ -16,6 +16,7 @@
 #include <QByteArray>
 
 #include "ReverieCore.h"
+#include "ReverieCrashHandler.h"
 
 #include "reverie_jni_common.h"
 
@@ -286,5 +287,33 @@ JNIEXPORT jint JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_docHeight(JNIEnv *, jobject)
 {
     return core()->docHeight();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_initNativeCrashHandler(JNIEnv *env, jobject, jstring jLogDir, jstring jAppVersion)
+{
+    const char *logDir = jLogDir ? env->GetStringUTFChars(jLogDir, nullptr) : nullptr;
+    const char *appVer = jAppVersion ? env->GetStringUTFChars(jAppVersion, nullptr) : nullptr;
+    reverie_crash_handler_init(logDir, appVer);
+    if (logDir) env->ReleaseStringUTFChars(jLogDir, logDir);
+    if (appVer) env->ReleaseStringUTFChars(jAppVersion, appVer);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_addNativeBreadcrumb(JNIEnv *env, jobject, jstring jTag, jstring jMsg)
+{
+    const char *tag = jTag ? env->GetStringUTFChars(jTag, nullptr) : nullptr;
+    const char *msg = jMsg ? env->GetStringUTFChars(jMsg, nullptr) : nullptr;
+    reverie_crash_handler_add_breadcrumb(tag, msg);
+    if (tag) env->ReleaseStringUTFChars(jTag, tag);
+    if (msg) env->ReleaseStringUTFChars(jMsg, msg);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_updateNativeCrashState(JNIEnv *env, jobject, jstring jState)
+{
+    const char *st = jState ? env->GetStringUTFChars(jState, nullptr) : nullptr;
+    reverie_crash_handler_update_state(st);
+    if (st) env->ReleaseStringUTFChars(jState, st);
 }
 }

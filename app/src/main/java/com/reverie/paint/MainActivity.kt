@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
@@ -211,6 +213,7 @@ class MainActivity : ComponentActivity() {
             // 预热, 其余页面挂起, 避免常驻静音输出被系统判为"播放媒体"而耗电
             val appPage = vm.currentPage
             androidx.compose.runtime.LaunchedEffect(appPage) {
+                com.reverie.paint.core.Breadcrumbs.record("Navigation", "Current page: $appPage")
                 vm.refreshStylusAudioGate()
             }
             ReverieApp(vm)
@@ -644,6 +647,27 @@ fun ReverieApp(vm: PaintViewModel = viewModel()) {
             uris = brushImportUris,
             vm = vm,
             onDismiss = { vm.pendingExternalBrushUris = null },
+        )
+    }
+
+    // 崩溃诊断弹窗：检测上次未提示的崩溃日志
+    var pendingCrashLog by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<com.reverie.paint.core.CrashHandler.CrashLogInfo?>(null)
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val unseen = com.reverie.paint.core.CrashHandler.getUnseenCrashLog(context)
+            if (unseen != null) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    pendingCrashLog = unseen
+                }
+            }
+        }
+    }
+    pendingCrashLog?.let { logInfo ->
+        com.reverie.paint.ui.dialog.CrashReportDialog(
+            logInfo = logInfo,
+            onDismiss = { pendingCrashLog = null },
         )
     }
 }

@@ -1503,6 +1503,7 @@ import kotlinx.coroutines.withContext
             checkBrushSizeLimit()
         }) {
             if (ReverieCoreBridge.loadBrushPreset(index)) {
+                Breadcrumbs.record("Brush", "Load preset [$index]: ${preset?.name}")
                 // 分组元数据覆盖 C++ 名字启发式; 必须在 loadBrushPreset 之后下发,
                 // 否则会被加载成功路径里的 override 重置抹掉
                 ReverieCoreBridge.setPresetIsEraser(currentToolId == "eraser" || isEraserPreset)

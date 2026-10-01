@@ -307,6 +307,7 @@ internal fun PaintViewModel.addLayer() {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_ADD)
     }
     val defaultName = generateDefaultLayerName()
+    Breadcrumbs.record("Layer", "Add layer: $defaultName")
     runCore(after = {
         clearLayerSelection()
         notifyLayerChanged()
@@ -370,6 +371,7 @@ internal fun PaintViewModel.removeLayer() {
 
 internal fun PaintViewModel.removeLayer(index: Int) {
     clearLayerSelection()
+    Breadcrumbs.record("Layer", "Remove layer: $index")
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_REMOVE, index)
     }
@@ -382,6 +384,7 @@ internal fun PaintViewModel.removeLayer(index: Int) {
 }
 
 internal fun PaintViewModel.setCurrentLayer(i: Int) {
+    Breadcrumbs.record("Layer", "Set current layer: $i")
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_SET_CURRENT, i)
     }

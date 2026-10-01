@@ -82,6 +82,7 @@ object ReverieCoreBridge {
         nativeLoaded = true
         initQtAndroid()
         System.loadLibrary("reverie_jni")
+        mainActivity?.let { CrashHandler.init(it) }
     }
 
     external fun newDocument(
@@ -1254,5 +1255,10 @@ object ReverieCoreBridge {
     external fun storedSelectionId(index: Int): String
     external fun storedSelectionThumbnail(index: Int, w: Int, h: Int): IntArray?
     external fun clearStoredSelections()
+
+    // Native Crash Handler & Breadcrumbs
+    external fun initNativeCrashHandler(logDir: String, appVersion: String)
+    external fun addNativeBreadcrumb(tag: String, msg: String)
+    external fun updateNativeCrashState(stateJson: String)
 }
 

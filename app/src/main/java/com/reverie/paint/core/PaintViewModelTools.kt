@@ -733,6 +733,7 @@ internal fun PaintViewModel.applyTool(toolId: String) {
         isTemporaryPicker = false
     }
     currentToolId = toolId
+    Breadcrumbs.record("Tool", "Switch tool to: $toolId")
     try {
         prefs().edit().putString("current_tool_id", toolId).apply()
     } catch (_: Exception) {
@@ -1274,6 +1275,7 @@ internal fun PaintViewModel.undo() {
         }
     }) {
         if (ReverieCoreBridge.canUndo()) {
+            Breadcrumbs.record("History", "Undo")
             if (recorder.recording) {
                 recorder.toolOp(T_UNDO) { }
             }
@@ -1308,6 +1310,7 @@ internal fun PaintViewModel.redo() {
         }
     }) {
         if (ReverieCoreBridge.canRedo()) {
+            Breadcrumbs.record("History", "Redo")
             if (recorder.recording) {
                 recorder.toolOp(T_REDO) { }
             }
