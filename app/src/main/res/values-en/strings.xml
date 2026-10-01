@@ -964,6 +964,8 @@
     <string name="canvas_toast_group_not_drawable">Cannot paint directly on layer group</string>
     <string name="canvas_toast_filter_not_drawable">Cannot paint directly on filter layer, rasterize first</string>
     <string name="canvas_toast_layer_locked">Layer is locked and cannot be edited</string>
+    <string name="canvas_toast_layer_hidden">Layer is hidden and cannot be edited</string>
+    <string name="canvas_toast_group_empty">Layer group is empty, cannot transform</string>
     <string name="quick_shape_title">Quick Shape: %s</string>
     <string name="quick_shape_to_ellipse">To Ellipse</string>
     <string name="quick_shape_to_circle">To Circle</string>

@@ -964,6 +964,8 @@
     <string name="canvas_toast_group_not_drawable">图层组不可直接绘制，请选择组内图层</string>
     <string name="canvas_toast_filter_not_drawable">滤镜图层不可直接绘制，请在普通图层绘制或栅格化</string>
     <string name="canvas_toast_layer_locked">图层已锁定，无法编辑</string>
+    <string name="canvas_toast_layer_hidden">图层已隐藏，无法编辑</string>
+    <string name="canvas_toast_group_empty">图层组为空，无法进行变换</string>
     <string name="quick_shape_title">速创形状: %s</string>
     <string name="quick_shape_to_ellipse">转为椭圆</string>
     <string name="quick_shape_to_circle">转为正圆</string>

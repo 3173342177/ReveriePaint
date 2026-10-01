@@ -460,6 +460,9 @@ fun PaintingPage(
             activeLayer?.locked == true ->
                 vm.showActionToast(context.getString(R.string.canvas_toast_layer_locked), R.drawable.ic_lock)
 
+            vm.isLayerEffectivelyHidden(vm.currentLayerIndex) ->
+                vm.showActionToast(context.getString(R.string.canvas_toast_layer_hidden), R.drawable.ic_eye_off)
+
             else -> {
                 val bmpW = vm.displayBitmap?.width ?: vm.docWidth
                 val bmpH = vm.displayBitmap?.height ?: vm.docHeight
@@ -490,6 +493,12 @@ fun PaintingPage(
     // Clear transient tool state when switching tools, and activate tool states
     androidx.compose.runtime.LaunchedEffect(tool) {
         if (tool == Tool.TRANSFORM || tool == Tool.MOVE) {
+            val targets = vm.editTargetLayers()
+            val activeLayer = vm.layers.firstOrNull { it.index == vm.currentLayerIndex }
+            if (activeLayer?.isGroup == true && targets.isEmpty()) {
+                vm.showActionToast(context.getString(R.string.canvas_toast_group_empty), R.drawable.ic_folder)
+                return@LaunchedEffect
+            }
             val b = vm.contentBounds()
             if (b != null && b[2] > 0 && b[3] > 0) {
                 tfState.reset(

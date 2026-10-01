@@ -3119,6 +3119,10 @@ class CanvasTouchView(context: Context) : View(context) {
             v.showActionToast(context.getString(R.string.canvas_toast_layer_locked), R.drawable.ic_lock)
             return
         }
+        if (v.isLayerEffectivelyHidden(v.currentLayerIndex) && (isDrawingTool || tool == Tool.LIQUIFY)) {
+            v.showActionToast(context.getString(R.string.canvas_toast_layer_hidden), R.drawable.ic_eye_off)
+            return
+        }
 
         when (effTool()) {
             Tool.BRUSH, Tool.ERASER, Tool.SMUDGE -> {

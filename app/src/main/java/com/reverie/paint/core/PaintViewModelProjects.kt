@@ -106,7 +106,8 @@ internal fun PaintViewModel.saveProject(
                 "layerCount": ${layers.size},
                 "dpi": $docDpi,
                 "selectedLayerIndex": $currentLayerIndex,
-                "activeLayerIndex": $currentLayerIndex
+                "activeLayerIndex": $currentLayerIndex,
+                "collapsedGroups": [${collapsedGroupNames.joinToString(",") { "\"${it.replace("\\", "\\\\").replace("\"", "\\\"")}\"" }}]
             }
             """.trimIndent()
         // Recording blob goes straight into the .revp via the C++ store
@@ -157,7 +158,8 @@ internal fun PaintViewModel.autoSaveProject() {
                 "docName": "$name",
                 "dpi": $docDpi,
                 "selectedLayerIndex": $currentLayerIndex,
-                "activeLayerIndex": $currentLayerIndex
+                "activeLayerIndex": $currentLayerIndex,
+                "collapsedGroups": [${collapsedGroupNames.joinToString(",") { "\"${it.replace("\\", "\\\\").replace("\"", "\\\"")}\"" }}]
             }
             """.trimIndent()
         val recBlob = recorder.serialize()
@@ -214,8 +216,10 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
         null
     }
 
+    var loadedCollapsedGroups: Set<String> = emptySet()
     runCore(
         after = {
+            collapsedGroupNames = loadedCollapsedGroups
             initialStrokeCount = p.strokeCount
             totalStrokes = p.strokeCount
             isModified = isRecovered // 异常恢复的工程标记为未保存
@@ -255,6 +259,27 @@ internal fun PaintViewModel.loadProject(p: com.reverie.paint.model.Project) {
         if (file.exists()) {
             val ok =
                 if (file.extension.equals("revp", ignoreCase = true) || file.extension.equals("kra", ignoreCase = true)) {
+                    if (file.extension.equals("revp", ignoreCase = true)) {
+                        try {
+                            java.util.zip.ZipFile(file).use { zip ->
+                                val metaEntry = zip.getEntry("meta.json")
+                                if (metaEntry != null) {
+                                    val text = zip.getInputStream(metaEntry).bufferedReader().use { it.readText() }
+                                    val json = org.json.JSONObject(text)
+                                    val arr = json.optJSONArray("collapsedGroups")
+                                    if (arr != null) {
+                                        val set = mutableSetOf<String>()
+                                        for (i in 0 until arr.length()) {
+                                            set.add(arr.getString(i))
+                                        }
+                                        loadedCollapsedGroups = set
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("RP_IO", "Failed to parse collapsedGroups", e)
+                        }
+                    }
                     val res = ReverieCoreBridge.loadRevp(file.absolutePath)
                     android.util.Log.d("RP_IO", "loadRevp returned $res, nativeDocW=${ReverieCoreBridge.docWidth()}, nativeDocH=${ReverieCoreBridge.docHeight()}, nativeLayers=${ReverieCoreBridge.layerCount()}")
                     res
@@ -1076,6 +1101,7 @@ internal fun PaintViewModel.startPainting(
             } else {
                 resetAnimationState()
             }
+            collapsedGroupNames = emptySet()
         },
     ) {
         try {

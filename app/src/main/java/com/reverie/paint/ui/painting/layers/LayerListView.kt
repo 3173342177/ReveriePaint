@@ -149,7 +149,7 @@ internal fun LayerListView(
     // Only one row may have its swipe drawer open; swiping another row
     // closes this one (revealedIndex is the open row's layer index)
     var revealedIndex by remember { mutableStateOf<Int?>(null) }
-    var collapsedGroupNames by remember { mutableStateOf(setOf<String>()) }
+    val collapsedGroupNames = vm.collapsedGroupNames
     val listState = rememberLazyListState()
     var draggingFrom by remember { mutableIntStateOf(-1) }
     var dragOver by remember { mutableStateOf<Pair<Int, DropMode>?>(null) }
@@ -339,8 +339,8 @@ internal fun LayerListView(
                     vm.moveLayerToGroup(from, groupIdx)
                 }
                 val groupLayer = vm.layers.firstOrNull { it.index == groupIdx }
-                if (groupLayer != null && groupLayer.name in collapsedGroupNames) {
-                    collapsedGroupNames = collapsedGroupNames - groupLayer.name
+                if (groupLayer != null && groupLayer.name in vm.collapsedGroupNames) {
+                    vm.collapsedGroupNames = vm.collapsedGroupNames - groupLayer.name
                 }
             } else if (insert >= 0) {
                 val nonDraggedPrev = remaining.take(insert).lastOrNull()
@@ -777,12 +777,7 @@ internal fun LayerListView(
                             collapsed = layer.name in collapsedGroupNames,
                             onToggleCollapse = {
                                 revealedIndex = null
-                                collapsedGroupNames =
-                                    if (layer.name in collapsedGroupNames) {
-                                        collapsedGroupNames - layer.name
-                                    } else {
-                                        collapsedGroupNames + layer.name
-                                    }
+                                vm.toggleGroupCollapsed(layer.name)
                             },
                             revealed = layer.index == revealedIndex,
                             onReveal = { revealedIndex = layer.index },

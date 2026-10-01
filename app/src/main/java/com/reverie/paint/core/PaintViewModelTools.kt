@@ -128,6 +128,10 @@ internal fun PaintViewModel.touchStart(
         }
     }
     val curLayer = layers.firstOrNull { it.index == currentLayerIndex }
+    if (isLayerEffectivelyHidden(currentLayerIndex)) {
+        showActionToast(R.string.canvas_toast_layer_hidden, com.reverie.paint.R.drawable.ic_eye_off)
+        return false
+    }
     if (curLayer?.nodeType == 3 || curLayer?.name?.contains("滤镜") == true || curLayer?.name?.contains("Filter", ignoreCase = true) == true) {
         showActionToast(R.string.canvas_toast_filter_not_drawable, com.reverie.paint.R.drawable.ic_image_adjust)
         return false
@@ -941,7 +945,8 @@ internal fun PaintViewModel.moveLayerContent(
     dy: Int,
 ) {
     val layers = editTargetLayers()
-    val multi = selectedLayerIndices.isNotEmpty()
+    if (layers.isEmpty()) return
+    val multi = layers.size > 1 || selectedLayerIndices.isNotEmpty()
     if (recorder.recording) {
         if (multi) recordLayerSet(recorder, T_MOVE_CONTENT_LAYERS, layers)
         recorder.toolOp(T_MOVE_CONTENT) {
@@ -1027,6 +1032,7 @@ internal fun PaintViewModel.scaleImage(
 
 internal fun PaintViewModel.contentBounds(): IntArray? {
     val targets = editTargetLayers().toIntArray()
+    if (targets.isEmpty()) return null
     val h = renderHandler ?: return null
     if (android.os.Looper.myLooper() == h.looper) {
         return ReverieCoreBridge.contentBoundsLayers(targets)
@@ -1078,7 +1084,11 @@ internal fun PaintViewModel.applyTransform(
     originY: Double = -1.0,
 ) {
     val layers = editTargetLayers()
-    val multi = selectedLayerIndices.isNotEmpty()
+    if (layers.isEmpty()) {
+        cancelTransformPreview()
+        return
+    }
+    val multi = layers.size > 1 || selectedLayerIndices.isNotEmpty()
     if (recorder.recording) {
         if (multi) recordLayerSet(recorder, T_TRANSFORM_LAYERS, layers)
         recorder.toolOp(T_TRANSFORM) {
@@ -1094,7 +1104,6 @@ internal fun PaintViewModel.applyTransform(
         }
     }
     val copyOnly = transformCopyOnly
-    val arr = if (multi) layers.toIntArray() else null
     runCore(render = true, after = {
         notifyLayerChanged(pixelChanged = true)
         refreshSelection()
@@ -1102,7 +1111,7 @@ internal fun PaintViewModel.applyTransform(
         transformCopyOnly = false
         isSelectionTransformPending = false
     }) {
-        val targets = arr ?: intArrayOf(currentLayerIndex)
+        val targets = layers.toIntArray()
         ReverieCoreBridge.applyTransformLayersEx(
             targets,
             xscale,
@@ -1303,10 +1312,29 @@ internal fun PaintViewModel.setLiquifyBrushSize(size: Double) {
 /** Layers an edit should apply to: the multi-selected set when any layer is
  *  selected in the layer panel, else the current layer (Krita move-tool
  *  semantics). The current layer ALWAYS participates - it is the panel's
- *  highlighted/active row, so the user expects it to be edited too. */
+ *  highlighted/active row, so the user expects it to be edited too.
+ *  If any selected layer is a group, it recursively expands to all its
+ *  descendant concrete layers (excluding group containers).
+ */
 internal fun PaintViewModel.editTargetLayers(): List<Int> {
     val sel = selectedLayerIndices
-    return if (sel.isNotEmpty()) (sel + currentLayerIndex).sorted() else listOf(currentLayerIndex)
+    val base = if (sel.isNotEmpty()) (sel + currentLayerIndex).sorted() else listOf(currentLayerIndex)
+    return base.flatMap { idx ->
+        val layer = layers.firstOrNull { it.index == idx }
+        if (layer != null && layer.isGroup) {
+            val descendants = mutableListOf<Int>()
+            for (j in idx + 1 until layers.size) {
+                val child = layers[j]
+                if (child.depth <= layer.depth) break
+                if (!child.isGroup) {
+                    descendants.add(child.index)
+                }
+            }
+            descendants
+        } else {
+            listOf(idx)
+        }
+    }.distinct().sorted()
 }
 
 private fun recordLayerSet(
@@ -1326,7 +1354,7 @@ private fun recordLayerSet(
  *  (multi-select) warp together as one undo step. */
 internal fun PaintViewModel.liquifyBegin() {
     val layers = editTargetLayers()
-    val multi = selectedLayerIndices.isNotEmpty()
+    val multi = layers.size > 1 || selectedLayerIndices.isNotEmpty()
     if (recorder.recording) {
         if (multi) recordLayerSet(recorder, T_LIQUIFY_LAYERS, layers)
         recorder.toolOp(T_LIQUIFY_BEGIN)
@@ -1602,6 +1630,7 @@ internal fun PaintViewModel.liquify(
 internal fun PaintViewModel.startTransformPreview() {
     if (docWidth <= 0 || docHeight <= 0) return
     val targets = editTargetLayers().toIntArray()
+    if (targets.isEmpty()) return
     val copyOnly = transformCopyOnly
     runCore(render = true) {
         val b = android.graphics.Bitmap.createBitmap(docWidth, docHeight, android.graphics.Bitmap.Config.ARGB_8888)
@@ -2258,6 +2287,10 @@ internal fun PaintViewModel.floodFill(
     feather: Int = fillFeather,
     closeGap: Int = fillCloseGap,
 ) {
+    if (isLayerEffectivelyHidden(currentLayerIndex)) {
+        showActionToast(R.string.canvas_toast_layer_hidden, com.reverie.paint.R.drawable.ic_eye_off)
+        return
+    }
     if (recorder.recording) {
         // V3 携带填充色: 引擎用自身 m_brushColor 填充, 回放若不带色会漂到
         // 上一个 CONTEXT 的颜色

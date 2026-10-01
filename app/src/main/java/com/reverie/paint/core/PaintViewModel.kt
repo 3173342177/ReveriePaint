@@ -1415,6 +1415,34 @@ class PaintViewModel : ViewModel() {
     // 图层面板多选（右滑选中）
     var selectedLayerIndices by mutableStateOf<Set<Int>>(emptySet())
 
+    // 图层组折叠状态（收起组名称集合，保存于项目元数据并在会话中记忆）
+    var collapsedGroupNames by mutableStateOf<Set<String>>(emptySet())
+
+    fun toggleGroupCollapsed(name: String) {
+        collapsedGroupNames = if (name in collapsedGroupNames) {
+            collapsedGroupNames - name
+        } else {
+            collapsedGroupNames + name
+        }
+    }
+
+    /** 检查指定图层自身是否隐藏，或其任意祖先图层组是否隐藏。 */
+    fun isLayerEffectivelyHidden(layerIndex: Int): Boolean {
+        val layer = layers.firstOrNull { it.index == layerIndex } ?: return false
+        if (!layer.visible) return true
+        var currentDepth = layer.depth
+        var idx = layerIndex - 1
+        while (idx >= 0 && currentDepth > 0) {
+            val candidate = layers.getOrNull(idx) ?: break
+            if (candidate.depth == currentDepth - 1 && candidate.isGroup) {
+                if (!candidate.visible) return true
+                currentDepth = candidate.depth
+            }
+            idx--
+        }
+        return false
+    }
+
     // 独显浮窗的“取消所有效果”模式（C++ 状态，经 notifyLayerChanged 同步为
     // Compose state，保证点击后 chip 高亮即时刷新）
     var soloRawMode by mutableStateOf(false)
