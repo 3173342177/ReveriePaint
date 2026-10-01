@@ -738,6 +738,28 @@ bool ReverieCore::loadBrushPreset(int index)
     if (m_brushPreset && m_brushPreset->settings()) {
         m_brushPreset->settings()->setEraserMode(m_toolMode == ToolEraser);
         KisPaintOpSettingsSP s = m_brushPreset->settings();
+        // 归一化压感开关：部分 Krita 预设（如 Basic-2_Opacity, Basic-4_Flow_Opacity 等）
+        // 仅包含 OpacityUseCurve / FlowUseCurve / SizeUseCurve，缺失显式的 PressureOpacity / PressureFlow / PressureSize 属性。
+        // Krita 的 KisOpacityOption / KisFlowOpacityOption 在读取配置时依赖 Pressure* 决定 isChecked，
+        // 若缺失会导致压感曲线被跳过，恒定输出 1.0。
+        if (!s->hasProperty("PressureOpacity") && s->getBool("OpacityUseCurve", false)) {
+            const QString sensor = s->getString("OpacitySensor");
+            if (sensor.isEmpty() || sensor.contains(QStringLiteral("id=\"pressure\""))) {
+                s->setProperty("PressureOpacity", true);
+            }
+        }
+        if (!s->hasProperty("PressureFlow") && s->getBool("FlowUseCurve", false)) {
+            const QString sensor = s->getString("FlowSensor");
+            if (sensor.isEmpty() || sensor.contains(QStringLiteral("id=\"pressure\""))) {
+                s->setProperty("PressureFlow", true);
+            }
+        }
+        if (!s->hasProperty("PressureSize") && s->getBool("SizeUseCurve", false)) {
+            const QString sensor = s->getString("SizeSensor");
+            if (sensor.isEmpty() || sensor.contains(QStringLiteral("id=\"pressure\""))) {
+                s->setProperty("PressureSize", true);
+            }
+        }
         m_airbrushEnabled = s->getBool("PaintOpSettings/isAirbrushing",
                             s->getBool("AirbrushOption/isAirbrushing",
                             s->getBool("Airbrush/isChecked", false)));
@@ -850,6 +872,24 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
         return false;
     }
     KisPaintOpSettingsSP s = preset->settings();
+    if (!s->hasProperty("PressureOpacity") && s->getBool("OpacityUseCurve", false)) {
+        const QString sensor = s->getString("OpacitySensor");
+        if (sensor.isEmpty() || sensor.contains(QStringLiteral("id=\"pressure\""))) {
+            s->setProperty("PressureOpacity", true);
+        }
+    }
+    if (!s->hasProperty("PressureFlow") && s->getBool("FlowUseCurve", false)) {
+        const QString sensor = s->getString("FlowSensor");
+        if (sensor.isEmpty() || sensor.contains(QStringLiteral("id=\"pressure\""))) {
+            s->setProperty("PressureFlow", true);
+        }
+    }
+    if (!s->hasProperty("PressureSize") && s->getBool("SizeUseCurve", false)) {
+        const QString sensor = s->getString("SizeSensor");
+        if (sensor.isEmpty() || sensor.contains(QStringLiteral("id=\"pressure\""))) {
+            s->setProperty("PressureSize", true);
+        }
+    }
 
     CachedPresetInfo info;
     info.mtimeMs = mtimeMs;
