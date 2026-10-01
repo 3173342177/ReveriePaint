@@ -199,9 +199,9 @@ internal fun LayerListView(
             if (res.isEmpty() && n > 0) vm.layers.reversed() else res
         }
 
-    // Auto-scroll to newly added layer when list length requires scrolling
+    // Auto-scroll to newly added layer ONLY when it is outside the visible viewport
     var prevLayerCount by remember { mutableIntStateOf(vm.layers.size) }
-    LaunchedEffect(displayRows, vm.currentLayerIndex) {
+    LaunchedEffect(vm.layers.size) {
         if (vm.layers.size > prevLayerCount) {
             val newLayer = vm.layers.getOrNull(vm.currentLayerIndex)
             if (newLayer != null && newLayer.depth > 0) {
@@ -224,7 +224,14 @@ internal fun LayerListView(
             }
             val visualIdx = displayRows.indexOfFirst { it.index == vm.currentLayerIndex }
             if (visualIdx >= 0) {
-                listState.animateScrollToItem(visualIdx)
+                val layout = listState.layoutInfo
+                val item = layout.visibleItemsInfo.firstOrNull { it.index == visualIdx }
+                val isFullyVisible = item != null &&
+                    item.offset >= layout.viewportStartOffset &&
+                    (item.offset + item.size) <= layout.viewportEndOffset
+                if (!isFullyVisible) {
+                    listState.animateScrollToItem(visualIdx)
+                }
             }
         }
         prevLayerCount = vm.layers.size
