@@ -912,9 +912,32 @@ bool ReverieCore::ensurePresetInfo(int index, CachedPresetInfo &out)
     const double rotation = s->getDouble("RotationValue", s->getDouble("Rotation", 0.0));
 
     // Dynamics
-    const double pressureSize = s->getBool("PressureSize", true) ? 1.0 : 0.0;
-    const double pressureOpacity = s->getBool("PressureOpacity", false) ? 1.0 : 0.0;
-    const double pressureFlow = s->getBool("PressureFlow", false) ? 1.0 : 0.0;
+    bool hasPressureSize = true;
+    if (s->hasProperty("PressureSize")) {
+        hasPressureSize = s->getBool("PressureSize", true);
+    } else if (s->hasProperty("SizeUseCurve")) {
+        const QString sizeSensor = s->getString("SizeSensor");
+        hasPressureSize = s->getBool("SizeUseCurve", false) && (sizeSensor.isEmpty() || sizeSensor.contains(QStringLiteral("id=\"pressure\"")));
+    }
+    const double pressureSize = hasPressureSize ? 1.0 : 0.0;
+
+    bool hasPressureOpacity = false;
+    if (s->hasProperty("PressureOpacity")) {
+        hasPressureOpacity = s->getBool("PressureOpacity", false) && s->getBool("OpacityUseCurve", true);
+    } else if (s->hasProperty("OpacityUseCurve")) {
+        const QString opacitySensor = s->getString("OpacitySensor");
+        hasPressureOpacity = s->getBool("OpacityUseCurve", false) && (opacitySensor.isEmpty() || opacitySensor.contains(QStringLiteral("id=\"pressure\"")));
+    }
+    const double pressureOpacity = hasPressureOpacity ? 1.0 : 0.0;
+
+    bool hasPressureFlow = false;
+    if (s->hasProperty("PressureFlow")) {
+        hasPressureFlow = s->getBool("PressureFlow", false) && s->getBool("FlowUseCurve", true);
+    } else if (s->hasProperty("FlowUseCurve")) {
+        const QString flowSensor = s->getString("FlowSensor");
+        hasPressureFlow = s->getBool("FlowUseCurve", false) && (flowSensor.isEmpty() || flowSensor.contains(QStringLiteral("id=\"pressure\"")));
+    }
+    const double pressureFlow = hasPressureFlow ? 1.0 : 0.0;
     const double followDirection = s->getBool("PressureRotation", false) ? 1.0 : 0.0;
     const double mirrorX = s->getBool("HorizontalMirrorEnabled", false) ? 1.0 : 0.0;
     const double mirrorY = s->getBool("VerticalMirrorEnabled", false) ? 1.0 : 0.0;
@@ -1298,8 +1321,11 @@ void ReverieCore::setBrushPressureDynamics(bool enabled, qreal sizeStrength, qre
 
     if (!enabled) {
         s->setProperty("PressureSize", false);
+        s->setProperty("SizeUseCurve", false);
         s->setProperty("PressureOpacity", false);
+        s->setProperty("OpacityUseCurve", false);
         s->setProperty("PressureFlow", false);
+        s->setProperty("FlowUseCurve", false);
         return;
     }
 
@@ -1326,19 +1352,23 @@ void ReverieCore::setBrushPressureDynamics(bool enabled, qreal sizeStrength, qre
     s->setProperty("PressureSize", useSize);
     s->setProperty("SizeUseCurve", useSize);
     s->setProperty("SizeValue", sizeStrength);
-    s->setProperty("SizeSensor", sensorXml);
+    if (useSize) {
+        s->setProperty("SizeSensor", sensorXml);
+    }
 
     const bool useOpacity = (opacityStrength > 0.001);
     s->setProperty("PressureOpacity", useOpacity);
     s->setProperty("OpacityUseCurve", useOpacity);
-    s->setProperty("OpacityValue", opacityStrength);
-    s->setProperty("OpacitySensor", sensorXml);
+    if (useOpacity) {
+        s->setProperty("OpacitySensor", sensorXml);
+    }
 
     const bool useFlow = (flowStrength > 0.001);
     s->setProperty("PressureFlow", useFlow);
     s->setProperty("FlowUseCurve", useFlow);
-    s->setProperty("FlowValue", flowStrength);
-    s->setProperty("FlowSensor", sensorXml);
+    if (useFlow) {
+        s->setProperty("FlowSensor", sensorXml);
+    }
 }
 
 void ReverieCore::setBrushFollowDirection(bool enabled)

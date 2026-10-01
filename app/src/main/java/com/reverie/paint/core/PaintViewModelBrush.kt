@@ -1442,9 +1442,9 @@ import kotlinx.coroutines.withContext
                 brushRatio = parsed.ratio ?: d.getOrNull(11) ?: 1.0
                 brushSharpness = d.getOrNull(12) ?: 0.0
                 brushRotation = d.getOrNull(13) ?: 0.0
-                brushPressureSize = d.getOrNull(14) ?: 1.0
-                brushPressureOpacity = d.getOrNull(15) ?: 0.0
-                brushPressureFlow = d.getOrNull(16) ?: 0.0
+                brushPressureSize = parsed.pressureSize ?: d.getOrNull(14) ?: 1.0
+                brushPressureOpacity = parsed.pressureOpacity ?: d.getOrNull(15) ?: 0.0
+                brushPressureFlow = parsed.pressureFlow ?: d.getOrNull(16) ?: 0.0
                 brushFollowDirection = (d.getOrNull(17) ?: 0.0) > 0.5
                 brushRandomFlipX = (d.getOrNull(18) ?: 0.0) > 0.5
                 brushRandomFlipY = (d.getOrNull(19) ?: 0.0) > 0.5
@@ -2073,7 +2073,8 @@ import kotlinx.coroutines.withContext
                         roundness = preset.roundness,
                     )
 
-                    val hasDynamics = preset.pressureSize || preset.pressureOpacity || preset.pressureFlow
+                    val hasPressureDynamics = preset.pressureSize || preset.pressureOpacity || preset.pressureFlow
+                    val hasDynamics = hasPressureDynamics || preset.scatter > 0.001 || preset.followDirection || preset.flipX || preset.flipY
                     val bp = BrushParams(
                         size = preset.diameter,
                         opacity = 1.0,
@@ -2085,7 +2086,7 @@ import kotlinx.coroutines.withContext
                         followDirection = preset.followDirection,
                         randomFlipX = preset.flipX,
                         randomFlipY = preset.flipY,
-                        pressureEnabled = hasDynamics,
+                        pressureEnabled = hasPressureDynamics,
                         pressureSize = if (preset.pressureSize) 1.0 else 0.0,
                         pressureOpacity = if (preset.pressureOpacity) 1.0 else 0.0,
                         pressureFlow = if (preset.pressureFlow) 1.0 else 0.0,
