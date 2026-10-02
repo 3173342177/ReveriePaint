@@ -50,6 +50,7 @@ import com.reverie.paint.model.QuickAction
 import com.reverie.paint.model.QuickActionLayoutMode
 import com.reverie.paint.ui.components.pressScale
 import com.reverie.paint.ui.components.ReSwitch
+import com.reverie.paint.ui.theme.glassBorder
 import com.reverie.paint.ui.theme.Morandi
 import com.reverie.paint.ui.theme.Motion
 import com.reverie.paint.ui.theme.systemHoverIcon
@@ -678,15 +679,16 @@ private fun QuickActionsEditDialog(
                 .clickable { saveAndDismiss() },
             contentAlignment = Alignment.Center,
         ) {
+            val dialogShape = RoundedCornerShape(20.dp)
             Column(
                 modifier = Modifier
                     .widthIn(max = if (isWideScreen) 660.dp else 460.dp)
                     .fillMaxWidth(0.92f)
                     .heightIn(max = if (isWideScreen) 540.dp else 600.dp)
-                    .clip(RoundedCornerShape(22.dp))
+                    .shadow(20.dp, dialogShape, spotColor = Color.Black.copy(alpha = 0.45f))
+                    .clip(dialogShape)
                     .background(Morandi.panel)
-                    .border(1.dp, Morandi.border.copy(alpha = 0.8f), RoundedCornerShape(22.dp))
-                    .shadow(20.dp, RoundedCornerShape(22.dp))
+                    .glassBorder(dialogShape)
                     .clickable(enabled = false) {}
                     .padding(20.dp),
             ) {
