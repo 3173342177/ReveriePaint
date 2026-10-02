@@ -66,6 +66,26 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         } catch (t: Throwable) {
             Log.w(TAG, "Native crash handler init deferred or failed: ${t.message}")
         }
+
+        cleanupStaleSwapFiles(context)
+    }
+
+    private fun cleanupStaleSwapFiles(context: Context) {
+        Thread {
+            try {
+                val cacheDir = context.cacheDir ?: return@Thread
+                cacheDir.listFiles { file ->
+                    file.isFile && file.name.startsWith("KRITA_SWAP_FILE_")
+                }?.forEach { it.delete() }
+
+                val swapDir = File(cacheDir, "swap")
+                if (swapDir.exists()) {
+                    swapDir.listFiles { file ->
+                        file.isFile && file.name.startsWith("KRITA_SWAP_FILE_")
+                    }?.forEach { it.delete() }
+                }
+            } catch (_: Throwable) {}
+        }.start()
     }
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {

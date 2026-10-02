@@ -710,7 +710,6 @@ class CanvasTouchView(context: Context) : View(context) {
 
     // ---- 硬件笔尖前向超前预测 (OEM Hardware Motion Prediction) ----
     private var oplusPredictor: OplusMotionPredictor? = null
-    private var androidMotionPredictor: Any? = null
     private var predictedScreenPoint: Offset? = null
     private var predictedPressure: Float = 1f
     private val cachedTouchPointInfo = OplusTouchPointInfo()
@@ -1160,11 +1159,6 @@ class CanvasTouchView(context: Context) : View(context) {
                 android.util.Log.e("ReveriePerf", "Failed to init OplusMotionPredictor", t)
             }
         }
-        if (oplusPredictor == null && Build.VERSION.SDK_INT >= 34 && androidMotionPredictor == null) {
-            try {
-                androidMotionPredictor = android.view.MotionPredictor(context)
-            } catch (_: Throwable) {}
-        }
         post { updateSystemGestureExclusion() }
     }
 
@@ -1296,7 +1290,6 @@ class CanvasTouchView(context: Context) : View(context) {
         cancelCanvasTransformAnimators()
         oplusPredictor?.destroy()
         oplusPredictor = null
-        androidMotionPredictor = null
         safeEndSymmetryUndoMacro()
         resetMirrorBranches()
         currentStrokeDocPos = Offset.Zero
@@ -3650,23 +3643,6 @@ class CanvasTouchView(context: Context) : View(context) {
                             }
                         } catch (_: Throwable) {
                             predictedScreenPoint = null
-                        }
-                    } else if (Build.VERSION.SDK_INT >= 34 && androidMotionPredictor != null) {
-                        val amp = androidMotionPredictor as? android.view.MotionPredictor
-                        if (amp != null) {
-                            try {
-                                amp.record(event)
-                                val predEvent = amp.predict(15_000_000L)
-                                if (predEvent != null) {
-                                    predictedScreenPoint = Offset(predEvent.x, predEvent.y)
-                                    predictedPressure = predEvent.pressure.coerceIn(0.01f, 1f)
-                                    predEvent.recycle()
-                                } else {
-                                    predictedScreenPoint = null
-                                }
-                            } catch (_: Throwable) {
-                                predictedScreenPoint = null
-                            }
                         }
                     } else {
                         predictedScreenPoint = null
