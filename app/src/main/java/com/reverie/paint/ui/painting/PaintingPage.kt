@@ -222,9 +222,6 @@ fun PaintingPage(
     }
 
     var textDialogPos by remember { mutableStateOf<Pair<Float, Float>?>(null) }
-    LaunchedEffect(textDialogPos) {
-        vm.isTextInputActive = textDialogPos != null
-    }
     var brushPanelOpen by remember { mutableStateOf(false) }
     var layerPanelOpen by remember { mutableStateOf(false) }
     var targetFilterLayers by remember { mutableStateOf<List<Int>?>(null) }
@@ -616,7 +613,13 @@ fun PaintingPage(
             .background(Morandi.canvasBg)
             .focusRequester(focusRequester)
             .focusable()
-            .onKeyEvent { vm.handleKeyEvent(it) }
+            .onKeyEvent {
+                if (vm.isTextInputActive || vm.isShortcutRecordingActive) {
+                    false
+                } else {
+                    vm.handleKeyEvent(it)
+                }
+            }
     ) {
         // ---- Canvas workspace
         Box(
@@ -1979,6 +1982,7 @@ fun PaintingPage(
 
         // Text tool editing dialog
         textDialogPos?.let {
+            TextInputGuard(vm)
             com.reverie.paint.ui.painting.panels.TypographyTextDialog(
                 initialText = vm.typographyConfig.text,
                 onConfirm = { newText ->

@@ -136,6 +136,7 @@ internal fun LayerListView(
     onOpenDetail: (Int) -> Unit,
     onOpenFilters: (Int) -> Unit,
     onOpenCreateFilter: () -> Unit = {},
+    onRenameLayer: ((Int, String) -> Unit)? = null,
 ) {
     val rowHeight = vm.layerRowHeightDp.dp
     // Local selection (synchronous, not the async JNI currentLayerIndex):
@@ -869,6 +870,7 @@ internal fun LayerListView(
                                 draggingFrom == layer.index ||
                                 (draggingFrom in vm.selectedLayerIndices && vm.selectedLayerIndices.size > 1 && layer.index in vm.selectedLayerIndices),
                             multiSelected = layer.index in vm.selectedLayerIndices,
+                            onRename = onRenameLayer,
                             onSelect = {
                                 revealedIndex = null
                                 vm.toggleLayerSelection(layer.index)

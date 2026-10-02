@@ -877,6 +877,7 @@
     <string name="layer_op_alpha_lock">锁定透明度</string>
     <string name="layer_op_rasterize">栅格化为普通图层</string>
     <string name="layer_rename_dialog_title">重命名图层</string>
+    <string name="layer_rename_dialog_hint">输入图层名称</string>
     <string name="layer_add_paint_layer">添加颜料图层</string>
     <string name="layer_add_group">添加图层组</string>
     <string name="layer_more_types">更多图层类型</string>

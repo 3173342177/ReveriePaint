@@ -523,6 +523,18 @@ class PaintViewModel : ViewModel() {
     var isSpacePanning by mutableStateOf(false)
     /** 当前是否有文本输入弹窗处于编辑聚焦状态 (聚焦时跳过物理快捷键拦截) */
     var isTextInputActive by mutableStateOf(false)
+    private var textInputCounter = 0
+
+    fun pushTextInputActive() {
+        textInputCounter++
+        isTextInputActive = true
+    }
+
+    fun popTextInputActive() {
+        textInputCounter = (textInputCounter - 1).coerceAtLeast(0)
+        isTextInputActive = textInputCounter > 0
+    }
+
     /** 当前是否有快捷键录制弹窗打开 (打开时跳过物理快捷键拦截，优先录制按键) */
     var isShortcutRecordingActive by mutableStateOf(false)
 

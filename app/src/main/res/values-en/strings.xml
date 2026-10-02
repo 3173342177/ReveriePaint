@@ -877,6 +877,7 @@
     <string name="layer_op_alpha_lock">Alpha Lock</string>
     <string name="layer_op_rasterize">Rasterize to Paint Layer</string>
     <string name="layer_rename_dialog_title">Rename Layer</string>
+    <string name="layer_rename_dialog_hint">Enter layer name</string>
     <string name="layer_add_paint_layer">Add Paint Layer</string>
     <string name="layer_add_group">Add Layer Group</string>
     <string name="layer_more_types">More Layer Types</string>

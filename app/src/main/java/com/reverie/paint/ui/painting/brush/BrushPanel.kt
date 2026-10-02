@@ -19,6 +19,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import com.reverie.paint.ui.components.ReTextButton
+import com.reverie.paint.ui.painting.TextInputGuard
 import com.reverie.paint.R
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -829,6 +830,7 @@ fun BrushPanel(
 
     // ---- dialogs -----------------------------------------------------
     if (showNewBrushDialog) {
+        TextInputGuard(vm)
         NewBrushPresetDialog(
             groups = categories.filter { it !in listOf("全部", "常用", "最近") },
             onDismiss = { showNewBrushDialog = false },
@@ -839,6 +841,7 @@ fun BrushPanel(
         )
     }
     if (renamePresetName != null) {
+        TextInputGuard(vm)
         val rn = renamePresetName!!
         val pIdx = vm.brushPresets.firstOrNull { it.name == rn }?.index ?: -1
         RenameBrushPresetDialog(
@@ -853,6 +856,7 @@ fun BrushPanel(
         )
     }
     if (showNewGroupDialog) {
+        TextInputGuard(vm)
         NewBrushGroupDialog(
             existing = categories.filter { it !in listOf("全部", "常用", "最近") },
             onDismiss = { showNewGroupDialog = false },
@@ -893,6 +897,7 @@ fun BrushPanel(
         )
     }
     if (renameCategoryTarget != null) {
+        TextInputGuard(vm)
         val cat = renameCategoryTarget!!
         RenameBrushGroupDialog(
             initialName = cat,

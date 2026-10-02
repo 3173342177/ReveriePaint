@@ -21,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
+import com.reverie.paint.ui.painting.TextInputGuard
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -721,6 +722,7 @@ fun BrushStudioPage(
         }
 
         if (showRenameDialog && preset != null) {
+            TextInputGuard(vm)
             StudioRenameDialog(
                 initialName = preset.name,
                 onDismiss = { showRenameDialog = false },
