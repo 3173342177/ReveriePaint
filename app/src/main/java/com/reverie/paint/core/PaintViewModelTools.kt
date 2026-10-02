@@ -908,8 +908,28 @@ internal fun PaintViewModel.selectShape(
             it.f32(y2.toFloat())
         }
     }
+    val vw = (renderW.takeIf { it > 0 } ?: docWidth.coerceAtLeast(1)).toFloat()
+    val vh = (renderH.takeIf { it > 0 } ?: docHeight.coerceAtLeast(1)).toFloat()
+    val dw = if (docWidth > 0) docWidth.toFloat() else vw
+    val dh = if (docHeight > 0) docHeight.toFloat() else vh
+    val scX = vw / dw
+    val scY = vh / dh
+    val halfW = vw / 2f
+    val halfH = vh / 2f
+    val fallbackPath = androidx.compose.ui.graphics.Path().apply {
+        val l = minOf(x1, x2) * scX - halfW
+        val t = minOf(y1, y2) * scY - halfH
+        val r = maxOf(x1, x2) * scX - halfW
+        val b = maxOf(y1, y2) * scY - halfH
+        if (kind == 1) {
+            addOval(androidx.compose.ui.geometry.Rect(l, t, r, b))
+        } else {
+            addRect(androidx.compose.ui.geometry.Rect(l, t, r, b))
+        }
+    }
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath ?: (if (ov != null) fallbackPath else null)
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.selectShape(kind, x1, y1, x2, y2)
@@ -925,8 +945,24 @@ internal fun PaintViewModel.selectPolygon(points: List<Pair<Int, Int>>) {
     val xs = IntArray(points.size) { points[it].first }
     val ys = IntArray(points.size) { points[it].second }
     var ov: android.graphics.Bitmap? = null
+    val vw = (renderW.takeIf { it > 0 } ?: docWidth.coerceAtLeast(1)).toFloat()
+    val vh = (renderH.takeIf { it > 0 } ?: docHeight.coerceAtLeast(1)).toFloat()
+    val dw = if (docWidth > 0) docWidth.toFloat() else vw
+    val dh = if (docHeight > 0) docHeight.toFloat() else vh
+    val scX = vw / dw
+    val scY = vh / dh
+    val halfW = vw / 2f
+    val halfH = vh / 2f
+    val fallbackPath = androidx.compose.ui.graphics.Path().apply {
+        moveTo(points[0].first * scX - halfW, points[0].second * scY - halfH)
+        for (i in 1 until points.size) {
+            lineTo(points[i].first * scX - halfW, points[i].second * scY - halfH)
+        }
+        close()
+    }
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath ?: (if (ov != null) fallbackPath else null)
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.selectPolygon(xs, ys, points.size)
@@ -1739,6 +1775,7 @@ internal fun PaintViewModel.featherSelection(radius: Int) {
     var ov: android.graphics.Bitmap? = null
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.featherSelection(radius)
@@ -1753,6 +1790,7 @@ internal fun PaintViewModel.expandSelection(px: Int) {
     var ov: android.graphics.Bitmap? = null
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.expandSelection(px)
@@ -1767,6 +1805,7 @@ internal fun PaintViewModel.contractSelection(px: Int) {
     var ov: android.graphics.Bitmap? = null
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.contractSelection(px)
@@ -1781,6 +1820,7 @@ internal fun PaintViewModel.smoothSelection(radius: Int) {
     var ov: android.graphics.Bitmap? = null
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.smoothSelection(radius)
@@ -1798,7 +1838,7 @@ internal fun PaintViewModel.buildSelectionOverlayLocked(): android.graphics.Bitm
     val vw = maxOf(1, renderW)
     val vh = maxOf(1, renderH)
     val px = ReverieCoreBridge.selectionOverlayScaled(vw, vh) ?: run {
-        selectionOutlinePath = null
+        pendingSelectionOutlinePath = null
         return null
     }
     val bmp = android.graphics.Bitmap.createBitmap(vw, vh, android.graphics.Bitmap.Config.ARGB_8888)
@@ -1831,9 +1871,9 @@ internal fun PaintViewModel.buildSelectionOverlayLocked(): android.graphics.Bitm
                 idx += count * 2
             }
         }
-        selectionOutlinePath = path
+        pendingSelectionOutlinePath = path
     } else {
-        selectionOutlinePath = null
+        pendingSelectionOutlinePath = null
     }
 
     return bmp
@@ -1843,6 +1883,7 @@ internal fun PaintViewModel.refreshSelection() {
     var result: android.graphics.Bitmap? = null
     runCore(render = false, after = {
         selectionOverlayBitmap = result
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = result != null
     }) {
         result = buildSelectionOverlayLocked()
@@ -1852,6 +1893,7 @@ internal fun PaintViewModel.refreshSelection() {
 // Clear only the displayed overlay (replace mode: finger-down clears the
 // old selection immediately; the C++ selection is committed on release)
 internal fun PaintViewModel.clearSelectionOverlayLocal() {
+    pendingSelectionOutlinePath = null
     selectionOverlayBitmap = null
     selectionOutlinePath = null
     selectionMask = null
@@ -1862,7 +1904,13 @@ internal fun PaintViewModel.clearSelectionAction() {
     if (recorder.recording) {
         recorder.toolOp(T_CLEAR_SELECTION)
     }
+    pendingSelectionOutlinePath = null
+    selectionMask = null
+    hasSelection = false
+    selectionOverlayBitmap = null
+    selectionOutlinePath = null
     runCore(after = {
+        pendingSelectionOutlinePath = null
         selectionMask = null
         hasSelection = false
         selectionOverlayBitmap = null
@@ -1881,6 +1929,7 @@ internal fun PaintViewModel.selectAllAction() {
     var ov: android.graphics.Bitmap? = null
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.selectionFromLayer(layerIdx)
@@ -1896,6 +1945,7 @@ internal fun PaintViewModel.selectAllCanvasAction() {
     var ov: android.graphics.Bitmap? = null
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.selectAll()
@@ -1910,6 +1960,7 @@ internal fun PaintViewModel.invertSelectionAction() {
     var ov: android.graphics.Bitmap? = null
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.invertSelection()
@@ -1978,9 +2029,25 @@ internal fun PaintViewModel.lassoSelect(points: List<Pair<Int, Int>>) {
     }
     val xs = IntArray(points.size) { points[it].first }
     val ys = IntArray(points.size) { points[it].second }
+    val vw = (renderW.takeIf { it > 0 } ?: docWidth.coerceAtLeast(1)).toFloat()
+    val vh = (renderH.takeIf { it > 0 } ?: docHeight.coerceAtLeast(1)).toFloat()
+    val dw = if (docWidth > 0) docWidth.toFloat() else vw
+    val dh = if (docHeight > 0) docHeight.toFloat() else vh
+    val scX = vw / dw
+    val scY = vh / dh
+    val halfW = vw / 2f
+    val halfH = vh / 2f
+    val fallbackPath = androidx.compose.ui.graphics.Path().apply {
+        moveTo(points[0].first * scX - halfW, points[0].second * scY - halfH)
+        for (i in 1 until points.size) {
+            lineTo(points[i].first * scX - halfW, points[i].second * scY - halfH)
+        }
+        close()
+    }
     var ov: android.graphics.Bitmap? = null
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath ?: (if (ov != null) fallbackPath else null)
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.lassoSelect(xs, ys, points.size)
@@ -2208,6 +2275,7 @@ internal fun PaintViewModel.selectContiguous(
             "wand total=${(System.nanoTime() - t0) / 1_000_000}ms (queued=${hQueued()})",
         )
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.selectContiguousAt(x, y, tolerance, sampleMerged, expand, feather, closeGap)
@@ -2237,6 +2305,7 @@ internal fun PaintViewModel.selectSimilar(
             "similar total=${(System.nanoTime() - t0) / 1_000_000}ms",
         )
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = ov != null
     }) {
         ReverieCoreBridge.selectSimilarAt(x, y, tol, sampleMerged)
@@ -2668,6 +2737,7 @@ internal fun PaintViewModel.loadStoredSelectionAction(index: Int, mode: Int = 0)
         if (ok) {
             hasSelection = true
             selectionOverlayBitmap = ov
+            selectionOutlinePath = pendingSelectionOutlinePath
             val msgRes = when (mode) {
                 1 -> R.string.selection_toast_added
                 2 -> R.string.selection_toast_subtracted

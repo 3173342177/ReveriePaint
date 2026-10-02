@@ -324,7 +324,7 @@ QVector<qint32> ReverieCore::selectionOutline() const
         return {};
     }
     KisPixelSelectionSP ps = m_selection->pixelSelection();
-    if (!ps || ps->selectedRect().isEmpty()) {
+    if (!ps || ps->isEmpty()) {
         return {};
     }
     const QVector<QPolygon> polys = ps->outline();

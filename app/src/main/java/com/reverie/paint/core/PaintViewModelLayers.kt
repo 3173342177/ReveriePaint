@@ -922,6 +922,7 @@ internal fun PaintViewModel.selectionFromLayer(i: Int, mode: Int = 0) {
     var has = false
     runCore(render = false, after = {
         selectionOverlayBitmap = ov
+        selectionOutlinePath = pendingSelectionOutlinePath
         hasSelection = has && ov != null
         notifyLayerChanged()
         if (hasSelection) {

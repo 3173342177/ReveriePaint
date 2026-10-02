@@ -4052,6 +4052,7 @@ class PaintViewModel : ViewModel() {
 
     // Vector outline path of the active selection (document coords centered at origin)
     var selectionOutlinePath: androidx.compose.ui.graphics.Path? by mutableStateOf(null)
+    @Volatile internal var pendingSelectionOutlinePath: androidx.compose.ui.graphics.Path? = null
 
     var transformPreviewBitmap: androidx.compose.ui.graphics.ImageBitmap? by mutableStateOf(null)
     var transformCopyOnly: Boolean by mutableStateOf(false)
