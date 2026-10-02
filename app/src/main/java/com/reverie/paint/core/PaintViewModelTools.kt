@@ -1652,6 +1652,7 @@ internal fun PaintViewModel.startTransformPreview() {
     val copyOnly = transformCopyOnly
     runCore(render = true) {
         val b = android.graphics.Bitmap.createBitmap(docWidth, docHeight, android.graphics.Bitmap.Config.ARGB_8888)
+        b.setPremultiplied(true)
         val success = ReverieCoreBridge.startTransformPreviewLayersEx(targets, b, copyOnly)
         mainHandler.post {
             if (success) {
