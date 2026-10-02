@@ -743,7 +743,16 @@
     <string name="tool_quick_action">快捷操作</string>
     <string name="quick_action_window_title">快捷操作</string>
     <string name="quick_action_edit">自定义快捷操作</string>
-    <string name="quick_action_edit_desc">勾选需要显示的操作并调整排布样式</string>
+    <string name="quick_action_edit_desc">自定义操作顺序、增删常用项及排布样式</string>
+    <string name="quick_action_active_list">已启用操作</string>
+    <string name="quick_action_available_list">可添加操作</string>
+    <string name="quick_action_preview">效果预览</string>
+    <string name="quick_action_show_labels">显示按钮文字标签</string>
+    <string name="quick_action_layout_title">排布模式</string>
+    <string name="quick_action_tab_actions">操作排序与管理</string>
+    <string name="quick_action_tab_style">排布与预览</string>
+    <string name="quick_action_all_added">所有操作已全部添加</string>
+    <string name="quick_action_add_all">添加全部</string>
     <string name="quick_action_done">完成</string>
     <string name="quick_action_reset_default">恢复默认</string>
     <string name="quick_action_layout_row">横向单排</string>

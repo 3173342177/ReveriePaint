@@ -743,7 +743,16 @@
     <string name="tool_quick_action">Quick Actions</string>
     <string name="quick_action_window_title">Quick Actions</string>
     <string name="quick_action_edit">Customize Quick Actions</string>
-    <string name="quick_action_edit_desc">Select actions to display and choose layout style</string>
+    <string name="quick_action_edit_desc">Reorder actions, add or remove items, and choose layout</string>
+    <string name="quick_action_active_list">Active Actions</string>
+    <string name="quick_action_available_list">Available Actions</string>
+    <string name="quick_action_preview">Live Preview</string>
+    <string name="quick_action_show_labels">Show Button Labels</string>
+    <string name="quick_action_layout_title">Layout Style</string>
+    <string name="quick_action_tab_actions">Actions &amp; Order</string>
+    <string name="quick_action_tab_style">Layout &amp; Preview</string>
+    <string name="quick_action_all_added">All actions have been added</string>
+    <string name="quick_action_add_all">Add All</string>
     <string name="quick_action_done">Done</string>
     <string name="quick_action_reset_default">Reset Default</string>
     <string name="quick_action_layout_row">Row (Pill)</string>
