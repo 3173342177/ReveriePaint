@@ -152,6 +152,7 @@ fun AllToolsPanel(
                                     val isSelected = when (t) {
                                         Tool.REFERENCE -> vm.referenceWindowOpen
                                         Tool.SHORTCUT -> vm.quickActionWindowOpen
+                                        Tool.QUICK_BRUSH -> vm.quickBrushWindowOpen
                                         Tool.SYMMETRY -> vm.drawingGuide.mode == GuideMode.SYMMETRY
                                         Tool.PERSPECTIVE -> vm.drawingGuide.mode == GuideMode.PERSPECTIVE
                                         else -> tool == t

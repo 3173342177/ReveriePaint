@@ -1091,6 +1091,26 @@ class CanvasTouchView(context: Context) : View(context) {
             }
         }
 
+        // 快捷笔刷浮窗区域 (若打开)
+        if (v.quickBrushWindowOpen) {
+            val bx = v.quickBrushWindowX
+            val by = v.quickBrushWindowY
+            val isVert = v.quickBrushOrientation == "vertical"
+            val bw = when {
+                v.quickBrushCollapsed -> 90f * d
+                isVert -> 72f * d
+                else -> 420f * d
+            }
+            val bh = when {
+                v.quickBrushCollapsed -> 50f * d
+                isVert -> 420f * d
+                else -> 72f * d
+            }
+            if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+                return true
+            }
+        }
+
         return false
     }
 

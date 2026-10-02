@@ -757,6 +757,19 @@
 
     <!-- Quick Action Strings -->
     <string name="tool_quick_action">Quick Actions</string>
+
+    <!-- Quick Brush Strings -->
+    <string name="tool_quick_brush">Quick Brushes</string>
+    <string name="quick_brush_window_title">Quick Brushes</string>
+    <string name="quick_brush_empty">No Favorite Brushes</string>
+    <string name="quick_brush_empty_add">Add Favorite Brush</string>
+    <string name="quick_brush_manage_title">Manage Favorite Brushes</string>
+    <string name="quick_brush_manage_desc">Quickly switch between your favorite brushes on canvas</string>
+    <string name="quick_brush_favorites_list">Current Favorite Brushes</string>
+    <string name="quick_brush_library_list">Brush Library (tap star to add)</string>
+    <string name="quick_brush_orientation">Capsule Orientation</string>
+    <string name="quick_brush_orientation_horizontal">Horizontal</string>
+    <string name="quick_brush_orientation_vertical">Vertical</string>
     <string name="quick_action_window_title">Quick Actions</string>
     <string name="quick_action_edit">Customize Quick Actions</string>
     <string name="quick_action_edit_desc">Reorder actions, add or remove items, and choose layout</string>

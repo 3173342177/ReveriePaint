@@ -842,6 +842,35 @@ class PaintViewModel : ViewModel() {
         } catch (_: Exception) {}
     }
 
+    // Quick Brush Tool Window State (快捷笔刷浮窗)
+    var quickBrushWindowOpen by mutableStateOf(false)
+    var quickBrushWindowX by mutableFloatStateOf(60f)
+    var quickBrushWindowY by mutableFloatStateOf(280f)
+    var quickBrushCollapsed by mutableStateOf(false)
+    var quickBrushOrientation by mutableStateOf("horizontal") // "horizontal" or "vertical"
+    var quickBrushOrder by mutableStateOf<List<String>>(emptyList())
+
+    fun persistQuickBrushState() {
+        if (!::appContext.isInitialized) return
+        try {
+            val p = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE).edit()
+            p.putBoolean("quick_brush_open", quickBrushWindowOpen)
+            p.putFloat("quick_brush_x", quickBrushWindowX)
+            p.putFloat("quick_brush_y", quickBrushWindowY)
+            p.putBoolean("quick_brush_collapsed", quickBrushCollapsed)
+            p.putString("quick_brush_orientation", quickBrushOrientation)
+            p.putString("quick_brush_order", quickBrushOrder.joinToString(","))
+            p.apply()
+        } catch (_: Exception) {}
+    }
+
+    fun getOrderedFavoriteBrushes(): List<BrushPresetInfo> {
+        val favs = brushPresets.filter { isFavoriteBrush(it.name) }
+        if (quickBrushOrder.isEmpty()) return favs
+        val orderMap = quickBrushOrder.withIndex().associate { it.value to it.index }
+        return favs.sortedWith(compareBy({ orderMap[it.name] ?: Int.MAX_VALUE }, { it.name }))
+    }
+
     fun executeQuickAction(action: com.reverie.paint.model.QuickAction) {
         when (action) {
             com.reverie.paint.model.QuickAction.LOCK_VIEW -> {
@@ -2807,6 +2836,17 @@ class PaintViewModel : ViewModel() {
                 layoutMode = layoutMode,
                 showLabels = showLabels,
             )
+
+            // 快捷笔刷浮窗持久化恢复
+            quickBrushWindowOpen = prefs.getBoolean("quick_brush_open", false)
+            quickBrushWindowX = prefs.getFloat("quick_brush_x", 60f)
+            quickBrushWindowY = prefs.getFloat("quick_brush_y", 280f)
+            quickBrushCollapsed = prefs.getBoolean("quick_brush_collapsed", false)
+            quickBrushOrientation = prefs.getString("quick_brush_orientation", "horizontal") ?: "horizontal"
+            val brushOrderStr = prefs.getString("quick_brush_order", "") ?: ""
+            if (brushOrderStr.isNotBlank()) {
+                quickBrushOrder = brushOrderStr.split(",").filter { it.isNotBlank() }
+            }
 
             applyCurrentTheme()
         }

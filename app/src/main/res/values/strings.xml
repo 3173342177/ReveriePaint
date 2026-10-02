@@ -757,6 +757,19 @@
 
     <!-- Quick Action Strings -->
     <string name="tool_quick_action">快捷操作</string>
+
+    <!-- Quick Brush Strings -->
+    <string name="tool_quick_brush">快捷笔刷</string>
+    <string name="quick_brush_window_title">快捷笔刷</string>
+    <string name="quick_brush_empty">暂无常用笔刷</string>
+    <string name="quick_brush_empty_add">添加常用画笔</string>
+    <string name="quick_brush_manage_title">管理常用笔刷</string>
+    <string name="quick_brush_manage_desc">在悬浮胶囊中快速切换您最爱的笔刷</string>
+    <string name="quick_brush_favorites_list">已选常用笔刷</string>
+    <string name="quick_brush_library_list">笔刷库（点击星标添加）</string>
+    <string name="quick_brush_orientation">胶囊排列方向</string>
+    <string name="quick_brush_orientation_horizontal">横向单排</string>
+    <string name="quick_brush_orientation_vertical">纵向单列</string>
     <string name="quick_action_window_title">快捷操作</string>
     <string name="quick_action_edit">自定义快捷操作</string>
     <string name="quick_action_edit_desc">自定义操作顺序、增删常用项及排布样式</string>
