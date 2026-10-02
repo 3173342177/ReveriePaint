@@ -597,8 +597,8 @@ private fun QuickActionButton(
  * 支持：
  * 1. 自由调整各快捷操作的顺序位置 (向上/向下移动，实时伴随顺滑插槽动效)
  * 2. 快捷操作增删 (可从“可添加操作”池自由扩充或移除至回收池)
- * 3. 悬浮窗外观与排布模式实时预览与切换 (单排横向/纵向胶囊、2列/3列网格、文字标签显隐)
- * 4. 平板双列沉浸式工作台布局与手机分段 Tab 响应式适配
+ * 3. 悬浮窗外观与排布模式实时切换 (单排横向/纵向胶囊、2列/3列网格、文字标签显隐)
+ * 4. 纯净统一的莫兰迪配色体系与双列/分段自适应布局
  */
 @Composable
 private fun QuickActionsEditDialog(
@@ -612,7 +612,7 @@ private fun QuickActionsEditDialog(
     var currentActions by remember { mutableStateOf(vm.quickActionsConfig.actions) }
     var layoutMode by remember { mutableStateOf(vm.quickActionsConfig.layoutMode) }
     var showLabels by remember { mutableStateOf(vm.quickActionsConfig.showLabels) }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: 动作排序, 1: 排布与预览 (窄屏模式)
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     val availableActions = remember(currentActions) {
         QuickAction.entries.filter { it !in currentActions }
@@ -680,9 +680,9 @@ private fun QuickActionsEditDialog(
         ) {
             Column(
                 modifier = Modifier
-                    .widthIn(max = if (isWideScreen) 680.dp else 460.dp)
+                    .widthIn(max = if (isWideScreen) 660.dp else 460.dp)
                     .fillMaxWidth(0.92f)
-                    .heightIn(max = if (isWideScreen) 560.dp else 620.dp)
+                    .heightIn(max = if (isWideScreen) 540.dp else 600.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(Morandi.panel)
                     .border(1.dp, Morandi.border.copy(alpha = 0.8f), RoundedCornerShape(22.dp))
@@ -758,13 +758,71 @@ private fun QuickActionsEditDialog(
                             .weight(1f),
                         horizontalArrangement = Arrangement.spacedBy(18.dp),
                     ) {
-                        // 左侧栏：样式设置与实时预览 (固定宽度 240dp)
+                        // 左侧栏：已启用快捷操作列表与顺序重排 (宽度 54%)
                         Column(
                             modifier = Modifier
-                                .width(240.dp)
+                                .weight(1.15f)
                                 .fillMaxHeight(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "${stringResource(R.string.quick_action_active_list)} (${currentActions.size})",
+                                    color = Morandi.text,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+
+                                Text(
+                                    text = stringResource(R.string.quick_action_reset_default),
+                                    color = Morandi.subText,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Morandi.panelHi)
+                                        .clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            resetDefaults()
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                itemsIndexed(currentActions, key = { _, action -> action.id }) { index, action ->
+                                    ActiveActionRow(
+                                        index = index,
+                                        action = action,
+                                        isFirst = index == 0,
+                                        isLast = index == currentActions.size - 1,
+                                        canRemove = currentActions.size > 1,
+                                        onMoveUp = { moveUp(index) },
+                                        onMoveDown = { moveDown(index) },
+                                        onRemove = { removeAction(action) },
+                                        modifier = Modifier.animateItem(),
+                                    )
+                                }
+                            }
+                        }
+
+                        // 右侧栏：外观排布设置 + 添加更多操作池 (宽度 46%)
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            // 排布设置与标签显隐
                             QuickActionsStyleSection(
                                 layoutMode = layoutMode,
                                 onLayoutModeChange = { layoutMode = it },
@@ -772,35 +830,80 @@ private fun QuickActionsEditDialog(
                                 onShowLabelsChange = { showLabels = it },
                             )
 
-                            Text(
-                                text = stringResource(R.string.quick_action_preview),
-                                color = Morandi.text,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                            )
+                            // 可添加操作池
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = "${stringResource(R.string.quick_action_available_list)} (${availableActions.size})",
+                                        color = Morandi.text,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
 
-                            QuickActionsPreviewCard(
-                                actions = currentActions,
-                                layoutMode = layoutMode,
-                                showLabels = showLabels,
-                                modifier = Modifier.weight(1f),
-                            )
+                                    if (availableActions.isNotEmpty()) {
+                                        Text(
+                                            text = stringResource(R.string.quick_action_add_all),
+                                            color = Morandi.accent,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Morandi.accent.copy(alpha = 0.12f))
+                                                .clickable {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    addAllActions()
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        )
+                                    }
+                                }
+
+                                Spacer(Modifier.height(8.dp))
+
+                                if (availableActions.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Morandi.panelHi)
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.quick_action_all_added),
+                                            color = Morandi.subText,
+                                            fontSize = 12.sp,
+                                        )
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f),
+                                    ) {
+                                        item {
+                                            FlowRow(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                            ) {
+                                                availableActions.forEach { action ->
+                                                    AvailableActionChip(
+                                                        action = action,
+                                                        onAdd = { addAction(action) },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
-
-                        // 右侧栏：已启用操作排序与可添加操作池 (自适应宽度)
-                        QuickActionsManagementSection(
-                            currentActions = currentActions,
-                            availableActions = availableActions,
-                            onMoveUp = ::moveUp,
-                            onMoveDown = ::moveDown,
-                            onRemove = ::removeAction,
-                            onAdd = ::addAction,
-                            onReset = ::resetDefaults,
-                            onAddAll = ::addAllActions,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                        )
                     }
                 } else {
                     // ---- 手机/窄屏分段 Tab 布局 ----
@@ -848,44 +951,94 @@ private fun QuickActionsEditDialog(
 
                     Spacer(Modifier.height(12.dp))
 
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (selectedTab == 0) {
-                            QuickActionsManagementSection(
-                                currentActions = currentActions,
-                                availableActions = availableActions,
-                                onMoveUp = ::moveUp,
-                                onMoveDown = ::moveDown,
-                                onRemove = ::removeAction,
-                                onAdd = ::addAction,
-                                onReset = ::resetDefaults,
-                                onAddAll = ::addAllActions,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        } else {
-                            Column(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    if (selectedTab == 0) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                QuickActionsStyleSection(
-                                    layoutMode = layoutMode,
-                                    onLayoutModeChange = { layoutMode = it },
-                                    showLabels = showLabels,
-                                    onShowLabelsChange = { showLabels = it },
-                                )
-
                                 Text(
-                                    text = stringResource(R.string.quick_action_preview),
+                                    text = "${stringResource(R.string.quick_action_active_list)} (${currentActions.size})",
                                     color = Morandi.text,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
                                 )
 
-                                QuickActionsPreviewCard(
-                                    actions = currentActions,
-                                    layoutMode = layoutMode,
-                                    showLabels = showLabels,
-                                    modifier = Modifier.weight(1f),
+                                Text(
+                                    text = stringResource(R.string.quick_action_reset_default),
+                                    color = Morandi.subText,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Morandi.panelHi)
+                                        .clickable { resetDefaults() }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
                                 )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                itemsIndexed(currentActions, key = { _, action -> action.id }) { index, action ->
+                                    ActiveActionRow(
+                                        index = index,
+                                        action = action,
+                                        isFirst = index == 0,
+                                        isLast = index == currentActions.size - 1,
+                                        canRemove = currentActions.size > 1,
+                                        onMoveUp = { moveUp(index) },
+                                        onMoveDown = { moveDown(index) },
+                                        onRemove = { removeAction(action) },
+                                        modifier = Modifier.animateItem(),
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            QuickActionsStyleSection(
+                                layoutMode = layoutMode,
+                                onLayoutModeChange = { layoutMode = it },
+                                showLabels = showLabels,
+                                onShowLabelsChange = { showLabels = it },
+                            )
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${stringResource(R.string.quick_action_available_list)} (${availableActions.size})",
+                                    color = Morandi.text,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Spacer(Modifier.height(8.dp))
+
+                                LazyColumn(modifier = Modifier.weight(1f)) {
+                                    item {
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            availableActions.forEach { action ->
+                                                AvailableActionChip(
+                                                    action = action,
+                                                    onAdd = { addAction(action) },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -939,9 +1092,8 @@ private fun QuickActionsStyleSection(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // 排布样式分段选择
         Text(
             text = stringResource(R.string.quick_action_layout_title),
             color = Morandi.text,
@@ -949,34 +1101,43 @@ private fun QuickActionsStyleSection(
             fontWeight = FontWeight.Medium,
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(Morandi.panelHi)
-                .padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            QuickActionLayoutMode.entries.forEach { mode ->
-                val isSelected = layoutMode == mode
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(32.dp)
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(if (isSelected) Morandi.accent else Color.Transparent)
-                        .clickable { onLayoutModeChange(mode) },
-                    contentAlignment = Alignment.Center,
+        // 4 档排布模式：两列并排，整齐紧凑
+        val chunks = QuickActionLayoutMode.entries.chunked(2)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            chunks.forEach { rowModes ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(
-                        text = stringResource(mode.labelRes),
-                        color = if (isSelected) Color.White else Morandi.subText,
-                        fontSize = 11.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    )
+                    rowModes.forEach { mode ->
+                        val isSelected = layoutMode == mode
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) Morandi.accent else Morandi.panelHi)
+                                .border(
+                                    1.dp,
+                                    if (isSelected) Morandi.accent else Morandi.border.copy(alpha = 0.5f),
+                                    RoundedCornerShape(8.dp),
+                                )
+                                .clickable { onLayoutModeChange(mode) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(mode.labelRes),
+                                color = if (isSelected) Color.White else Morandi.subText,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                        }
+                    }
                 }
             }
         }
+
+        Spacer(Modifier.height(2.dp))
 
         // 显示文字标签切换
         Row(
@@ -984,8 +1145,9 @@ private fun QuickActionsStyleSection(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .background(Morandi.panelHi)
+                .border(1.dp, Morandi.border.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
                 .clickable { onShowLabelsChange(!showLabels) }
-                .padding(horizontal = 12.dp, vertical = 9.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -998,263 +1160,6 @@ private fun QuickActionsStyleSection(
                 checked = showLabels,
                 onChecked = onShowLabelsChange,
             )
-        }
-    }
-}
-
-/**
- * 实时效果缩略预览卡片
- */
-@Composable
-private fun QuickActionsPreviewCard(
-    actions: List<QuickAction>,
-    layoutMode: QuickActionLayoutMode,
-    showLabels: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val windowShape = remember(layoutMode) {
-        when (layoutMode) {
-            QuickActionLayoutMode.ROW, QuickActionLayoutMode.COLUMN -> RoundedCornerShape(16.dp)
-            QuickActionLayoutMode.GRID_2, QuickActionLayoutMode.GRID_3 -> RoundedCornerShape(14.dp)
-        }
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Morandi.canvasBg.copy(alpha = 0.45f))
-            .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
-            .padding(12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .shadow(6.dp, windowShape)
-                .clip(windowShape)
-                .background(Morandi.panel)
-                .border(1.dp, Morandi.border.copy(alpha = 0.8f), windowShape)
-                .padding(4.dp),
-        ) {
-            when (layoutMode) {
-                QuickActionLayoutMode.ROW -> {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        actions.take(6).forEach { action ->
-                            MiniActionItem(action, showLabels)
-                        }
-                        if (actions.size > 6) {
-                            Text(
-                                text = "+${actions.size - 6}",
-                                color = Morandi.subText,
-                                fontSize = 9.sp,
-                                modifier = Modifier.padding(horizontal = 4.dp),
-                            )
-                        }
-                    }
-                }
-                QuickActionLayoutMode.COLUMN -> {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        actions.take(5).forEach { action ->
-                            MiniActionItem(action, showLabels)
-                        }
-                        if (actions.size > 5) {
-                            Text(
-                                text = "+${actions.size - 5}",
-                                color = Morandi.subText,
-                                fontSize = 9.sp,
-                                modifier = Modifier.padding(vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
-                QuickActionLayoutMode.GRID_2 -> {
-                    val chunks = actions.take(6).chunked(2)
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        chunks.forEach { row ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                row.forEach { action ->
-                                    MiniActionItem(action, showLabels)
-                                }
-                            }
-                        }
-                    }
-                }
-                QuickActionLayoutMode.GRID_3 -> {
-                    val chunks = actions.take(6).chunked(3)
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        chunks.forEach { row ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                row.forEach { action ->
-                                    MiniActionItem(action, showLabels)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MiniActionItem(action: QuickAction, showLabel: Boolean) {
-    if (showLabel) {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(5.dp))
-                .background(Morandi.panelHi)
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Icon(
-                painter = painterResource(action.iconRes),
-                contentDescription = null,
-                tint = Morandi.text,
-                modifier = Modifier.size(11.dp),
-            )
-            Text(
-                text = stringResource(action.titleRes),
-                color = Morandi.text,
-                fontSize = 8.sp,
-                maxLines = 1,
-            )
-        }
-    } else {
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Morandi.panelHi),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(action.iconRes),
-                contentDescription = null,
-                tint = Morandi.text,
-                modifier = Modifier.size(13.dp),
-            )
-        }
-    }
-}
-
-/**
- * 操作排序与增删管理列表卡片
- */
-@Composable
-private fun QuickActionsManagementSection(
-    currentActions: List<QuickAction>,
-    availableActions: List<QuickAction>,
-    onMoveUp: (Int) -> Unit,
-    onMoveDown: (Int) -> Unit,
-    onRemove: (QuickAction) -> Unit,
-    onAdd: (QuickAction) -> Unit,
-    onReset: () -> Unit,
-    onAddAll: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier) {
-        // 顶部工具栏 (已启用计数 + 恢复默认 / 添加全部快捷按钮)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "${stringResource(R.string.quick_action_active_list)} (${currentActions.size})",
-                color = Morandi.text,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.quick_action_reset_default),
-                    color = Morandi.subText,
-                    fontSize = 11.sp,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Morandi.panelHi.copy(alpha = 0.7f))
-                        .clickable { onReset() }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                )
-
-                if (availableActions.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.quick_action_add_all),
-                        color = Morandi.accent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Morandi.accent.copy(alpha = 0.14f))
-                            .clickable { onAddAll() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // 已启用操作列表 (支持顺滑位置上移/下移与移除)
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            itemsIndexed(currentActions, key = { _, action -> action.id }) { index, action ->
-                ActiveActionRow(
-                    index = index,
-                    action = action,
-                    isFirst = index == 0,
-                    isLast = index == currentActions.size - 1,
-                    canRemove = currentActions.size > 1,
-                    onMoveUp = { onMoveUp(index) },
-                    onMoveDown = { onMoveDown(index) },
-                    onRemove = { onRemove(action) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
-
-            // 可添加操作池 (FlowRow 流式芯片排布)
-            if (availableActions.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "${stringResource(R.string.quick_action_available_list)} (${availableActions.size})",
-                        color = Morandi.subText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 4.dp),
-                    )
-                }
-
-                item {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        availableActions.forEach { action ->
-                            AvailableActionChip(
-                                action = action,
-                                onAdd = { onAdd(action) },
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -1277,7 +1182,7 @@ private fun ActiveActionRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Morandi.panelHi.copy(alpha = 0.75f))
+            .background(Morandi.panelHi)
             .border(1.dp, Morandi.border.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1292,7 +1197,7 @@ private fun ActiveActionRow(
                 modifier = Modifier
                     .size(20.dp)
                     .clip(CircleShape)
-                    .background(Morandi.border.copy(alpha = 0.5f)),
+                    .background(Morandi.panel),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -1307,7 +1212,7 @@ private fun ActiveActionRow(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(RoundedCornerShape(7.dp))
-                    .background(Morandi.accent.copy(alpha = 0.15f)),
+                    .background(Morandi.panel),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -1407,13 +1312,13 @@ private fun AvailableActionChip(
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(Morandi.panelHi.copy(alpha = 0.6f))
-            .border(1.dp, Morandi.border.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+            .background(Morandi.panelHi)
+            .border(1.dp, Morandi.border.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
             .clickable {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onAdd()
             }
-            .padding(horizontal = 8.dp, vertical = 5.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
