@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -120,12 +121,15 @@ internal fun CanvasOverlay(
     )
 
     // 45 度斜向条纹纹理：周期 24px，暗条纹与微透亮条纹交错，完全无缝平铺
+    // 柔和低对比度中性灰阶斑马纹（Procreate 原生质感）：
+    // 暗阶 ~18% 透明度 (0x2E141416)，明阶 ~8% 透明度 (0x14141416)
+    // 二者均为同色系中性微透底色，对比度温和通透，绝不刺眼抢眼
     val zebraTileBitmap = androidx.compose.runtime.remember {
         val size = 24
         val b = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
         val pixels = IntArray(size * size)
-        val colDark = 0x4814141Eu.toInt()
-        val colLight = 0x14FFFFFFu.toInt()
+        val colDark = 0x2E141416u.toInt()
+        val colLight = 0x14141416u.toInt()
         for (y in 0 until size) {
             for (x in 0 until size) {
                 val d = ((x - y) % size + size) % size
@@ -153,7 +157,14 @@ internal fun CanvasOverlay(
             xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN)
         }
     }
+    val clearPaint = androidx.compose.runtime.remember {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+        }
+    }
     val selDstRectF = androidx.compose.runtime.remember { android.graphics.RectF() }
+    val inProgressClosedPath = androidx.compose.runtime.remember { androidx.compose.ui.graphics.Path() }
+    val inProgressRectF = androidx.compose.runtime.remember { android.graphics.RectF() }
 
     Canvas(Modifier.fillMaxSize()) {
         val isSelectionTool = tool.group == ToolGroup.SELECTION
@@ -603,21 +614,10 @@ internal fun CanvasOverlay(
                                 addPath(polyPath)
                                 close()
                             }
-                            // 1. 半透明填充高亮（适配选区模式）
-                            val polyFillColor = when (vm.selectionMode) {
-                                2 -> Color(0xFFFF5252).copy(alpha = 0.24f)
-                                3 -> Color(0xFF4CAF50).copy(alpha = 0.22f)
-                                else -> Morandi.accent.copy(alpha = 0.20f)
-                            }
+                            // 双色闭合蚂蚁线
                             drawPath(
                                 path = closedPath,
-                                color = polyFillColor,
-                                style = androidx.compose.ui.graphics.drawscope.Fill,
-                            )
-                            // 2. 双色闭合蚂蚁线
-                            drawPath(
-                                path = closedPath,
-                                color = Color.Black.copy(alpha = 0.75f),
+                                color = Color.Black.copy(alpha = 0.85f),
                                 style = androidx.compose.ui.graphics.drawscope.Stroke(
                                     width = blackStrokeW,
                                     pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
@@ -742,14 +742,8 @@ internal fun CanvasOverlay(
                         }
                         Tool.SELECT_RECT -> {
                             val r = androidx.compose.ui.geometry.Rect(minOf(s.x, e.x), minOf(s.y, e.y), maxOf(s.x, e.x), maxOf(s.y, e.y))
-                            val liveFillColor = when (vm.selectionMode) {
-                                2 -> Color(0xFFFF5252).copy(alpha = 0.28f)
-                                3 -> Color(0xFF4CAF50).copy(alpha = 0.25f)
-                                else -> Morandi.accent.copy(alpha = 0.25f)
-                            }
                             val dashInterval = 3.5.dp.toPx() / currentScale
                             val antPhase = animFraction * (dashInterval * 2)
-                            drawRect(liveFillColor, topLeft = r.topLeft, size = r.size, style = androidx.compose.ui.graphics.drawscope.Fill)
                             drawRect(
                                 Color.Black.copy(alpha = 0.85f),
                                 topLeft = r.topLeft,
@@ -777,14 +771,8 @@ internal fun CanvasOverlay(
                         }
                         Tool.SELECT_ELLIPSE -> {
                             val r = androidx.compose.ui.geometry.Rect(minOf(s.x, e.x), minOf(s.y, e.y), maxOf(s.x, e.x), maxOf(s.y, e.y))
-                            val liveFillColor = when (vm.selectionMode) {
-                                2 -> Color(0xFFFF5252).copy(alpha = 0.28f)
-                                3 -> Color(0xFF4CAF50).copy(alpha = 0.25f)
-                                else -> Morandi.accent.copy(alpha = 0.25f)
-                            }
                             val dashInterval = 3.5.dp.toPx() / currentScale
                             val antPhase = animFraction * (dashInterval * 2)
-                            drawOval(liveFillColor, topLeft = r.topLeft, size = r.size, style = androidx.compose.ui.graphics.drawscope.Fill)
                             drawOval(
                                 Color.Black.copy(alpha = 0.85f),
                                 topLeft = r.topLeft,
@@ -1228,9 +1216,9 @@ internal fun CanvasOverlay(
                 // 1. Procreate 风格：仅在选区工具内显示未选区 45 度动态流动斑马纹；切到非选区工具（画笔、橡皮擦等）时自动隐藏遮罩，保持画布视野干净
                 val isTransformOrMove = (tool == Tool.TRANSFORM || tool == Tool.MOVE)
                 val isSelectionTool = tool.group == ToolGroup.SELECTION
-                val shouldShowZebra = isSelectionTool && !isTransformOrMove && (!isSelecting || vm.selectionMode != 0)
-                val selBmp = if (shouldShowZebra) vm.selectionOverlayBitmap else null
-                if (selBmp != null && !selBmp.isRecycled) {
+                val shouldShowZebra = isSelectionTool && !isTransformOrMove && (vm.hasSelection || isSelecting)
+                val selBmp = if (vm.hasSelection) vm.selectionOverlayBitmap else null
+                if (shouldShowZebra) {
                     val nativeCanvas = drawContext.canvas.nativeCanvas
                     val currentScale = (zoom.value * fitScale).coerceAtLeast(0.001f)
                     val left = -bmp.width / 2f
@@ -1249,10 +1237,128 @@ internal fun CanvasOverlay(
                     zebraShaderMatrix.postTranslate(zebraOffset / currentScale, 0f)
                     zebraShader.setLocalMatrix(zebraShaderMatrix)
 
+                    // 动态调整斑马纹不透明度（与蒙版不透明度设置项联动）
+                    val opacityScale = (vm.selectionMaskOpacity / 0.47f).coerceIn(0.2f, 2.0f)
+                    zebraPaint.alpha = (opacityScale * 255).toInt().coerceIn(20, 255)
+
                     val saveCount = nativeCanvas.saveLayer(left, top, right, bottom, null)
                     nativeCanvas.drawRect(left, top, right, bottom, zebraPaint)
-                    selDstRectF.set(left, top, right, bottom)
-                    nativeCanvas.drawBitmap(selBmp, null, selDstRectF, selMaskPaint)
+
+                    // 若存在已有提交选区，且当前处于追加/减去/相交模式（或当前未在绘制新选区），则先应用已有选区遮罩
+                    if (vm.hasSelection && selBmp != null && !selBmp.isRecycled && (vm.selectionMode != 0 || !isSelecting)) {
+                        selDstRectF.set(left, top, right, bottom)
+                        nativeCanvas.drawBitmap(selBmp, null, selDstRectF, selMaskPaint)
+                    }
+
+                    // 实时反向斑马纹预览：将正在拖拽/绘制的路径内部镂空 (CLEAR) 或叠加，外部即刻呈现斑马纹
+                    if (isSelecting) {
+                        val scX = if (vm.docWidth > 0) bmp.width.toFloat() / vm.docWidth else 1f
+                        val scY = if (vm.docHeight > 0) bmp.height.toFloat() / vm.docHeight else 1f
+                        val halfW = bmp.width / 2f
+                        val halfH = bmp.height / 2f
+
+                        when {
+                            // 自由套索实时轨迹
+                            liveSelectionPath.value != null -> {
+                                val livePath = liveSelectionPath.value!!
+                                inProgressClosedPath.reset()
+                                inProgressClosedPath.addPath(livePath)
+                                inProgressClosedPath.close()
+                                when (vm.selectionMode) {
+                                    0, 1 -> nativeCanvas.drawPath(inProgressClosedPath.asAndroidPath(), clearPaint)
+                                    2 -> nativeCanvas.drawPath(inProgressClosedPath.asAndroidPath(), zebraPaint)
+                                    3 -> {
+                                        nativeCanvas.save()
+                                        nativeCanvas.clipOutPath(inProgressClosedPath.asAndroidPath())
+                                        nativeCanvas.drawRect(left, top, right, bottom, zebraPaint)
+                                        nativeCanvas.restore()
+                                    }
+                                }
+                            }
+                            // 折线套索已确认点集（>=3 点时可闭合镂空预览）
+                            tool == Tool.LASSO && vm.lassoMultiPoints.size >= 3 -> {
+                                val pts = vm.lassoMultiPoints
+                                inProgressClosedPath.reset()
+                                inProgressClosedPath.moveTo(pts[0].first - halfW, pts[0].second - halfH)
+                                for (i in 1 until pts.size) {
+                                    inProgressClosedPath.lineTo(pts[i].first - halfW, pts[i].second - halfH)
+                                }
+                                inProgressClosedPath.close()
+                                when (vm.selectionMode) {
+                                    0, 1 -> nativeCanvas.drawPath(inProgressClosedPath.asAndroidPath(), clearPaint)
+                                    2 -> nativeCanvas.drawPath(inProgressClosedPath.asAndroidPath(), zebraPaint)
+                                    3 -> {
+                                        nativeCanvas.save()
+                                        nativeCanvas.clipOutPath(inProgressClosedPath.asAndroidPath())
+                                        nativeCanvas.drawRect(left, top, right, bottom, zebraPaint)
+                                        nativeCanvas.restore()
+                                    }
+                                }
+                            }
+                            // 多边形选择（>=3 点时可闭合镂空预览）
+                            tool == Tool.SELECT_POLYGON && polyPoints.size >= 3 -> {
+                                inProgressClosedPath.reset()
+                                inProgressClosedPath.moveTo(polyPoints[0].x * scX - halfW, polyPoints[0].y * scY - halfH)
+                                for (i in 1 until polyPoints.size) {
+                                    inProgressClosedPath.lineTo(polyPoints[i].x * scX - halfW, polyPoints[i].y * scY - halfH)
+                                }
+                                inProgressClosedPath.close()
+                                when (vm.selectionMode) {
+                                    0, 1 -> nativeCanvas.drawPath(inProgressClosedPath.asAndroidPath(), clearPaint)
+                                    2 -> nativeCanvas.drawPath(inProgressClosedPath.asAndroidPath(), zebraPaint)
+                                    3 -> {
+                                        nativeCanvas.save()
+                                        nativeCanvas.clipOutPath(inProgressClosedPath.asAndroidPath())
+                                        nativeCanvas.drawRect(left, top, right, bottom, zebraPaint)
+                                        nativeCanvas.restore()
+                                    }
+                                }
+                            }
+                            // 矩形选择实时拖拽框
+                            tool == Tool.SELECT_RECT && liveShapeStart.value != null && liveShapeEnd.value != null -> {
+                                val s = liveShapeStart.value!!
+                                val e = liveShapeEnd.value!!
+                                val rLeft = minOf(s.x, e.x) * scX - halfW
+                                val rTop = minOf(s.y, e.y) * scY - halfH
+                                val rRight = maxOf(s.x, e.x) * scX - halfW
+                                val rBottom = maxOf(s.y, e.y) * scY - halfH
+                                inProgressRectF.set(rLeft, rTop, rRight, rBottom)
+                                when (vm.selectionMode) {
+                                    0, 1 -> nativeCanvas.drawRect(inProgressRectF, clearPaint)
+                                    2 -> nativeCanvas.drawRect(inProgressRectF, zebraPaint)
+                                    3 -> {
+                                        nativeCanvas.save()
+                                        nativeCanvas.clipOutRect(inProgressRectF)
+                                        nativeCanvas.drawRect(left, top, right, bottom, zebraPaint)
+                                        nativeCanvas.restore()
+                                    }
+                                }
+                            }
+                            // 椭圆选择实时拖拽框
+                            tool == Tool.SELECT_ELLIPSE && liveShapeStart.value != null && liveShapeEnd.value != null -> {
+                                val s = liveShapeStart.value!!
+                                val e = liveShapeEnd.value!!
+                                val rLeft = minOf(s.x, e.x) * scX - halfW
+                                val rTop = minOf(s.y, e.y) * scY - halfH
+                                val rRight = maxOf(s.x, e.x) * scX - halfW
+                                val rBottom = maxOf(s.y, e.y) * scY - halfH
+                                inProgressRectF.set(rLeft, rTop, rRight, rBottom)
+                                when (vm.selectionMode) {
+                                    0, 1 -> nativeCanvas.drawOval(inProgressRectF, clearPaint)
+                                    2 -> nativeCanvas.drawOval(inProgressRectF, zebraPaint)
+                                    3 -> {
+                                        inProgressClosedPath.reset()
+                                        inProgressClosedPath.addOval(androidx.compose.ui.geometry.Rect(rLeft, rTop, rRight, rBottom))
+                                        nativeCanvas.save()
+                                        nativeCanvas.clipOutPath(inProgressClosedPath.asAndroidPath())
+                                        nativeCanvas.drawRect(left, top, right, bottom, zebraPaint)
+                                        nativeCanvas.restore()
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     nativeCanvas.restoreToCount(saveCount)
                 }
 
@@ -1298,19 +1404,7 @@ internal fun CanvasOverlay(
                     val dashInterval = 3.5.dp.toPx() / currentScale
                     val antPhase = animFraction * (dashInterval * 2)
 
-                    // 1. 半透明填充指示选区覆盖区域（减去选区时显示减去提示色）
-                    val liveFillColor = when (vm.selectionMode) {
-                        2 -> Color(0xFFFF5252).copy(alpha = 0.28f)
-                        3 -> Color(0xFF4CAF50).copy(alpha = 0.25f)
-                        else -> Morandi.accent.copy(alpha = 0.25f)
-                    }
-                    drawPath(
-                        path = livePath,
-                        color = liveFillColor,
-                        style = androidx.compose.ui.graphics.drawscope.Fill
-                    )
-
-                    // 2. 细腻双色虚线蚂蚁线轮廓 (黑色底 + 白色错位虚线)
+                    // 细腻双色虚线蚂蚁线轮廓 (黑色底 + 白色错位虚线)
                     drawPath(
                         path = livePath,
                         color = Color.Black.copy(alpha = 0.85f),
@@ -1360,18 +1454,7 @@ internal fun CanvasOverlay(
                             addPath(path)
                             close()
                         }
-                        // 1. 半透明填充高亮（模式感知）
-                        val multiFillColor = when (vm.selectionMode) {
-                            2 -> Color(0xFFFF5252).copy(alpha = 0.24f)
-                            3 -> Color(0xFF4CAF50).copy(alpha = 0.22f)
-                            else -> Morandi.accent.copy(alpha = 0.20f)
-                        }
-                        drawPath(
-                            path = closedPath,
-                            color = multiFillColor,
-                            style = androidx.compose.ui.graphics.drawscope.Fill,
-                        )
-                        // 2. 双色闭合蚂蚁线
+                        // 双色闭合蚂蚁线
                         drawPath(
                             path = closedPath,
                             color = Color.Black.copy(alpha = 0.85f),
