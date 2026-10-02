@@ -2211,5 +2211,7 @@
     <string name="settings_smoothing_pressure_desc">Apply Gaussian smoothing to stylus pressure</string>
     <string name="settings_smoothing_tail_aggressiveness">Tail Aggressiveness</string>
     <string name="settings_smoothing_tail_aggressiveness_desc">Reduce tail latency when lifting the stylus</string>
+    <string name="project_copying_progress">Copying artworks (%1$d/%2$d)</string>
+    <string name="project_copy_result">Copied %1$d artworks, %2$d failed</string>
 </resources>
 
