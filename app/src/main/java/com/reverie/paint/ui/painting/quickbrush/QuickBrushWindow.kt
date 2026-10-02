@@ -116,16 +116,42 @@ fun QuickBrushWindow(
     Box(
         modifier = modifier
             .offset {
-                IntOffset(
-                    vm.quickBrushWindowX.roundToInt(),
-                    vm.quickBrushWindowY.roundToInt(),
-                )
+                val x = if (vm.quickBrushWindowX >= 0f) {
+                    vm.quickBrushWindowX.roundToInt()
+                } else {
+                    ((screenWidth - windowSize.width.coerceAtLeast(240)) / 2).coerceAtLeast(0)
+                }
+                val y = if (vm.quickBrushWindowY >= 0f) {
+                    vm.quickBrushWindowY.roundToInt()
+                } else {
+                    ((screenHeight - windowSize.height.coerceAtLeast(100)) / 2).coerceAtLeast(0)
+                }
+                IntOffset(x, y)
             }
     ) {
         // ---- 悬浮窗实体 ----
         Box(
             modifier = Modifier
-                .onSizeChanged { windowSize = it }
+                .onSizeChanged { size ->
+                    windowSize = size
+                    if (size.width > 0 && size.height > 0) {
+                        val maxX = (screenWidth - size.width).coerceAtLeast(0).toFloat()
+                        val maxY = (screenHeight - size.height).coerceAtLeast(0).toFloat()
+                        if (vm.quickBrushWindowX < 0f || vm.quickBrushWindowY < 0f) {
+                            vm.quickBrushWindowX = (maxX / 2f).coerceIn(0f, maxX)
+                            vm.quickBrushWindowY = (maxY / 2f).coerceIn(0f, maxY)
+                            vm.persistQuickBrushState()
+                        } else {
+                            val clampedX = vm.quickBrushWindowX.coerceIn(0f, maxX)
+                            val clampedY = vm.quickBrushWindowY.coerceIn(0f, maxY)
+                            if (clampedX != vm.quickBrushWindowX || clampedY != vm.quickBrushWindowY) {
+                                vm.quickBrushWindowX = clampedX
+                                vm.quickBrushWindowY = clampedY
+                                vm.persistQuickBrushState()
+                            }
+                        }
+                    }
+                }
                 .shadow(12.dp, windowShape)
                 .systemHoverIcon(context)
                 .clip(windowShape)

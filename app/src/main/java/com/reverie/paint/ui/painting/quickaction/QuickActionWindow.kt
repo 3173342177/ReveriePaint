@@ -78,6 +78,8 @@ fun QuickActionWindow(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
+    val screenWidthPx = context.resources.displayMetrics.widthPixels
+    val screenHeightPx = context.resources.displayMetrics.heightPixels
 
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -120,16 +122,42 @@ fun QuickActionWindow(
     Box(
         modifier = modifier
             .offset {
-                IntOffset(
-                    vm.quickActionWindowX.roundToInt(),
-                    vm.quickActionWindowY.roundToInt(),
-                )
+                val x = if (vm.quickActionWindowX >= 0f) {
+                    vm.quickActionWindowX.roundToInt()
+                } else {
+                    ((screenWidthPx - windowSize.width.coerceAtLeast(260)) / 2).coerceAtLeast(0)
+                }
+                val y = if (vm.quickActionWindowY >= 0f) {
+                    vm.quickActionWindowY.roundToInt()
+                } else {
+                    ((screenHeightPx - windowSize.height.coerceAtLeast(140)) / 2).coerceAtLeast(0)
+                }
+                IntOffset(x, y)
             }
     ) {
         // ---- 悬浮窗实体 ----
         Box(
             modifier = Modifier
-                .onSizeChanged { windowSize = it }
+                .onSizeChanged { size ->
+                    windowSize = size
+                    if (size.width > 0 && size.height > 0) {
+                        val maxX = (screenWidthPx - size.width).coerceAtLeast(0).toFloat()
+                        val maxY = (screenHeightPx - size.height).coerceAtLeast(0).toFloat()
+                        if (vm.quickActionWindowX < 0f || vm.quickActionWindowY < 0f) {
+                            vm.quickActionWindowX = (maxX / 2f).coerceIn(0f, maxX)
+                            vm.quickActionWindowY = (maxY / 2f).coerceIn(0f, maxY)
+                            vm.persistQuickActionsState()
+                        } else {
+                            val clampedX = vm.quickActionWindowX.coerceIn(0f, maxX)
+                            val clampedY = vm.quickActionWindowY.coerceIn(0f, maxY)
+                            if (clampedX != vm.quickActionWindowX || clampedY != vm.quickActionWindowY) {
+                                vm.quickActionWindowX = clampedX
+                                vm.quickActionWindowY = clampedY
+                                vm.persistQuickActionsState()
+                            }
+                        }
+                    }
+                }
                 .shadow(12.dp, windowShape)
                 .systemHoverIcon(context)
                 .clip(windowShape)
@@ -154,8 +182,10 @@ fun QuickActionWindow(
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
-                            vm.quickActionWindowX += dragAmount.x
-                            vm.quickActionWindowY += dragAmount.y
+                            val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0).toFloat()
+                            val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0).toFloat()
+                            vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(0f, maxX)
+                            vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(0f, maxY)
                             vm.persistQuickActionsState()
                         }
                     }
@@ -230,8 +260,10 @@ fun QuickActionWindow(
                         .pointerInput(Unit) {
                             detectDragGestures { change, dragAmount ->
                                 change.consume()
-                                vm.quickActionWindowX += dragAmount.x
-                                vm.quickActionWindowY += dragAmount.y
+                                val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0).toFloat()
+                                val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0).toFloat()
+                                vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(0f, maxX)
+                                vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(0f, maxY)
                                 vm.persistQuickActionsState()
                             }
                         },

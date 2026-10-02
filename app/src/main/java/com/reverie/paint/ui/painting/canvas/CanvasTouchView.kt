@@ -1081,11 +1081,10 @@ class CanvasTouchView(context: Context) : View(context) {
 
         // 快捷操作浮窗区域 (若打开)
         if (v.quickActionWindowOpen) {
-            val qx = v.quickActionWindowX
-            val qy = v.quickActionWindowY
-            // 根据展开态与单排/网格预估有效触控保护区域，防止悬浮窗背景处笔刷落笔误画
             val qw = if (v.quickActionCollapsed) 90f * d else 380f * d
             val qh = if (v.quickActionCollapsed) 50f * d else 380f * d
+            val qx = if (v.quickActionWindowX >= 0f) v.quickActionWindowX else ((width - qw) / 2f).coerceAtLeast(0f)
+            val qy = if (v.quickActionWindowY >= 0f) v.quickActionWindowY else ((height - qh) / 2f).coerceAtLeast(0f)
             if (x >= qx && x <= qx + qw && y >= qy && y <= qy + qh) {
                 return true
             }
@@ -1093,8 +1092,6 @@ class CanvasTouchView(context: Context) : View(context) {
 
         // 快捷笔刷浮窗区域 (若打开)
         if (v.quickBrushWindowOpen) {
-            val bx = v.quickBrushWindowX
-            val by = v.quickBrushWindowY
             val isVert = v.quickBrushOrientation == "vertical"
             val favCount = v.favoriteBrushNames.size
             val visibleCount = if (favCount == 0) 1 else favCount.coerceAtMost(v.quickBrushMaxLength)
@@ -1109,6 +1106,8 @@ class CanvasTouchView(context: Context) : View(context) {
                 isVert -> (28f + (if (favCount == 0) 48f else (visibleCount * 43f - 1f)) + 36f) * d
                 else -> 56f * d
             }
+            val bx = if (v.quickBrushWindowX >= 0f) v.quickBrushWindowX else ((width - bw) / 2f).coerceAtLeast(0f)
+            val by = if (v.quickBrushWindowY >= 0f) v.quickBrushWindowY else ((height - bh) / 2f).coerceAtLeast(0f)
             if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
                 return true
             }

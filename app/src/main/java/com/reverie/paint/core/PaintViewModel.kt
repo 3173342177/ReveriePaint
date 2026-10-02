@@ -822,8 +822,8 @@ class PaintViewModel : ViewModel() {
     // Quick Actions Tool Window State (快捷操作浮窗)
     var quickActionWindowOpen by mutableStateOf(false)
     var quickActionsConfig by mutableStateOf(com.reverie.paint.model.QuickActionsConfig())
-    var quickActionWindowX by mutableFloatStateOf(60f)
-    var quickActionWindowY by mutableFloatStateOf(200f)
+    var quickActionWindowX by mutableFloatStateOf(-1f)
+    var quickActionWindowY by mutableFloatStateOf(-1f)
     var quickActionCollapsed by mutableStateOf(false)
 
     fun persistQuickActionsState() {
@@ -844,8 +844,8 @@ class PaintViewModel : ViewModel() {
 
     // Quick Brush Tool Window State (快捷笔刷浮窗)
     var quickBrushWindowOpen by mutableStateOf(false)
-    var quickBrushWindowX by mutableFloatStateOf(60f)
-    var quickBrushWindowY by mutableFloatStateOf(280f)
+    var quickBrushWindowX by mutableFloatStateOf(-1f)
+    var quickBrushWindowY by mutableFloatStateOf(-1f)
     var quickBrushCollapsed by mutableStateOf(false)
     var quickBrushOrientation by mutableStateOf("horizontal") // "horizontal" or "vertical"
     var quickBrushMaxLength by mutableIntStateOf(6) // 最大长度（显示数量上限）
@@ -2822,8 +2822,12 @@ class PaintViewModel : ViewModel() {
 
             // 快捷操作浮窗持久化恢复
             quickActionWindowOpen = prefs.getBoolean("quick_action_open", false)
-            quickActionWindowX = prefs.getFloat("quick_action_x", 60f)
-            quickActionWindowY = prefs.getFloat("quick_action_y", 200f)
+            quickActionWindowX = prefs.getFloat("quick_action_x", -1f)
+            quickActionWindowY = prefs.getFloat("quick_action_y", -1f)
+            if (quickActionWindowX == 60f && quickActionWindowY == 200f) {
+                quickActionWindowX = -1f
+                quickActionWindowY = -1f
+            }
             quickActionCollapsed = prefs.getBoolean("quick_action_collapsed", false)
             val layoutMode = com.reverie.paint.model.QuickActionLayoutMode.fromId(prefs.getString("quick_action_layout", "column") ?: "column")
             val showLabels = prefs.getBoolean("quick_action_show_labels", false)
@@ -2841,8 +2845,12 @@ class PaintViewModel : ViewModel() {
 
             // 快捷笔刷浮窗持久化恢复
             quickBrushWindowOpen = prefs.getBoolean("quick_brush_open", false)
-            quickBrushWindowX = prefs.getFloat("quick_brush_x", 60f)
-            quickBrushWindowY = prefs.getFloat("quick_brush_y", 280f)
+            quickBrushWindowX = prefs.getFloat("quick_brush_x", -1f)
+            quickBrushWindowY = prefs.getFloat("quick_brush_y", -1f)
+            if (quickBrushWindowX == 60f && quickBrushWindowY == 280f) {
+                quickBrushWindowX = -1f
+                quickBrushWindowY = -1f
+            }
             quickBrushCollapsed = prefs.getBoolean("quick_brush_collapsed", false)
             quickBrushOrientation = prefs.getString("quick_brush_orientation", "horizontal") ?: "horizontal"
             quickBrushMaxLength = prefs.getInt("quick_brush_max_length", 6)
