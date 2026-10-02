@@ -269,10 +269,12 @@ fun PaintingPage(
                 flashIndicator()
             }
             "reset_view" -> {
-                zoom = 1f
-                rotation = 0f
-                panX = 0f
-                panY = 0f
+                com.reverie.paint.ui.painting.canvas.CanvasTouchView.activeTouchView?.animateFitCanvas() ?: run {
+                    zoom = 1f
+                    rotation = 0f
+                    panX = 0f
+                    panY = 0f
+                }
                 flashIndicator()
             }
             "open_edit_menu" -> {

@@ -541,12 +541,15 @@ class CanvasTouchView(context: Context) : View(context) {
         return transformWriterGuard.invalidateAll()
     }
 
-    private fun animateFitCanvas() {
+    internal fun animateFitCanvas() {
         val writerToken = cancelCanvasTransformAnimators()
+        isInteracting = false
+        isTransformActive = false
         val startZoom = canvasZoom
         val startRot = canvasRotation
         val startPanX = canvasPanX
         val startPanY = canvasPanY
+        val dRot = RotationSnap.shortestDelta(startRot, 0f)
 
         val animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 240L
@@ -556,12 +559,24 @@ class CanvasTouchView(context: Context) : View(context) {
                 if (!transformWriterGuard.isActive(writerToken)) return@addUpdateListener
                 val f = anim.animatedFraction
                 canvasZoom = startZoom + (1f - startZoom) * f
-                canvasRotation = startRot + (0f - startRot) * f
+                canvasRotation = startRot + dRot * f
                 canvasPanX = startPanX + (0f - startPanX) * f
                 canvasPanY = startPanY + (0f - startPanY) * f
                 onTransform?.invoke(canvasZoom, canvasRotation, canvasPanX, canvasPanY)
                 invalidate()
             }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (transformWriterGuard.isActive(writerToken)) {
+                        canvasZoom = 1f
+                        canvasRotation = 0f
+                        canvasPanX = 0f
+                        canvasPanY = 0f
+                        onTransform?.invoke(1f, 0f, 0f, 0f)
+                        invalidate()
+                    }
+                }
+            })
         }
         fitAnimator = animator
         animator.start()
@@ -1070,8 +1085,8 @@ class CanvasTouchView(context: Context) : View(context) {
             val qx = v.quickActionWindowX
             val qy = v.quickActionWindowY
             // 根据展开态与单排/网格预估有效触控保护区域，防止悬浮窗背景处笔刷落笔误画
-            val qw = if (v.quickActionCollapsed) 90f * d else 260f * d
-            val qh = if (v.quickActionCollapsed) 50f * d else 360f * d
+            val qw = if (v.quickActionCollapsed) 90f * d else 380f * d
+            val qh = if (v.quickActionCollapsed) 50f * d else 380f * d
             if (x >= qx && x <= qx + qw && y >= qy && y <= qy + qh) {
                 return true
             }

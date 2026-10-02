@@ -26,6 +26,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -34,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -73,6 +76,27 @@ fun QuickActionWindow(
 
     var showEditDialog by remember { mutableStateOf(false) }
 
+    var actionToastText by remember { mutableStateOf<String?>(null) }
+    var actionToastIcon by remember { mutableIntStateOf(0) }
+    var actionToastRevision by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(actionToastRevision) {
+        if (actionToastRevision > 0L) {
+            kotlinx.coroutines.delay(1000)
+            actionToastText = null
+        }
+    }
+
+    fun onTriggerAction(action: QuickAction) {
+        val (toastText, toastIcon) = getActionToastInfo(action, vm, context)
+        actionToastText = toastText
+        actionToastIcon = toastIcon
+        actionToastRevision++
+        vm.executeQuickAction(action)
+    }
+
+    var windowSize by remember { mutableStateOf(IntSize.Zero) }
+
     val config = vm.quickActionsConfig
     val isCollapsed = vm.quickActionCollapsed
     val layoutMode = config.layoutMode
@@ -96,22 +120,27 @@ fun QuickActionWindow(
                     vm.quickActionWindowY.roundToInt(),
                 )
             }
-            .shadow(12.dp, windowShape)
-            .systemHoverIcon(context)
-            .clip(windowShape)
-            .then(
-                if (vm.blurBackground && hazeState != null) {
-                    Modifier.hazeChild(
-                        state = hazeState,
-                        style = com.reverie.paint.ui.theme.Glass.popupStyle(if (opacity >= 0.99f) 0.92f else opacity),
-                    )
-                } else {
-                    Modifier.background(Morandi.panel.copy(alpha = opacity))
-                }
-            )
-            .border(1.dp, Morandi.border.copy(alpha = 0.7f), windowShape)
-            .animateContentSize(Motion.enterSpring())
     ) {
+        // ---- 悬浮窗实体 ----
+        Box(
+            modifier = Modifier
+                .onSizeChanged { windowSize = it }
+                .shadow(12.dp, windowShape)
+                .systemHoverIcon(context)
+                .clip(windowShape)
+                .then(
+                    if (vm.blurBackground && hazeState != null) {
+                        Modifier.hazeChild(
+                            state = hazeState,
+                            style = com.reverie.paint.ui.theme.Glass.popupStyle(if (opacity >= 0.99f) 0.92f else opacity),
+                        )
+                    } else {
+                        Modifier.background(Morandi.panel.copy(alpha = opacity))
+                    }
+                )
+                .border(1.dp, Morandi.border.copy(alpha = 0.7f), windowShape)
+                .animateContentSize(Motion.enterSpring())
+        ) {
         if (isCollapsed) {
             // ---- 折叠微缩态 (流线型悬浮小球/胶囊) ----
             Row(
@@ -316,7 +345,7 @@ fun QuickActionWindow(
                                     vm = vm,
                                     action = action,
                                     showLabel = config.showLabels,
-                                    onClick = { vm.executeQuickAction(action) },
+                                    onClick = { onTriggerAction(action) },
                                 )
                             }
                         }
@@ -331,7 +360,7 @@ fun QuickActionWindow(
                                     vm = vm,
                                     action = action,
                                     showLabel = config.showLabels,
-                                    onClick = { vm.executeQuickAction(action) },
+                                    onClick = { onTriggerAction(action) },
                                 )
                             }
 
@@ -362,7 +391,7 @@ fun QuickActionWindow(
                                             vm = vm,
                                             action = action,
                                             showLabel = config.showLabels,
-                                            onClick = { vm.executeQuickAction(action) },
+                                            onClick = { onTriggerAction(action) },
                                         )
                                     }
                                 }
@@ -379,11 +408,85 @@ fun QuickActionWindow(
                                             vm = vm,
                                             action = action,
                                             showLabel = config.showLabels,
-                                            onClick = { vm.executeQuickAction(action) },
+                                            onClick = { onTriggerAction(action) },
                                         )
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+        // ---- 就近微型 Toast 提示 (智能贴合悬浮窗侧边或上方，提供操作即时反馈) ----
+        val toastText = actionToastText
+        val toastIcon = actionToastIcon
+        val screenWidthPx = context.resources.displayMetrics.widthPixels
+        val densityDpi = density.density
+        val spacingPx = with(density) { 10.dp.roundToPx() }
+
+        Box(
+            modifier = Modifier.layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(0, 0) {
+                    val isCol = layoutMode == QuickActionLayoutMode.COLUMN
+                    val isRight = vm.quickActionWindowX > screenWidthPx / 2f
+                    val isNearTop = vm.quickActionWindowY < 90f * densityDpi
+
+                    val px = if (isCol) {
+                        if (isRight) -placeable.width - spacingPx else windowSize.width + spacingPx
+                    } else {
+                        (windowSize.width - placeable.width) / 2
+                    }
+
+                    val py = if (isCol) {
+                        (windowSize.height - placeable.height) / 2
+                    } else {
+                        if (isNearTop) windowSize.height + spacingPx else -placeable.height - spacingPx
+                    }
+
+                    placeable.placeRelative(px, py)
+                }
+            }
+        ) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = toastText != null,
+                enter = androidx.compose.animation.fadeIn(Motion.enterSpring()) +
+                    androidx.compose.animation.scaleIn(Motion.enterSpring(), initialScale = 0.82f),
+                exit = androidx.compose.animation.fadeOut(Motion.exitTween(150)) +
+                    androidx.compose.animation.scaleOut(Motion.exitTween(150), targetScale = 0.82f),
+            ) {
+                if (toastText != null) {
+                    Box(
+                        modifier = Modifier
+                            .shadow(8.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.25f))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Morandi.panelHi.copy(alpha = 0.96f))
+                            .border(1.dp, Morandi.border.copy(alpha = 0.65f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (toastIcon != 0) {
+                                Icon(
+                                    painter = painterResource(toastIcon),
+                                    contentDescription = null,
+                                    tint = Morandi.accent,
+                                    modifier = Modifier.size(13.dp),
+                                )
+                            }
+                            Text(
+                                text = toastText,
+                                color = Morandi.text,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                            )
                         }
                     }
                 }
@@ -760,4 +863,40 @@ private fun QuickActionsEditDialog(
             }
         }
     }
+}
+
+/**
+ * 格式化快捷操作触发时的微型 Toast 提示文案与图标
+ */
+private fun getActionToastInfo(
+    action: QuickAction,
+    vm: PaintViewModel,
+    context: android.content.Context,
+): Pair<String, Int> {
+    val text = when (action) {
+        QuickAction.LOCK_VIEW -> {
+            if (!vm.isViewTransformLocked) context.getString(R.string.toast_view_locked)
+            else context.getString(R.string.toast_view_unlocked)
+        }
+        QuickAction.TOGGLE_ERASER -> {
+            if (vm.currentToolId == "eraser") context.getString(R.string.tool_brush)
+            else context.getString(R.string.tool_eraser)
+        }
+        QuickAction.BRUSH_SIZE_INC -> {
+            val newSize = (vm.brushSize * 1.25).coerceAtMost(vm.effectiveBrushMaxSize)
+            "${context.getString(R.string.quick_action_brush_size_inc)} (${newSize.toInt()}px)"
+        }
+        QuickAction.BRUSH_SIZE_DEC -> {
+            val minL = vm.brushMinSizeLimit.coerceAtLeast(0.5)
+            val newSize = (vm.brushSize / 1.25).coerceAtLeast(minL)
+            "${context.getString(R.string.quick_action_brush_size_dec)} (${newSize.toInt()}px)"
+        }
+        QuickAction.ALPHA_LOCK -> {
+            val layer = vm.layers.firstOrNull { it.index == vm.currentLayerIndex }
+            if (layer?.alphaLocked == true) "已解除透明度锁定"
+            else "已锁定透明度"
+        }
+        else -> context.getString(action.titleRes)
+    }
+    return text to action.iconRes
 }
