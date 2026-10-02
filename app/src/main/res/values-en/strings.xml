@@ -731,6 +731,8 @@
     <string name="settings_back_key_none">No Action</string>
     <string name="settings_back_key_open_settings">Open Menu</string>
     <string name="settings_back_key_exit">Back</string>
+    <string name="settings_allow_edge_back_title">Allow Edge Swipe Back</string>
+    <string name="settings_allow_edge_back_desc">Enable screen edge swipe to trigger back gesture; disable or set back key to None to exclude edge gestures</string>
     <string name="settings_gesture_pen_hint">Note: Multi-touch gestures work regardless of stylus mode. Two-finger undo and three-finger redo remain available</string>
     <string name="settings_eyedropper_long_press_title">Long Press Eyedropper</string>
     <string name="settings_eyedropper_long_press_stylus_desc">Stylus mode active: long press canvas with finger or stylus to pick color</string>

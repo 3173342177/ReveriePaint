@@ -687,6 +687,25 @@ internal fun SettingsTabPage(
                                 }
                             }
                         }
+
+                        SettingsInnerDivider()
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(stringResource(R.string.settings_allow_edge_back_title), color = Morandi.text, fontSize = 13.sp)
+                                Text(stringResource(R.string.settings_allow_edge_back_desc), color = Morandi.subText, fontSize = 11.sp)
+                            }
+                            ReSwitch(
+                                checked = vm.allowEdgeBackGesture,
+                                onChecked = { vm.updateAllowEdgeBackGesture(it) },
+                            )
+                        }
                     }
 
                     Box(

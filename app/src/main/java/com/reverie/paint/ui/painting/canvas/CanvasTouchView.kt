@@ -652,6 +652,47 @@ class CanvasTouchView(context: Context) : View(context) {
         }
     }
 
+    // 边缘侧滑返回手势与起笔防误画缓冲 (仅针对手指触控，压感笔完全不受影响)
+    private var isPendingEdgeFinger = false
+    private var pendingEdgeScreenPos = Offset.Zero
+    private var pendingEdgeDocPos = Offset.Zero
+
+    private val flushEdgeFingerRunnable = Runnable {
+        flushPendingEdgeFinger()
+    }
+
+    private fun flushPendingEdgeFinger() {
+        if (!isPendingEdgeFinger) return
+        isPendingEdgeFinger = false
+        val v = vm ?: return
+        val canEyedrop = v.longPressEyedropperEnabled &&
+            (tool == Tool.BRUSH || tool == Tool.ERASER || tool == Tool.SMUDGE || tool == Tool.LIQUIFY)
+        if (canEyedrop) {
+            isPendingLongPress = true
+            activeLongPressToken = longPressToken
+            pendingDownDocPos = pendingEdgeDocPos
+            pendingDownScreenPos = pendingEdgeScreenPos
+            pendingDownPressure = 1f
+            val delayMs = (520L - (v.eyedropperSensitivity - 1) * 70L).coerceIn(200L, 600L)
+            postDelayed(longPressRunnable, delayMs)
+            if (!v.penOnlyMode) {
+                localCursorPos = pendingEdgeScreenPos
+                localIsTouching = true
+                localIsHovering = false
+                localPressure = 1f
+                invalidate()
+            }
+        } else if (!v.penOnlyMode) {
+            isPendingLongPress = false
+            localCursorPos = pendingEdgeScreenPos
+            localIsTouching = true
+            localIsHovering = false
+            localPressure = 1f
+            invalidate()
+            handleToolDown(pendingEdgeScreenPos, pendingEdgeDocPos, 1f, isStylus = false)
+        }
+    }
+
     // ---- 硬件笔尖前向超前预测 (OEM Hardware Motion Prediction) ----
     private var oplusPredictor: OplusMotionPredictor? = null
     private var androidMotionPredictor: Any? = null
@@ -1038,16 +1079,27 @@ class CanvasTouchView(context: Context) : View(context) {
         val h = height
         if (w <= 0 || h <= 0) return
 
-        val edgeWidth = (48 * density).toInt() // 覆盖系统边缘手势感应区 (约 48dp)
+        val v = vm
+        val allowEdgeBack = v?.allowEdgeBackGesture ?: true
+        val backKeyAction = v?.backKeyAction ?: BackKeyAction.OPEN_SETTINGS
 
-        // 沉浸绘画模式下全高度排除左右边缘返回手势
-        leftExclusionRect.set(0, 0, edgeWidth, h)
-        rightExclusionRect.set((w - edgeWidth).coerceAtLeast(0), 0, w, h)
+        // 仅在用户关闭边缘侧滑返回、或返回键行为设为无行为且无浮层打开时，
+        // 全高度排除左右边缘返回手势以防误触；反之释放排除区，让系统原生侧滑正常响应
+        val shouldExclude = (!allowEdgeBack || backKeyAction == BackKeyAction.NONE) && !overlayPanelsOpen
 
-        gestureExclusionRects.clear()
-        gestureExclusionRects.add(leftExclusionRect)
-        gestureExclusionRects.add(rightExclusionRect)
-        systemGestureExclusionRects = gestureExclusionRects
+        if (shouldExclude) {
+            val edgeWidth = (48 * density).toInt() // 覆盖系统边缘手势感应区 (约 48dp)
+            leftExclusionRect.set(0, 0, edgeWidth, h)
+            rightExclusionRect.set((w - edgeWidth).coerceAtLeast(0), 0, w, h)
+
+            gestureExclusionRects.clear()
+            gestureExclusionRects.add(leftExclusionRect)
+            gestureExclusionRects.add(rightExclusionRect)
+            systemGestureExclusionRects = gestureExclusionRects
+        } else {
+            gestureExclusionRects.clear()
+            systemGestureExclusionRects = emptyList()
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -1197,6 +1249,8 @@ class CanvasTouchView(context: Context) : View(context) {
         isContinuousUndoing = false
         removeCallbacks(longPressRunnable)
         isPendingLongPress = false
+        removeCallbacks(flushEdgeFingerRunnable)
+        isPendingEdgeFinger = false
         isLongPressPickerActive = false
         longPressToken++
         if (activeTouchView == this) activeTouchView = null
@@ -2559,6 +2613,10 @@ class CanvasTouchView(context: Context) : View(context) {
             removeCallbacks(longPressRunnable)
             longPressToken++
             isPendingLongPress = false
+            if (isPendingEdgeFinger) {
+                removeCallbacks(flushEdgeFingerRunnable)
+                isPendingEdgeFinger = false
+            }
 
             if (strokeStarted) {
                 cachedDriver?.feedbackManager?.setWritingHapticsEnabled(false)
@@ -2932,8 +2990,25 @@ class CanvasTouchView(context: Context) : View(context) {
                 isLongPressPickerActive = false
                 removeCallbacks(longPressRunnable)
                 longPressToken++
+                if (isPendingEdgeFinger) {
+                    removeCallbacks(flushEdgeFingerRunnable)
+                    isPendingEdgeFinger = false
+                }
 
                 if (checkHitGuideHandle(screenPos)) {
+                    return true
+                }
+
+                val curW = if (width > 0) width else viewW
+                val edgeThreshold = (32 * density)
+                val isEdgeTouch = screenPos.x <= edgeThreshold || (curW > 0 && screenPos.x >= curW - edgeThreshold)
+                val isEdgeBackAllowed = (v.allowEdgeBackGesture && v.backKeyAction != BackKeyAction.NONE) || overlayPanelsOpen
+
+                if (isEdgeTouch && isEdgeBackAllowed && !isPenOnlyPan && !v.penOnlyMode) {
+                    isPendingEdgeFinger = true
+                    pendingEdgeScreenPos = screenPos
+                    pendingEdgeDocPos = docPos
+                    postDelayed(flushEdgeFingerRunnable, 180L)
                     return true
                 }
 
@@ -2980,6 +3055,33 @@ class CanvasTouchView(context: Context) : View(context) {
                 if (isLongPressPickerActive) {
                     sampleColorAtScreenPos(screenPos)
                     return true
+                }
+
+                if (isPendingEdgeFinger) {
+                    val dx = screenPos.x - pendingEdgeScreenPos.x
+                    val dy = screenPos.y - pendingEdgeScreenPos.y
+                    val dist = hypot(dx, dy)
+                    val isVerticalMove = abs(dy) > abs(dx) * 1.2f && dist > (8 * density)
+                    val isDeepMove = dist > (36 * density)
+                    if (isVerticalMove || isDeepMove) {
+                        removeCallbacks(flushEdgeFingerRunnable)
+                        val downScreen = pendingEdgeScreenPos
+                        val downDoc = pendingEdgeDocPos
+                        isPendingEdgeFinger = false
+                        if (!v.penOnlyMode) {
+                            localCursorPos = screenPos
+                            localIsTouching = true
+                            localIsHovering = false
+                            localPressure = 1f
+                            handleToolDown(downScreen, downDoc, 1f, isStylus = false)
+                            handleToolMove(event, 0, docPos, 1f, isStylus = false)
+                            invalidate()
+                            return true
+                        }
+                    } else {
+                        // 仍在边缘侧滑判定区中，暂缓落笔，避免抢占系统侧滑或在边缘误画
+                        return true
+                    }
                 }
 
                 if (isPendingLongPress) {
@@ -3051,6 +3153,7 @@ class CanvasTouchView(context: Context) : View(context) {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 removeCallbacks(longPressRunnable)
                 longPressToken++
+                removeCallbacks(flushEdgeFingerRunnable)
                 isInteracting = false
 
                 if (draggingGuideHandleIndex != -1) {
@@ -3076,11 +3179,25 @@ class CanvasTouchView(context: Context) : View(context) {
                     return true
                 }
 
+                if (isPendingEdgeFinger) {
+                    val downScreen = pendingEdgeScreenPos
+                    val downDoc = pendingEdgeDocPos
+                    isPendingEdgeFinger = false
+                    if (event.actionMasked != MotionEvent.ACTION_CANCEL && !v.penOnlyMode) {
+                        handleToolDown(downScreen, downDoc, 1f, isStylus = false)
+                        handleToolUp(event, downDoc, isCancel = false)
+                    }
+                    localIsTouching = false
+                    localCursorPos = null
+                    invalidate()
+                    return true
+                }
+
                 if (isPendingLongPress) {
                     isPendingLongPress = false
-                    if (!v.penOnlyMode) {
+                    if (!v.penOnlyMode && event.actionMasked != MotionEvent.ACTION_CANCEL) {
                         handleToolDown(pendingDownScreenPos, pendingDownDocPos, pendingDownPressure, isStylus = false)
-                        handleToolUp(event, pendingDownDocPos, isCancel = (event.actionMasked == MotionEvent.ACTION_CANCEL))
+                        handleToolUp(event, pendingDownDocPos, isCancel = false)
                     }
                     localIsTouching = false
                     localCursorPos = null

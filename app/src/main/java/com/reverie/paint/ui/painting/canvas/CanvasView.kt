@@ -313,14 +313,18 @@ fun CanvasView(
                 touchView.onFilterSlideDelta = onFilterSlideDelta
                 touchView.onFilterHoldingCompare = onFilterHoldingCompare
                 touchView.onRotationSnap = onRotationSnap
+                val _allowEdgeBack = vm.allowEdgeBackGesture
+                val _backKeyAction = vm.backKeyAction
                 if (touchView.overlayPanelsOpen != overlayPanelsOpen) {
                     touchView.overlayPanelsOpen = overlayPanelsOpen
+                    touchView.updateSystemGestureExclusion()
                     touchView.invalidate()
                 }
                 if (touchView.drawingGuidePanelOpen != drawingGuidePanelOpen) {
                     touchView.drawingGuidePanelOpen = drawingGuidePanelOpen
                     touchView.invalidate()
                 }
+                touchView.updateSystemGestureExclusion()
                 touchView.liquifyMode = liquifyMode
             },
         )

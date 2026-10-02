@@ -1653,6 +1653,23 @@ class PaintViewModel : ViewModel() {
                 .putString("backKeyAction", action.id)
                 .apply()
         }
+        com.reverie.paint.ui.painting.canvas.CanvasTouchView.activeTouchView?.updateSystemGestureExclusion()
+    }
+
+    /** 是否允许屏幕边缘侧滑返回手势 (开启且返回键行为非无时释放手势排除区) */
+    var allowEdgeBackGesture by mutableStateOf(true)
+
+    fun updateAllowEdgeBackGesture(enable: Boolean) {
+        if (allowEdgeBackGesture == enable) return
+        allowEdgeBackGesture = enable
+        if (::appContext.isInitialized) {
+            appContext
+                .getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("allowEdgeBackGesture", enable)
+                .apply()
+        }
+        com.reverie.paint.ui.painting.canvas.CanvasTouchView.activeTouchView?.updateSystemGestureExclusion()
     }
 
     var actionToastMessage by mutableStateOf<String?>(null)
@@ -2506,6 +2523,7 @@ class PaintViewModel : ViewModel() {
             gesturePinchTransform = prefs.getBoolean("gesturePinchTransform", true)
             gestureQuickPinchFit = prefs.getBoolean("gestureQuickPinchFit", true)
             backKeyAction = BackKeyAction.fromId(prefs.getString("backKeyAction", BackKeyAction.NONE.id))
+            allowEdgeBackGesture = prefs.getBoolean("allowEdgeBackGesture", true)
             longPressEyedropperEnabled = prefs.getBoolean("longPressEyedropperEnabled", true)
             eyedropperSensitivity = prefs.getInt("eyedropperSensitivity", 3).coerceIn(1, 5)
             eyedropperOffsetEnabled = prefs.getBoolean("eyedropperOffsetEnabled", true)
