@@ -673,6 +673,11 @@ fun PaintingPage(
                 tfState = tfState,
                 polyPoints = polyPoints,
                 onPolyPoint = { polyPoints = polyPoints + it },
+                onPolyPopPoint = {
+                    if (polyPoints.isNotEmpty()) {
+                        polyPoints = polyPoints.dropLast(1)
+                    }
+                },
                 fillTolerance = vm.fillTolerance,
                 gradientType = gradientType,
                 liquifyStrength = liquifyStrength,

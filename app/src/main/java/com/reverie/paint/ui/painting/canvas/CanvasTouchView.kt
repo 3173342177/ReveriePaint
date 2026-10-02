@@ -136,6 +136,9 @@ class CanvasTouchView(context: Context) : View(context) {
     var onRotationSnap: ((rotation: Float) -> Unit)? = null
     var onTextRequested: ((x: Float, y: Float) -> Unit)? = null
     var onPolyPoint: ((Offset) -> Unit)? = null
+    var onPolyPopPoint: (() -> Unit)? = null
+    private var isPolyPointPendingOnTouch = false
+    private var shapeCreatedOnCurrentTouch = false
     var onCropRect: ((Rect?) -> Unit)? = null
 
     var liveShapeStart: MutableState<Offset?>? = null
@@ -2609,6 +2612,7 @@ class CanvasTouchView(context: Context) : View(context) {
                 safeEndSymmetryUndoMacro()
                 resetMirrorBranches()
             }
+            cancelPendingShapeGesture()
             if (v.gestureThreeFingerRedo) postDelayed(continuousRedoRunnable, 420L)
         }
         if (editMenuGestureActive) {
@@ -2668,6 +2672,7 @@ class CanvasTouchView(context: Context) : View(context) {
                 safeEndSymmetryUndoMacro()
                 resetMirrorBranches()
             }
+            cancelPendingShapeGesture()
 
             val isShiftTraceAlign = v.anim.shiftTraceActive && v.anim.shiftTraceGestureMode == ShiftTraceGestureMode.ALIGN_FRAME
 
@@ -2997,6 +3002,7 @@ class CanvasTouchView(context: Context) : View(context) {
                         safeEndSymmetryUndoMacro()
                         resetMirrorBranches()
                     }
+                    cancelPendingShapeGesture()
                     postDelayed(resetTransformRunnable, 150)
                     invalidate()
                 }
@@ -3379,6 +3385,7 @@ class CanvasTouchView(context: Context) : View(context) {
             }
             Tool.SELECT_POLYGON -> {
                 onPolyPoint?.invoke(docPos)
+                isPolyPointPendingOnTouch = true
             }
             Tool.SHAPES, Tool.LINE, Tool.RECT, Tool.ELLIPSE, Tool.POLYGON, Tool.POLYLINE, Tool.PATH -> {
                 handleShapeDown(docPos)
@@ -4268,6 +4275,9 @@ class CanvasTouchView(context: Context) : View(context) {
             Tool.SHAPES, Tool.LINE, Tool.RECT, Tool.ELLIPSE, Tool.POLYGON, Tool.POLYLINE, Tool.PATH -> {
                 handleShapeUp(docPos)
             }
+            Tool.SELECT_POLYGON -> {
+                isPolyPointPendingOnTouch = false
+            }
             Tool.TEXT -> {
                 handleTextUp(docPos)
             }
@@ -4530,6 +4540,7 @@ class CanvasTouchView(context: Context) : View(context) {
                 state.dragCornerRadius = state.cornerRadius
                 state.dragStarInnerRatio = state.starInnerRatio
                 state.isCreatingNewNode = false
+                shapeCreatedOnCurrentTouch = false
             } else {
                 if (state.type == ShapeType.POLYLINE || state.type == ShapeType.POLYGON || state.type == ShapeType.BEZIER) {
                     if (state.nodes.size >= 3) {
@@ -4553,6 +4564,7 @@ class CanvasTouchView(context: Context) : View(context) {
                     state.activeHandle = ShapeHandleId.NODE_ANCHOR_BASE + newIdx
                     state.dragStartDocPos = docPos
                     state.isCreatingNewNode = true
+                    shapeCreatedOnCurrentTouch = false
                 } else {
                     // 连续绘制保障：若当前有尺寸有效的前序形状，自动提交上屏
                     val shapeDist = hypot(state.p2.x - state.p1.x, state.p2.y - state.p1.y)
@@ -4570,6 +4582,7 @@ class CanvasTouchView(context: Context) : View(context) {
                     state.dragP1 = docPos
                     state.dragP2 = docPos
                     state.isCreatingNewNode = false
+                    shapeCreatedOnCurrentTouch = true
                 }
             }
         } else {
@@ -4583,6 +4596,7 @@ class CanvasTouchView(context: Context) : View(context) {
                 state.selectedNodeIndex = 0
                 state.dragStartDocPos = docPos
                 state.isCreatingNewNode = true
+                shapeCreatedOnCurrentTouch = false
                 lastShapeTapTimeMs = now
                 lastShapeTapDocPos = docPos
             } else {
@@ -4591,6 +4605,7 @@ class CanvasTouchView(context: Context) : View(context) {
                 state.dragP1 = docPos
                 state.dragP2 = docPos
                 state.isCreatingNewNode = false
+                shapeCreatedOnCurrentTouch = true
             }
         }
     }
@@ -4708,6 +4723,53 @@ class CanvasTouchView(context: Context) : View(context) {
         v.shapeState.activeHandle = ShapeHandleId.NONE
         v.shapeState.dragStartDocPos = Offset.Zero
         v.shapeState.isCreatingNewNode = false
+        shapeCreatedOnCurrentTouch = false
+    }
+
+    private fun cancelPendingShapeGesture() {
+        val v = vm ?: return
+        val state = v.shapeState
+        lastShapeTapTimeMs = 0L
+
+        if (state.active) {
+            if (state.isCreatingNewNode) {
+                if (state.nodes.size <= 1) {
+                    state.clear()
+                } else {
+                    state.nodes.removeAt(state.nodes.size - 1)
+                    state.selectedNodeIndex = state.nodes.size - 1
+                    state.activeHandle = ShapeHandleId.NONE
+                    state.dragStartDocPos = Offset.Zero
+                    state.isCreatingNewNode = false
+                }
+            } else if (shapeCreatedOnCurrentTouch) {
+                state.clear()
+            } else if (state.activeHandle != ShapeHandleId.NONE) {
+                state.p1 = state.dragP1
+                state.p2 = state.dragP2
+                state.rotationDegrees = state.dragRotation
+                state.cornerRadius = state.dragCornerRadius
+                state.starInnerRatio = state.dragStarInnerRatio
+                state.activeHandle = ShapeHandleId.NONE
+                state.dragStartDocPos = Offset.Zero
+            }
+        }
+
+        shapeCreatedOnCurrentTouch = false
+
+        if (isPolyPointPendingOnTouch) {
+            onPolyPopPoint?.invoke()
+            isPolyPointPendingOnTouch = false
+        }
+
+        liveShapeStart?.value = null
+        liveShapeEnd?.value = null
+        if (lassoPoints.isNotEmpty()) {
+            lassoPoints.clear()
+            liveSelectionPath?.value = null
+        }
+
+        invalidate()
     }
 
     private fun hitTestTextHandle(

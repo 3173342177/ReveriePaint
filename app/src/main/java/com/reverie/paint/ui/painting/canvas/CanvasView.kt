@@ -68,6 +68,7 @@ fun CanvasView(
     tfState: TransformState,
     polyPoints: List<Offset> = emptyList(),
     onPolyPoint: (Offset) -> Unit = {},
+    onPolyPopPoint: () -> Unit = {},
     cropRect: androidx.compose.ui.geometry.Rect? = null,
     onCropRect: (androidx.compose.ui.geometry.Rect?) -> Unit = {},
     fillTolerance: Int = 24,
@@ -290,6 +291,7 @@ fun CanvasView(
                 touchView.onTransform = onTransform
                 touchView.onTextRequested = onTextRequested
                 touchView.onPolyPoint = onPolyPoint
+                touchView.onPolyPopPoint = onPolyPopPoint
                 touchView.onCropRect = onCropRect
                 touchView.liveShapeStart = liveShapeStart
                 touchView.liveShapeEnd = liveShapeEnd
