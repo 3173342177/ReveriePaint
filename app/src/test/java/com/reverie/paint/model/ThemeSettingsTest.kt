@@ -232,6 +232,35 @@ class ThemeSettingsTest {
         assertEquals("[", formatKey(false, false, false, "["))
         assertEquals("]", formatKey(false, false, false, "]"))
     }
+
+    @Test
+    fun `UiAnimationSpeed parsing and Motion token dynamics`() {
+        assertEquals(UiAnimationSpeed.NORMAL, UiAnimationSpeed.fromId("normal"))
+        assertEquals(UiAnimationSpeed.FAST, UiAnimationSpeed.fromId("fast"))
+        assertEquals(UiAnimationSpeed.OFF, UiAnimationSpeed.fromId("off"))
+        assertEquals(UiAnimationSpeed.NORMAL, UiAnimationSpeed.fromId("unknown"))
+
+        com.reverie.paint.ui.theme.Motion.currentSpeed = UiAnimationSpeed.NORMAL
+        val normalExit = com.reverie.paint.ui.theme.Motion.exitTween<Float>(200)
+        assertTrue("Normal exit should be tween", normalExit is androidx.compose.animation.core.TweenSpec)
+
+        com.reverie.paint.ui.theme.Motion.currentSpeed = UiAnimationSpeed.FAST
+        val fastExit = com.reverie.paint.ui.theme.Motion.exitTween<Float>(200)
+        assertTrue("Fast exit should be tween", fastExit is androidx.compose.animation.core.TweenSpec)
+        val fastTween = fastExit as androidx.compose.animation.core.TweenSpec
+        assertTrue("Fast animation duration must be <= 100ms", fastTween.durationMillis <= 100)
+
+        com.reverie.paint.ui.theme.Motion.currentSpeed = UiAnimationSpeed.OFF
+        val offExit = com.reverie.paint.ui.theme.Motion.exitTween<Float>(200)
+        assertTrue("Off exit should be snap", offExit is androidx.compose.animation.core.SnapSpec)
+
+        val offEnter = com.reverie.paint.ui.theme.Motion.enterSpring<Float>()
+        assertTrue("Off enter should be snap", offEnter is androidx.compose.animation.core.SnapSpec)
+
+        // Reset to normal
+        com.reverie.paint.ui.theme.Motion.currentSpeed = UiAnimationSpeed.NORMAL
+    }
 }
+
 
 

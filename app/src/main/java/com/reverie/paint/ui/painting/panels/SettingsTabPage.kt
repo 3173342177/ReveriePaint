@@ -263,6 +263,58 @@ internal fun SettingsTabPage(
                                 }
                             }
                         }
+
+                        SettingsInnerDivider()
+
+                        // 界面动效速度 (标准 / 极速 <= 0.1s / 关闭)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.settings_anim_speed_title),
+                                color = Morandi.text,
+                                fontSize = 13.sp,
+                            )
+                            Text(
+                                text = stringResource(R.string.settings_anim_speed_desc),
+                                color = Morandi.subText,
+                                fontSize = 11.sp,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Morandi.panel)
+                                    .padding(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                com.reverie.paint.model.UiAnimationSpeed.entries.forEach { speed ->
+                                    val selected = vm.uiAnimationSpeed == speed
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (selected) Morandi.accent else Color.Transparent)
+                                            .clickable { vm.updateUiAnimationSpeed(speed) },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = stringResource(speed.labelRes()),
+                                            color = if (selected) Color.White else Morandi.subText,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // 画布视口与辅助设置卡片

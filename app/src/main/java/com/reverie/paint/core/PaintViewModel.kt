@@ -1672,6 +1672,22 @@ class PaintViewModel : ViewModel() {
         com.reverie.paint.ui.painting.canvas.CanvasTouchView.activeTouchView?.updateSystemGestureExclusion()
     }
 
+    /** 界面动效速度设置 (NORMAL / FAST / OFF) */
+    var uiAnimationSpeed by mutableStateOf(com.reverie.paint.model.UiAnimationSpeed.NORMAL)
+
+    fun updateUiAnimationSpeed(speed: com.reverie.paint.model.UiAnimationSpeed) {
+        if (uiAnimationSpeed == speed) return
+        uiAnimationSpeed = speed
+        com.reverie.paint.ui.theme.Motion.currentSpeed = speed
+        if (::appContext.isInitialized) {
+            appContext
+                .getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString("uiAnimationSpeed", speed.id)
+                .apply()
+        }
+    }
+
     var actionToastMessage by mutableStateOf<String?>(null)
     var actionToastIcon by mutableStateOf<Int?>(null)
     var actionToastRevision by mutableLongStateOf(0L)
@@ -2524,6 +2540,8 @@ class PaintViewModel : ViewModel() {
             gestureQuickPinchFit = prefs.getBoolean("gestureQuickPinchFit", true)
             backKeyAction = BackKeyAction.fromId(prefs.getString("backKeyAction", BackKeyAction.NONE.id))
             allowEdgeBackGesture = prefs.getBoolean("allowEdgeBackGesture", true)
+            uiAnimationSpeed = com.reverie.paint.model.UiAnimationSpeed.fromId(prefs.getString("uiAnimationSpeed", com.reverie.paint.model.UiAnimationSpeed.NORMAL.id))
+            com.reverie.paint.ui.theme.Motion.currentSpeed = uiAnimationSpeed
             longPressEyedropperEnabled = prefs.getBoolean("longPressEyedropperEnabled", true)
             eyedropperSensitivity = prefs.getInt("eyedropperSensitivity", 3).coerceIn(1, 5)
             eyedropperOffsetEnabled = prefs.getBoolean("eyedropperOffsetEnabled", true)

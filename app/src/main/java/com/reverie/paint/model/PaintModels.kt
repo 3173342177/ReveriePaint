@@ -97,6 +97,25 @@ enum class BackKeyAction(
     }
 }
 
+/**
+ * 界面动效速度档位：
+ * - [NORMAL]: 标准 (1.0x / ~200ms)，保持莫兰迪柔和微动效
+ * - [FAST]: 极速 (0.45x / ~90ms)，面板展开收起在 0.1s 以内，保障极速绘画心流
+ * - [OFF]: 关闭 (0x / 瞬时)，彻底消除等待与重绘开销
+ */
+enum class UiAnimationSpeed(
+    val id: String,
+) {
+    NORMAL("normal"),
+    FAST("fast"),
+    OFF("off"),
+    ;
+
+    companion object {
+        fun fromId(id: String?): UiAnimationSpeed = entries.find { it.id == id } ?: NORMAL
+    }
+}
+
 /** 套索操作模式: 0: 自由描画, 1: 折线, 2: 自由描画与折线 (多次操作) */
 object LassoSubMode {
     const val FREEHAND = 0

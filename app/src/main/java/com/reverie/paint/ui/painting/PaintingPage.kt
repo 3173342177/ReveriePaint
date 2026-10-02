@@ -1495,7 +1495,7 @@ fun PaintingPage(
         AnimatedVisibility(
             visible = vm.anim.enabled && vm.anim.panelOpen,
             enter = fadeIn(Motion.enterSpring()) + slideInVertically(Motion.enterSpring()) { it },
-            exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it },
+            exit = fadeOut(Motion.exitTween(200)) + slideOutVertically(Motion.exitTween(200)) { it },
             modifier =
                 Modifier
                     .align(Alignment.BottomStart)
@@ -1681,7 +1681,7 @@ fun PaintingPage(
         AnimatedVisibility(
             visible = brushPanelOpen,
             enter = fadeIn(Motion.enterSpring()) + slideInHorizontally(Motion.enterSpring()) { if (vm.leftHandMode) 40 else -40 },
-            exit = fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { if (vm.leftHandMode) 40 else -40 },
+            exit = fadeOut(Motion.exitTween(200)) + slideOutHorizontally(Motion.exitTween(200)) { if (vm.leftHandMode) 40 else -40 },
             modifier = if (vm.panelPinningEnabled && vm.isBrushPanelPinned) {
                 Modifier
                     .align(if (vm.leftHandMode) Alignment.CenterEnd else Alignment.CenterStart)
@@ -1715,7 +1715,7 @@ fun PaintingPage(
         AnimatedVisibility(
             visible = layerPanelOpen,
             enter = fadeIn(Motion.enterSpring()) + slideInHorizontally(Motion.enterSpring()) { if (vm.leftHandMode) -40 else 40 },
-            exit = fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { if (vm.leftHandMode) -40 else 40 },
+            exit = fadeOut(Motion.exitTween(200)) + slideOutHorizontally(Motion.exitTween(200)) { if (vm.leftHandMode) -40 else 40 },
             modifier = if (vm.panelPinningEnabled && vm.isLayerPanelPinned) {
                 Modifier
                     .align(if (vm.leftHandMode) Alignment.TopStart else Alignment.TopEnd)
@@ -1754,7 +1754,7 @@ fun PaintingPage(
         AnimatedVisibility(
             visible = settingsPanelOpen,
             enter = fadeIn(Motion.enterSpring()) + slideInHorizontally(Motion.enterSpring()) { if (vm.leftHandMode) -40 else 40 },
-            exit = fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { if (vm.leftHandMode) -40 else 40 },
+            exit = fadeOut(Motion.exitTween(200)) + slideOutHorizontally(Motion.exitTween(200)) { if (vm.leftHandMode) -40 else 40 },
             modifier = Modifier.fillMaxSize().zIndex(100f),
         ) {
             SettingsPanel(
@@ -1779,7 +1779,7 @@ fun PaintingPage(
         AnimatedVisibility(
             visible = colorPanelOpen,
             enter = fadeIn(Motion.enterSpring()) + slideInHorizontally(Motion.enterSpring()) { if (vm.leftHandMode) 40 else -40 },
-            exit = fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { if (vm.leftHandMode) 40 else -40 },
+            exit = fadeOut(Motion.exitTween(200)) + slideOutHorizontally(Motion.exitTween(200)) { if (vm.leftHandMode) 40 else -40 },
             modifier = if (vm.isColorPanelPinned) {
                 Modifier
                     .align(if (vm.leftHandMode) Alignment.BottomEnd else Alignment.BottomStart)
@@ -1820,7 +1820,7 @@ fun PaintingPage(
             enter =
                 fadeIn(Motion.enterSpring()) +
                     slideInHorizontally(Motion.enterSpring()) { if (vm.leftHandMode) 40 else -40 },
-            exit = fadeOut(tween(180)) + slideOutHorizontally(tween(180)) { if (vm.leftHandMode) 40 else -40 },
+            exit = fadeOut(Motion.exitTween(180)) + slideOutHorizontally(Motion.exitTween(180)) { if (vm.leftHandMode) 40 else -40 },
             modifier = Modifier.fillMaxSize().zIndex(100f),
         ) {
             AllToolsPanel(
@@ -1887,7 +1887,7 @@ fun PaintingPage(
         AnimatedVisibility(
             visible = vm.referenceWindowOpen,
             enter = fadeIn(Motion.enterSpring()) + androidx.compose.animation.scaleIn(Motion.enterSpring(), initialScale = 0.92f),
-            exit = fadeOut(tween(150)) + androidx.compose.animation.scaleOut(tween(150), targetScale = 0.92f),
+            exit = fadeOut(Motion.exitTween(150)) + androidx.compose.animation.scaleOut(Motion.exitTween(150), targetScale = 0.92f),
             modifier = Modifier.zIndex(8f),
         ) {
             ReferenceWindow(

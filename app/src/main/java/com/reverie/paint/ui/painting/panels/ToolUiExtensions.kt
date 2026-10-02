@@ -62,6 +62,13 @@ fun BackKeyAction.labelRes(): Int = when (this) {
     BackKeyAction.EXIT -> R.string.settings_back_key_exit
 }
 
+@StringRes
+fun com.reverie.paint.model.UiAnimationSpeed.labelRes(): Int = when (this) {
+    com.reverie.paint.model.UiAnimationSpeed.NORMAL -> R.string.settings_anim_speed_normal
+    com.reverie.paint.model.UiAnimationSpeed.FAST -> R.string.settings_anim_speed_fast
+    com.reverie.paint.model.UiAnimationSpeed.OFF -> R.string.settings_anim_speed_off
+}
+
 val ToolGroup.displayName: String
     @Composable
     get() = stringResource(labelRes())
