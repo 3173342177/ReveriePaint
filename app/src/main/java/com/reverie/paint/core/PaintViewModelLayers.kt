@@ -166,6 +166,7 @@ internal fun PaintViewModel.notifyLayerChanged(
     pixelChanged: Boolean = false,
 ) {
     isModified = true
+    hasPendingMajorOp = true
     onPaintingActivity()
     syncLayersFromNative()
     // Mirror the C++ solo raw-mode flag into Compose state so the solo

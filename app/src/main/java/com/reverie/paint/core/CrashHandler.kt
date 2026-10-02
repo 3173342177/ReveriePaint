@@ -90,6 +90,16 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
         try {
+            // 崩溃抢救：在进程死亡前同步保存当前作画草稿
+            PaintViewModel.currentInstance?.emergencySaveOnCrash()
+
+            appContext?.let { ctx ->
+                try {
+                    val marker = File(getCrashLogDirectory(ctx), "CRASH_MARKER")
+                    marker.writeText("JAVA_CRASH: ${throwable.javaClass.simpleName} - ${throwable.message}\nTime: ${System.currentTimeMillis()}\n")
+                } catch (_: Throwable) {}
+            }
+
             val report = buildCrashReport(thread, throwable)
             Log.e(TAG, "FATAL JAVA CRASH DETECTED:\n$report")
             saveCrashReport(report)
@@ -378,5 +388,49 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             dir.listFiles { f -> f.isFile && f.name.startsWith("crash_") && f.name.endsWith(".log") }
                 ?.forEach { it.delete() }
         }
+    }
+
+    /**
+     * 检查是否存在待恢复的崩溃草稿或异常退出标记
+     */
+    fun checkCrashRecovery(context: Context): File? {
+        val marker = File(getCrashLogDirectory(context), "CRASH_MARKER")
+        if (!marker.exists()) return null
+
+        val autoSaveDir = File(context.filesDir, "autosave")
+        if (autoSaveDir.exists()) {
+            val emergencyFiles = autoSaveDir.listFiles { f -> f.isFile && f.name.endsWith(".emergency.revp") }
+            val newestEmergency = emergencyFiles?.maxByOrNull { it.lastModified() }
+            if (newestEmergency != null && newestEmergency.length() > 0) {
+                return newestEmergency
+            }
+
+            val autoSaveFiles = autoSaveDir.listFiles { f -> f.isFile && f.name.endsWith(".autosave.revp") }
+            val newestAutoSave = autoSaveFiles?.maxByOrNull { it.lastModified() }
+            if (newestAutoSave != null && newestAutoSave.length() > 0) {
+                return newestAutoSave
+            }
+        }
+
+        val snapshots = AutoSaveHistoryManager.getSnapshots(context)
+        if (snapshots.isNotEmpty()) {
+            val snapFile = File(AutoSaveHistoryManager.getHistoryDir(context), snapshots.first().fileName)
+            if (snapFile.exists() && snapFile.length() > 0) {
+                return snapFile
+            }
+        }
+        return null
+    }
+
+    /**
+     * 清理崩溃标记文件
+     */
+    fun clearCrashMarker(context: Context) {
+        try {
+            val marker = File(getCrashLogDirectory(context), "CRASH_MARKER")
+            if (marker.exists()) {
+                marker.delete()
+            }
+        } catch (_: Throwable) {}
     }
 }

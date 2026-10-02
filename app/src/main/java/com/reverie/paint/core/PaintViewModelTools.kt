@@ -436,6 +436,7 @@ internal fun PaintViewModel.touchEnd(render: Boolean = true) {
     lastStrokeEndElapsedMs = android.os.SystemClock.elapsedRealtime()
     isModified = true
     totalStrokes++
+    strokesSinceLastAutoSave++
     onPaintingActivity()
 
     val needCatchUp = when (strokeSmoothingType) {

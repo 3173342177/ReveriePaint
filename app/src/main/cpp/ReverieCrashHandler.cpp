@@ -310,6 +310,29 @@ static void native_crash_handler(int signo, siginfo_t *info, void *context) {
         close(fd);
     }
 
+    // 写入轻量 CRASH_MARKER 供下次冷启动自检查找未正常保存的草稿
+    char markerPath[LOG_PATH_MAX + 32];
+    markerPath[0] = '\0';
+    size_t dLen = safe_strlen(s_logDir);
+    if (dLen > 0 && dLen < LOG_PATH_MAX) {
+        memcpy(markerPath, s_logDir, dLen);
+        if (markerPath[dLen - 1] != '/') {
+            markerPath[dLen++] = '/';
+        }
+        const char mName[] = "CRASH_MARKER";
+        memcpy(markerPath + dLen, mName, sizeof(mName));
+        int mfd = open(markerPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (mfd >= 0) {
+            safe_write_str(mfd, "NATIVE_CRASH:");
+            safe_write_uint(mfd, signo);
+            safe_write_str(mfd, "\nSTATE:");
+            safe_write_str(mfd, s_appState);
+            safe_write_str(mfd, "\n");
+            fsync(mfd);
+            close(mfd);
+        }
+    }
+
     __android_log_print(ANDROID_LOG_FATAL, TAG, "CRASH DUMPED TO %s, propagating signal %d", filePath, signo);
 
     // 还原旧信号处理并重新发送，允许系统生成 tombstone 彻底崩溃

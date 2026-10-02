@@ -672,4 +672,38 @@ fun ReverieApp(vm: PaintViewModel = viewModel()) {
             onDismiss = { pendingCrashLog = null },
         )
     }
+
+    // 异常退出恢复弹窗：检测是否存在崩溃标记与可恢复工程
+    var pendingRecoveryFile by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<java.io.File?>(null)
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val recoveryFile = com.reverie.paint.core.CrashHandler.checkCrashRecovery(context)
+            if (recoveryFile != null) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    pendingRecoveryFile = recoveryFile
+                }
+            } else {
+                com.reverie.paint.core.CrashHandler.clearCrashMarker(context)
+            }
+        }
+    }
+    pendingRecoveryFile?.let { file ->
+        com.reverie.paint.ui.dialog.CrashRecoveryDialog(
+            recoveryFile = file,
+            onRestore = {
+                val proj = vm.parseProjectFromFile(file).copy(
+                    isAutoSaved = true,
+                )
+                vm.loadProject(proj)
+                com.reverie.paint.core.CrashHandler.clearCrashMarker(context)
+                pendingRecoveryFile = null
+            },
+            onDismiss = {
+                com.reverie.paint.core.CrashHandler.clearCrashMarker(context)
+                pendingRecoveryFile = null
+            },
+        )
+    }
 }

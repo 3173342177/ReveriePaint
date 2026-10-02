@@ -184,8 +184,16 @@ class PaintViewModel : ViewModel() {
             lastAutoSaveTimeMs = now
             return
         }
-        if (now - lastAutoSaveTimeMs >= intervalMs) {
-            autoSaveProject()
+
+        val timeElapsed = now - lastAutoSaveTimeMs >= intervalMs
+        val strokeThresholdReached = strokesSinceLastAutoSave >= 25 || hasPendingMajorOp
+
+        if (timeElapsed) {
+            // 定期兜底自动保存 (默认 5 分钟，带轻量 Toast 提示)
+            autoSaveProject(isPeriodic = true)
+        } else if (strokeThresholdReached && sinceStrokeEnd >= 4_000L) {
+            // 笔画或重大操作触发的空闲静默快照 (静默无弹窗，完全不打扰绘画)
+            autoSaveProject(isPeriodic = false)
         }
     }
 
@@ -200,7 +208,7 @@ class PaintViewModel : ViewModel() {
         if (!hasUnsavedChanges()) return
 
         // 软件切入后台时，立即触发后台静默自动保存
-        autoSaveProject()
+        autoSaveProject(isPeriodic = false)
     }
 
     /** 回到前台: 若仍停在绘画页, 恢复每秒计时与自动保存唤醒。 */
@@ -216,6 +224,11 @@ class PaintViewModel : ViewModel() {
         isModified = true
     }
 
+    fun markMajorOp() {
+        hasPendingMajorOp = true
+        isModified = true
+    }
+
     fun hasUnsavedChanges(): Boolean {
         val strokesAdded = totalStrokes > initialStrokeCount
         return isModified || strokesAdded || ReverieCoreBridge.canUndo()
@@ -225,6 +238,8 @@ class PaintViewModel : ViewModel() {
     var autoSaveEnabled by mutableStateOf(true)
     var autoSaveIntervalMinutes by mutableIntStateOf(5)
     var autoSaveToastEnabled by mutableStateOf(true)
+    var strokesSinceLastAutoSave by mutableIntStateOf(0)
+    var hasPendingMajorOp by mutableStateOf(false)
 
     /**
      * 性能标尺 (画布左上角实时显示渲染路径/纹理重传/保存阶段耗时)。见 [PerfTrace]。
@@ -3386,6 +3401,7 @@ class PaintViewModel : ViewModel() {
     @Volatile internal var pendingRenderRunnable: Runnable? = null
 
     init {
+        currentInstance = this
         startRenderThread()
     }
 
@@ -3419,6 +3435,9 @@ class PaintViewModel : ViewModel() {
     }
 
     override fun onCleared() {
+        if (currentInstance == this) {
+            currentInstance = null
+        }
         stylusDriver?.release()
         stylusDriver = null
         stopAirbrush()
@@ -3500,6 +3519,7 @@ class PaintViewModel : ViewModel() {
     // lost pressure detail. Buffers are allocated once: zero allocation on
     // the hot path (架构铁律 §4).
     companion object {
+        @Volatile var currentInstance: PaintViewModel? = null
         const val SMOOTHING_OFF = 0
         const val SMOOTHING_BASIC = 1
         const val SMOOTHING_WEIGHTED = 2
