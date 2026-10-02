@@ -1844,7 +1844,11 @@ internal fun PaintViewModel.buildSelectionOverlayLocked(): android.graphics.Bitm
     val bmp = android.graphics.Bitmap.createBitmap(vw, vh, android.graphics.Bitmap.Config.ARGB_8888)
     bmp.setPixels(px, 0, vw, 0, 0, vw, vh)
 
-    val outlineData = ReverieCoreBridge.selectionOutline()
+    val outlineData = try {
+        ReverieCoreBridge.selectionOutline()
+    } catch (_: Throwable) {
+        null
+    }
     if (outlineData != null && outlineData.isNotEmpty()) {
         val numPolys = outlineData[0]
         val path = androidx.compose.ui.graphics.Path()

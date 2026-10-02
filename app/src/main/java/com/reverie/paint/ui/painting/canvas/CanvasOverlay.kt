@@ -122,14 +122,14 @@ internal fun CanvasOverlay(
 
     // 45 度斜向条纹纹理：周期 24px，暗条纹与微透亮条纹交错，完全无缝平铺
     // 柔和低对比度中性灰阶斑马纹（Procreate 原生质感）：
-    // 暗阶 ~33% 透明度暗木炭灰 (0x5514141E)，明阶 ~4% 微透间隙 (0x0A000000)
-    // 既保持 Procreate 经典的柔和通透感，又在各种画布背景上清晰可辨
+    // 暗阶 ~18% 透明度 (0x2E141416)，明阶 ~8% 透明度 (0x14141416)
+    // 二者均为同色系中性微透底色，对比度温和通透，绝不刺眼抢眼
     val zebraTileBitmap = androidx.compose.runtime.remember {
         val size = 24
         val b = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
         val pixels = IntArray(size * size)
-        val colDark = 0x5514141Eu.toInt()
-        val colLight = 0x0A000000u.toInt()
+        val colDark = 0x2E141416u.toInt()
+        val colLight = 0x14141416u.toInt()
         for (y in 0 until size) {
             for (x in 0 until size) {
                 val d = ((x - y) % size + size) % size
