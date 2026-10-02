@@ -1101,15 +1101,24 @@ static inline void setSelectionFromMask(ReverieCore *core, const KisImageSP &ima
 {
     RPC_LOG("RPC setSelectionFromMask mode=%d maskPixels=%d", selMode, (int)mask.size());
     QVector<quint8> finalMask = mask;
-    if (selMode != ReverieCore::SelReplace && core->hasSelection()) {
-        QVector<quint8> existing(size_t(image->width()) * image->height(), 0);
+    QVector<quint8> existing(size_t(image->width()) * image->height(), 0);
+    bool hasOld = false;
+    if (core && core->hasSelection()) {
         KisPixelSelectionSP ps = core->currentSelectionPixelSelection();
         if (ps) {
             ps->readBytes(existing.data(), 0, 0, image->width(), image->height());
+            for (quint8 b : existing) {
+                if (b > 0) {
+                    hasOld = true;
+                    break;
+                }
+            }
         }
+    }
+    if (selMode != ReverieCore::SelReplace && hasOld) {
         finalMask = combineSelectionMasks(existing, mask, selMode);
     } else if (selMode == ReverieCore::SelSubtract || selMode == ReverieCore::SelIntersect) {
-        if (!core->hasSelection()) {
+        if (!hasOld) {
             finalMask = QVector<quint8>(mask.size(), 0);
         }
     }

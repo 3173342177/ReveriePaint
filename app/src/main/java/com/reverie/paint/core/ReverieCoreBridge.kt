@@ -1230,6 +1230,8 @@ object ReverieCoreBridge {
         vh: Int,
     ): IntArray?
 
+    external fun selectionOutline(): IntArray?
+
     external fun selectAll()
 
     external fun invertSelection()

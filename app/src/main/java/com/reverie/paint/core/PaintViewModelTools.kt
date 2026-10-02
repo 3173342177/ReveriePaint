@@ -743,6 +743,10 @@ internal fun PaintViewModel.applyTool(toolId: String) {
     val t =
         com.reverie.paint.model.Tool
             .fromId(toolId)
+    if (t.group == com.reverie.paint.model.ToolGroup.SELECTION) {
+        val sm = selectionMode
+        runCore(render = false) { ReverieCoreBridge.setSelectionMode(sm) }
+    }
     if (t == com.reverie.paint.model.Tool.BRUSH || t == com.reverie.paint.model.Tool.ERASER ||
         t == com.reverie.paint.model.Tool.SMUDGE
     ) {
@@ -1690,6 +1694,7 @@ internal fun PaintViewModel.copyOrCutSelection(cut: Boolean, toNewLayer: Boolean
             selectionMask = null
             hasSelection = false
             selectionOverlayBitmap = null
+            selectionOutlinePath = null
             transformCopyOnly = false
             isSelectionTransformPending = true
             currentToolId = Tool.TRANSFORM.id
@@ -1792,9 +1797,45 @@ internal fun PaintViewModel.buildSelectionOverlayLocked(): android.graphics.Bitm
     // instead of a full-document mask readBytes plus a 2M-pixel scan here
     val vw = maxOf(1, renderW)
     val vh = maxOf(1, renderH)
-    val px = ReverieCoreBridge.selectionOverlayScaled(vw, vh) ?: return null
+    val px = ReverieCoreBridge.selectionOverlayScaled(vw, vh) ?: run {
+        selectionOutlinePath = null
+        return null
+    }
     val bmp = android.graphics.Bitmap.createBitmap(vw, vh, android.graphics.Bitmap.Config.ARGB_8888)
     bmp.setPixels(px, 0, vw, 0, 0, vw, vh)
+
+    val outlineData = ReverieCoreBridge.selectionOutline()
+    if (outlineData != null && outlineData.isNotEmpty()) {
+        val numPolys = outlineData[0]
+        val path = androidx.compose.ui.graphics.Path()
+        var idx = 1
+        val dw = if (docWidth > 0) docWidth.toFloat() else vw.toFloat()
+        val dh = if (docHeight > 0) docHeight.toFloat() else vh.toFloat()
+        val scX = vw.toFloat() / dw
+        val scY = vh.toFloat() / dh
+        val halfW = vw.toFloat() / 2f
+        val halfH = vh.toFloat() / 2f
+        for (p in 0 until numPolys) {
+            if (idx >= outlineData.size) break
+            val count = outlineData[idx++]
+            if (count > 0 && idx + count * 2 <= outlineData.size) {
+                val startX = outlineData[idx].toFloat() * scX - halfW
+                val startY = outlineData[idx + 1].toFloat() * scY - halfH
+                path.moveTo(startX, startY)
+                for (i in 1 until count) {
+                    val x = outlineData[idx + i * 2].toFloat() * scX - halfW
+                    val y = outlineData[idx + i * 2 + 1].toFloat() * scY - halfH
+                    path.lineTo(x, y)
+                }
+                path.close()
+                idx += count * 2
+            }
+        }
+        selectionOutlinePath = path
+    } else {
+        selectionOutlinePath = null
+    }
+
     return bmp
 }
 
@@ -1812,6 +1853,7 @@ internal fun PaintViewModel.refreshSelection() {
 // old selection immediately; the C++ selection is committed on release)
 internal fun PaintViewModel.clearSelectionOverlayLocal() {
     selectionOverlayBitmap = null
+    selectionOutlinePath = null
     selectionMask = null
     hasSelection = false
 }
@@ -1824,6 +1866,7 @@ internal fun PaintViewModel.clearSelectionAction() {
         selectionMask = null
         hasSelection = false
         selectionOverlayBitmap = null
+        selectionOutlinePath = null
     }) {
         ReverieCoreBridge.clearSelection()
         refreshDisplay()
@@ -2126,6 +2169,8 @@ internal fun PaintViewModel.loadToolOptions() {
         shapeFillMode = o.optInt("shape_fill", 0)
         shapeKeepAspect = o.optBoolean("shape_aspect", false)
         selectionMode = o.optInt("sel_mode", 0)
+        val sm = selectionMode
+        runCore(render = false) { ReverieCoreBridge.setSelectionMode(sm) }
         lassoSubMode = o.optInt("lasso_sub_mode", LassoSubMode.FREEHAND).coerceIn(0, 2)
         selectionTolerance = o.optInt("sel_tol", 24)
         selectionSampleLayers = o.optInt("sel_sample", 1)

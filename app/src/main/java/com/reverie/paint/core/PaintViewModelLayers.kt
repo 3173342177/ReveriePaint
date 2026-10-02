@@ -947,6 +947,7 @@ internal fun PaintViewModel.selectionFromLayer(i: Int, mode: Int = 0) {
 internal fun PaintViewModel.clearSelection() {
     hasSelection = false
     selectionOverlayBitmap = null
+    selectionOutlinePath = null
     runCore(render = false, after = ::notifyLayerChanged) {
         ReverieCoreBridge.clearSelection()
     }

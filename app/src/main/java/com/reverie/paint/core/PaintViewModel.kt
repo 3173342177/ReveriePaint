@@ -4050,6 +4050,9 @@ class PaintViewModel : ViewModel() {
     // of the canvas so the user can see the active selection (Krita-style)
     var selectionOverlayBitmap: android.graphics.Bitmap? by mutableStateOf(null)
 
+    // Vector outline path of the active selection (document coords centered at origin)
+    var selectionOutlinePath: androidx.compose.ui.graphics.Path? by mutableStateOf(null)
+
     var transformPreviewBitmap: androidx.compose.ui.graphics.ImageBitmap? by mutableStateOf(null)
     var transformCopyOnly: Boolean by mutableStateOf(false)
     var isImportTransformPending: Boolean by mutableStateOf(false)
