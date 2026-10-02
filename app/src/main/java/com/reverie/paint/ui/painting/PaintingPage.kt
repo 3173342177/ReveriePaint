@@ -1003,6 +1003,11 @@ fun PaintingPage(
                                 vm.referenceWindowOpen = !vm.referenceWindowOpen
                                 moreToolsOpen = false
                             }
+                            Tool.SHORTCUT -> {
+                                vm.quickActionWindowOpen = !vm.quickActionWindowOpen
+                                vm.persistQuickActionsState()
+                                moreToolsOpen = false
+                            }
                             Tool.SYMMETRY -> {
                                 if (vm.drawingGuide.mode == com.reverie.paint.model.GuideMode.SYMMETRY) {
                                     vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.OFF, assistedDrawing = false)
@@ -1832,6 +1837,11 @@ fun PaintingPage(
                             vm.referenceWindowOpen = !vm.referenceWindowOpen
                             moreToolsOpen = false
                         }
+                        Tool.SHORTCUT -> {
+                            vm.quickActionWindowOpen = !vm.quickActionWindowOpen
+                            vm.persistQuickActionsState()
+                            moreToolsOpen = false
+                        }
                         Tool.SYMMETRY -> {
                             if (vm.drawingGuide.mode == com.reverie.paint.model.GuideMode.SYMMETRY) {
                                 vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.OFF, assistedDrawing = false)
@@ -1893,6 +1903,24 @@ fun PaintingPage(
             ReferenceWindow(
                 vm = vm,
                 onClose = { vm.referenceWindowOpen = false },
+                hazeState = hazeState,
+                opacity = vm.popupPanelOpacity,
+            )
+        }
+
+        // ---- Persistent Floating Quick Action Window (常驻悬浮快捷操作小窗) ----
+        AnimatedVisibility(
+            visible = vm.quickActionWindowOpen,
+            enter = fadeIn(Motion.enterSpring()) + androidx.compose.animation.scaleIn(Motion.enterSpring(), initialScale = 0.92f),
+            exit = fadeOut(Motion.exitTween(150)) + androidx.compose.animation.scaleOut(Motion.exitTween(150), targetScale = 0.92f),
+            modifier = Modifier.zIndex(9f),
+        ) {
+            com.reverie.paint.ui.painting.quickaction.QuickActionWindow(
+                vm = vm,
+                onClose = {
+                    vm.quickActionWindowOpen = false
+                    vm.persistQuickActionsState()
+                },
                 hazeState = hazeState,
                 opacity = vm.popupPanelOpacity,
             )

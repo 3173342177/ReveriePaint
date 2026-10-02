@@ -1065,6 +1065,18 @@ class CanvasTouchView(context: Context) : View(context) {
             }
         }
 
+        // 快捷操作浮窗区域 (若打开)
+        if (v.quickActionWindowOpen) {
+            val qx = v.quickActionWindowX
+            val qy = v.quickActionWindowY
+            // 根据展开态与单排/网格预估有效触控保护区域，防止悬浮窗背景处笔刷落笔误画
+            val qw = if (v.quickActionCollapsed) 90f * d else 260f * d
+            val qh = if (v.quickActionCollapsed) 50f * d else 360f * d
+            if (x >= qx && x <= qx + qw && y >= qy && y <= qy + qh) {
+                return true
+            }
+        }
+
         return false
     }
 

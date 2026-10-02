@@ -804,6 +804,108 @@ class PaintViewModel : ViewModel() {
         } catch (_: Exception) {}
     }
 
+    // Quick Actions Tool Window State (快捷操作浮窗)
+    var quickActionWindowOpen by mutableStateOf(false)
+    var quickActionsConfig by mutableStateOf(com.reverie.paint.model.QuickActionsConfig())
+    var quickActionWindowX by mutableFloatStateOf(60f)
+    var quickActionWindowY by mutableFloatStateOf(200f)
+    var quickActionCollapsed by mutableStateOf(false)
+
+    fun persistQuickActionsState() {
+        if (!::appContext.isInitialized) return
+        try {
+            val p = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE).edit()
+            p.putBoolean("quick_action_open", quickActionWindowOpen)
+            p.putFloat("quick_action_x", quickActionWindowX)
+            p.putFloat("quick_action_y", quickActionWindowY)
+            p.putBoolean("quick_action_collapsed", quickActionCollapsed)
+            p.putString("quick_action_layout", quickActionsConfig.layoutMode.id)
+            p.putBoolean("quick_action_show_labels", quickActionsConfig.showLabels)
+            val actionsStr = quickActionsConfig.actions.joinToString(",") { it.id }
+            p.putString("quick_action_actions", actionsStr)
+            p.apply()
+        } catch (_: Exception) {}
+    }
+
+    fun executeQuickAction(action: com.reverie.paint.model.QuickAction) {
+        when (action) {
+            com.reverie.paint.model.QuickAction.LOCK_VIEW -> {
+                isViewTransformLocked = !isViewTransformLocked
+            }
+            com.reverie.paint.model.QuickAction.FLIP_H -> {
+                flipCanvasHorizontal()
+            }
+            com.reverie.paint.model.QuickAction.FLIP_V -> {
+                flipCanvasVertical()
+            }
+            com.reverie.paint.model.QuickAction.RESET_VIEW -> {
+                requestUiCommand("reset_view")
+            }
+            com.reverie.paint.model.QuickAction.UNDO -> {
+                undo()
+            }
+            com.reverie.paint.model.QuickAction.REDO -> {
+                redo()
+            }
+            com.reverie.paint.model.QuickAction.TOGGLE_ERASER -> {
+                if (currentToolId == "eraser") {
+                    applyTool(lastToolId.ifEmpty { "brush" })
+                } else {
+                    applyTool("eraser")
+                }
+            }
+            com.reverie.paint.model.QuickAction.LAST_TOOL -> {
+                val t = lastToolId
+                if (t.isNotEmpty() && t != currentToolId) {
+                    applyTool(t)
+                }
+            }
+            com.reverie.paint.model.QuickAction.PICK_COLOR -> {
+                applyTool("picker")
+            }
+            com.reverie.paint.model.QuickAction.SWAP_COLOR -> {
+                val c1 = brushColor
+                val c2 = brushSecondaryColor
+                updateBrushColor(c2)
+                updateBrushSecondaryColor(c1)
+            }
+            com.reverie.paint.model.QuickAction.BRUSH_SIZE_INC -> {
+                val newSize = (brushSize * 1.25).coerceAtMost(effectiveBrushMaxSize)
+                updateBrushSize(newSize)
+            }
+            com.reverie.paint.model.QuickAction.BRUSH_SIZE_DEC -> {
+                val minL = brushMinSizeLimit.coerceAtLeast(0.5)
+                val newSize = (brushSize / 1.25).coerceAtLeast(minL)
+                updateBrushSize(newSize)
+            }
+            com.reverie.paint.model.QuickAction.ALPHA_LOCK -> {
+                val idx = currentLayerIndex
+                val layer = layers.firstOrNull { it.index == idx }
+                if (layer != null && !layer.isBackground && layer.nodeType != 3) {
+                    val curr = layer.alphaLocked
+                    setLayerAlphaLocked(idx, !curr)
+                }
+            }
+            com.reverie.paint.model.QuickAction.NEW_LAYER -> {
+                addLayer()
+            }
+            com.reverie.paint.model.QuickAction.DUPLICATE_LAYER -> {
+                copyLayer(currentLayerIndex)
+            }
+            com.reverie.paint.model.QuickAction.MERGE_DOWN -> {
+                mergeDown(currentLayerIndex)
+            }
+            com.reverie.paint.model.QuickAction.CLEAR_LAYER -> {
+                clearLayer(currentLayerIndex)
+            }
+        }
+    }
+
+    fun isCurrentLayerAlphaLocked(): Boolean {
+        val idx = currentLayerIndex
+        return layers.firstOrNull { it.index == idx }?.alphaLocked == true
+    }
+
     // 作者档案 (Dublin Core / Krita 兼容元数据)
     var authorProfile by mutableStateOf(com.reverie.paint.model.AuthorProfile())
         internal set
@@ -2671,6 +2773,25 @@ class PaintViewModel : ViewModel() {
             referencePanX = prefs.getFloat("ref_pan_x", 0f)
             referencePanY = prefs.getFloat("ref_pan_y", 0f)
             loadPersistedReferenceImages()
+
+            // 快捷操作浮窗持久化恢复
+            quickActionWindowOpen = prefs.getBoolean("quick_action_open", false)
+            quickActionWindowX = prefs.getFloat("quick_action_x", 60f)
+            quickActionWindowY = prefs.getFloat("quick_action_y", 200f)
+            quickActionCollapsed = prefs.getBoolean("quick_action_collapsed", false)
+            val layoutMode = com.reverie.paint.model.QuickActionLayoutMode.fromId(prefs.getString("quick_action_layout", "column") ?: "column")
+            val showLabels = prefs.getBoolean("quick_action_show_labels", false)
+            val actionsRaw = prefs.getString("quick_action_actions", null)
+            val actions = if (!actionsRaw.isNullOrBlank()) {
+                actionsRaw.split(",").mapNotNull { com.reverie.paint.model.QuickAction.fromId(it.trim()) }
+            } else {
+                com.reverie.paint.model.QuickAction.DEFAULT_ACTIONS
+            }
+            quickActionsConfig = com.reverie.paint.model.QuickActionsConfig(
+                actions = if (actions.isNotEmpty()) actions else com.reverie.paint.model.QuickAction.DEFAULT_ACTIONS,
+                layoutMode = layoutMode,
+                showLabels = showLabels,
+            )
 
             applyCurrentTheme()
         }

@@ -260,7 +260,29 @@ class ThemeSettingsTest {
         // Reset to normal
         com.reverie.paint.ui.theme.Motion.currentSpeed = UiAnimationSpeed.NORMAL
     }
+
+    @Test
+    fun `QuickAction enum and layout parsing logic`() {
+        assertEquals(QuickAction.LOCK_VIEW, QuickAction.fromId("lock_view"))
+        assertEquals(QuickAction.FLIP_H, QuickAction.fromId("flip_h"))
+        assertEquals(QuickAction.UNDO, QuickAction.fromId("undo"))
+        assertEquals(QuickAction.NEW_LAYER, QuickAction.fromId("new_layer"))
+        assertEquals(null, QuickAction.fromId("non_existent"))
+
+        assertEquals(QuickActionLayoutMode.ROW, QuickActionLayoutMode.fromId("row"))
+        assertEquals(QuickActionLayoutMode.COLUMN, QuickActionLayoutMode.fromId("column"))
+        assertEquals(QuickActionLayoutMode.GRID_2, QuickActionLayoutMode.fromId("grid_2"))
+        assertEquals(QuickActionLayoutMode.GRID_3, QuickActionLayoutMode.fromId("grid_3"))
+        assertEquals(QuickActionLayoutMode.COLUMN, QuickActionLayoutMode.fromId("invalid"))
+
+        val config = QuickActionsConfig()
+        assertTrue("Default actions must contain UNDO", config.actions.contains(QuickAction.UNDO))
+        assertTrue("Default actions must contain REDO", config.actions.contains(QuickAction.REDO))
+        assertEquals(QuickActionLayoutMode.COLUMN, config.layoutMode)
+        assertFalse(config.showLabels)
+    }
 }
+
 
 
 
