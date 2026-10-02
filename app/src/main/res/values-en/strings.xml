@@ -770,6 +770,11 @@
     <string name="quick_brush_orientation">Capsule Orientation</string>
     <string name="quick_brush_orientation_horizontal">Horizontal</string>
     <string name="quick_brush_orientation_vertical">Vertical</string>
+    <string name="quick_brush_max_length">Max Length (Capacity)</string>
+    <string name="quick_brush_max_length_desc">Panel scrolls when brush count exceeds this limit</string>
+    <string name="quick_brush_add_tip">Tip: Star or long-press brushes in the Brush Panel to add favorites</string>
+    <string name="quick_brush_open_brush_panel">Open Brush Panel</string>
+    <string name="quick_brush_count_format">%1$d brushes</string>
     <string name="quick_action_window_title">Quick Actions</string>
     <string name="quick_action_edit">Customize Quick Actions</string>
     <string name="quick_action_edit_desc">Reorder actions, add or remove items, and choose layout</string>

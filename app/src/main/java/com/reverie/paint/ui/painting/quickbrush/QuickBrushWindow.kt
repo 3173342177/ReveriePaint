@@ -99,7 +99,12 @@ fun QuickBrushWindow(
 
     val isCollapsed = vm.quickBrushCollapsed
     val isVertical = vm.quickBrushOrientation == "vertical"
-    val favoritePresets = vm.getOrderedFavoriteBrushes()
+    val favoritePresets = remember(vm.brushPresets, vm.favoriteBrushNames, vm.quickBrushOrder) {
+        vm.getOrderedFavoriteBrushes()
+    }
+    val maxListLengthDp = remember(vm.quickBrushMaxLength) {
+        (vm.quickBrushMaxLength * 43 - 1).coerceAtLeast(42).dp
+    }
 
     val screenWidth = context.resources.displayMetrics.widthPixels
     val screenHeight = context.resources.displayMetrics.heightPixels
@@ -257,7 +262,7 @@ fun QuickBrushWindow(
                             }
                         } else {
                             LazyColumn(
-                                modifier = Modifier.heightIn(max = 380.dp),
+                                modifier = Modifier.heightIn(max = maxListLengthDp),
                                 verticalArrangement = Arrangement.spacedBy(5.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 contentPadding = PaddingValues(vertical = 2.dp),
@@ -424,7 +429,7 @@ fun QuickBrushWindow(
                             }
                         } else {
                             LazyRow(
-                                modifier = Modifier.widthIn(max = 460.dp),
+                                modifier = Modifier.widthIn(max = maxListLengthDp),
                                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 contentPadding = PaddingValues(horizontal = 2.dp),

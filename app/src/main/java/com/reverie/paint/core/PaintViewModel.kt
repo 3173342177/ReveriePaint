@@ -848,6 +848,7 @@ class PaintViewModel : ViewModel() {
     var quickBrushWindowY by mutableFloatStateOf(280f)
     var quickBrushCollapsed by mutableStateOf(false)
     var quickBrushOrientation by mutableStateOf("horizontal") // "horizontal" or "vertical"
+    var quickBrushMaxLength by mutableIntStateOf(6) // 最大长度（显示数量上限）
     var quickBrushOrder by mutableStateOf<List<String>>(emptyList())
 
     fun persistQuickBrushState() {
@@ -859,6 +860,7 @@ class PaintViewModel : ViewModel() {
             p.putFloat("quick_brush_y", quickBrushWindowY)
             p.putBoolean("quick_brush_collapsed", quickBrushCollapsed)
             p.putString("quick_brush_orientation", quickBrushOrientation)
+            p.putInt("quick_brush_max_length", quickBrushMaxLength)
             p.putString("quick_brush_order", quickBrushOrder.joinToString(","))
             p.apply()
         } catch (_: Exception) {}
@@ -2843,6 +2845,7 @@ class PaintViewModel : ViewModel() {
             quickBrushWindowY = prefs.getFloat("quick_brush_y", 280f)
             quickBrushCollapsed = prefs.getBoolean("quick_brush_collapsed", false)
             quickBrushOrientation = prefs.getString("quick_brush_orientation", "horizontal") ?: "horizontal"
+            quickBrushMaxLength = prefs.getInt("quick_brush_max_length", 6)
             val brushOrderStr = prefs.getString("quick_brush_order", "") ?: ""
             if (brushOrderStr.isNotBlank()) {
                 quickBrushOrder = brushOrderStr.split(",").filter { it.isNotBlank() }

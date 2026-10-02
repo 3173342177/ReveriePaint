@@ -770,6 +770,11 @@
     <string name="quick_brush_orientation">胶囊排列方向</string>
     <string name="quick_brush_orientation_horizontal">横向单排</string>
     <string name="quick_brush_orientation_vertical">纵向单列</string>
+    <string name="quick_brush_max_length">面板最大长度（显示数量）</string>
+    <string name="quick_brush_max_length_desc">笔刷数量超过此上限时，面板将启用滚动浏览</string>
+    <string name="quick_brush_add_tip">可在「画笔面板」中点击星标或长按画笔，将其加入常用画笔</string>
+    <string name="quick_brush_open_brush_panel">前往画笔面板</string>
+    <string name="quick_brush_count_format">%1$d 个</string>
     <string name="quick_action_window_title">快捷操作</string>
     <string name="quick_action_edit">自定义快捷操作</string>
     <string name="quick_action_edit_desc">自定义操作顺序、增删常用项及排布样式</string>

@@ -1096,15 +1096,18 @@ class CanvasTouchView(context: Context) : View(context) {
             val bx = v.quickBrushWindowX
             val by = v.quickBrushWindowY
             val isVert = v.quickBrushOrientation == "vertical"
+            val favCount = v.favoriteBrushNames.size
+            val visibleCount = if (favCount == 0) 1 else favCount.coerceAtMost(v.quickBrushMaxLength)
+            val listDim = if (favCount == 0) 130f else (visibleCount * 43f - 1f)
             val bw = when {
                 v.quickBrushCollapsed -> 90f * d
-                isVert -> 72f * d
-                else -> 420f * d
+                isVert -> 56f * d
+                else -> (70f + listDim + 36f) * d
             }
             val bh = when {
                 v.quickBrushCollapsed -> 50f * d
-                isVert -> 420f * d
-                else -> 72f * d
+                isVert -> (28f + (if (favCount == 0) 48f else (visibleCount * 43f - 1f)) + 36f) * d
+                else -> 56f * d
             }
             if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
                 return true
