@@ -7,6 +7,10 @@
 #include <jni.h>
 #include <dlfcn.h>
 #include <string.h>
+#include <sched.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <errno.h>
 #include <android/bitmap.h>
 #include <android/log.h>
 
@@ -358,5 +362,71 @@ Java_com_reverie_paint_core_ReverieCoreBridge_configureTileEngine(JNIEnv *env, j
         config.setMaxSwapSize(8192);
     } catch (...) {}
     if (swapDir) env->ReleaseStringUTFChars(jSwapDir, swapDir);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_bindCurrentThreadToPerformanceCores(JNIEnv *, jobject)
+{
+    long numCores = sysconf(_SC_NPROCESSORS_CONF);
+    if (numCores <= 1) {
+        return JNI_FALSE;
+    }
+    if (numCores > CPU_SETSIZE) {
+        numCores = CPU_SETSIZE;
+    }
+
+    long maxFreqs[CPU_SETSIZE] = {0};
+    long highestFreq = 0;
+
+    for (int i = 0; i < numCores; ++i) {
+        char path[64];
+        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+        FILE *f = fopen(path, "r");
+        if (f) {
+            long freq = 0;
+            if (fscanf(f, "%ld", &freq) == 1) {
+                maxFreqs[i] = freq;
+                if (freq > highestFreq) {
+                    highestFreq = freq;
+                }
+            }
+            fclose(f);
+        }
+    }
+
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    int boundCores = 0;
+
+    if (highestFreq > 0) {
+        // Cores with frequency at least 70% of highestFreq are considered performance cores (mid/big/super)
+        long threshold = (highestFreq * 70) / 100;
+        for (int i = 0; i < numCores; ++i) {
+            if (maxFreqs[i] >= threshold) {
+                CPU_SET(i, &cpuset);
+                boundCores++;
+            }
+        }
+    }
+
+    // Fallback: if sysfs read failed or all cores excluded, bind upper half
+    if (boundCores == 0) {
+        int start = numCores > 4 ? numCores / 2 : 0;
+        for (int i = start; i < numCores; ++i) {
+            CPU_SET(i, &cpuset);
+            boundCores++;
+        }
+    }
+
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) == 0) {
+        __android_log_print(ANDROID_LOG_INFO, "ReverieCore",
+                            "bindCurrentThreadToPerformanceCores: bound to %d performance cores (highestFreq=%ld kHz)",
+                            boundCores, highestFreq);
+        return JNI_TRUE;
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "ReverieCore",
+                            "bindCurrentThreadToPerformanceCores: sched_setaffinity failed errno=%d", errno);
+        return JNI_FALSE;
+    }
 }
 }

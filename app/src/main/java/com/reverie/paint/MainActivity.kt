@@ -173,6 +173,7 @@ class MainActivity : ComponentActivity() {
         val vm = ViewModelProvider(this)[PaintViewModel::class.java]
         currentViewModel = vm
         vm.appContext = applicationContext
+        vm.initPerformanceHintSession()
         vm.syncSettingsFromPrefs()
         // 提前在 onCreate 启动笔刷加载，与 Compose UI 挂载和首帧渲染并发执行，彻底消除冷启动进入画布时笔刷面板的延迟与白屏
         vm.loadBrushPresets()

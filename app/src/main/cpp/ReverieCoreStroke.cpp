@@ -302,7 +302,11 @@ bool ReverieCore::appendStrokeSample(const QPointF &imgPos, qreal pressure, qrea
     // small and fixed. The old max(1.5px, 20% diameter) left a blind zone of
     // up to 20% of the brush diameter during slow strokes (ink only appeared
     // on pen-up). Path engines keep fine 1.5px sampling for smooth contours.
-    const qreal spacing = isPathEngine ? 1.5 : 0.75;
+    // For standard brushes, adaptively scale spacing slightly with brush size
+    // (capped at 2.5px) to prevent sample flooding on large brushes (e.g. 500px).
+    const qreal spacing = isPathEngine
+        ? 1.5
+        : qBound<qreal>(0.75, m_brushSize * 0.01, 2.5);
     if (!m_strokeSamples.isEmpty()) {
         const QPointF last = m_strokeSamples.last().imgPos;
         const qreal dist = QLineF(last, imgPos).length();
@@ -604,9 +608,10 @@ bool ReverieCore::flushStrokeBatch()
                     RPC_LOG("RPC strokeOp UNSUPPORTED engine=%s -> fell back to KisBrushOp (engine not registered in this build)",
                             m_brushPreset->paintOp().id().toUtf8().constData());
                 }
+                const char *actualOpName = m_strokeOp ? typeid(*m_strokeOp).name() : "null";
                 RPC_LOG("RPC strokeOp created: presetId=%s, actualOp=%s",
                         m_brushPreset->paintOp().id().toUtf8().constData(),
-                        m_strokeOp ? typeid(*m_strokeOp).name() : "null");
+                        actualOpName);
                 delete m_strokeDistance;
                 m_strokeDistance = new KisDistanceInformation(start, 0.0);
             }
@@ -840,10 +845,23 @@ bool ReverieCore::flushStrokeBatch()
             strokeDirty = strokeDirty.isNull() ? r : strokeDirty.united(r);
         }
         if (!isPathEngine && (engineBypassesSelection || exactDirty.isEmpty())) {
-            for (const StrokeSample &sm : m_strokeSamples) {
+            const int startIndex = qMax(0, firstNewSegment - 1);
+            if (startIndex < m_strokeSamples.size()) {
+                qreal minX = m_strokeSamples[startIndex].imgPos.x();
+                qreal maxX = minX;
+                qreal minY = m_strokeSamples[startIndex].imgPos.y();
+                qreal maxY = minY;
+                for (int si = startIndex + 1; si < m_strokeSamples.size(); ++si) {
+                    const qreal sx = m_strokeSamples[si].imgPos.x();
+                    const qreal sy = m_strokeSamples[si].imgPos.y();
+                    if (sx < minX) minX = sx;
+                    if (sx > maxX) maxX = sx;
+                    if (sy < minY) minY = sy;
+                    if (sy > maxY) maxY = sy;
+                }
                 const int w = int(m_brushSize) + 2;
-                const QRect r(int(sm.imgPos.x()) - w, int(sm.imgPos.y()) - w,
-                              2 * w, 2 * w);
+                const QRect r(int(minX) - w, int(minY) - w,
+                              int(maxX - minX) + 2 * w, int(maxY - minY) + 2 * w);
                 strokeDirty = strokeDirty.isNull() ? r : strokeDirty.united(r);
             }
         }
@@ -911,7 +929,7 @@ bool ReverieCore::flushStrokeBatch()
         const QRect ext = target ? target->extent() : QRect();
         RPC_LOG("RPC strokeNoInk op=%s samples=%d size=%.1f compOp=%s devExtent=%d,%d %dx%d",
                 paintOpId.isEmpty() ? "none" : paintOpId.toUtf8().constData(),
-                m_strokeSamples.size(),
+                (int)m_strokeSamples.size(),
                 (double)m_brushSize,
                 painterCompOp.toUtf8().constData(),
                 ext.x(), ext.y(), ext.width(), ext.height());

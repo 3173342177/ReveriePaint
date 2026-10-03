@@ -5,6 +5,7 @@
 package com.reverie.paint.core
 
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
@@ -3516,11 +3517,50 @@ class PaintViewModel : ViewModel() {
         persistToolBrushStates()
         recorder.endSession()
         replaySession?.stop()
+        closePerformanceHintSession()
         renderThread?.quitSafely()
         unregisterMemoryPressureCallbacks()
         renderThread = null
         renderHandler = null
         super.onCleared()
+    }
+
+    private var performanceHintSession: Any? = null
+    private var renderThreadTid: Int = -1
+
+    internal fun initPerformanceHintSession() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && hasAppContext() && renderThreadTid > 0 && performanceHintSession == null) {
+            try {
+                val phm = appContext.getSystemService(android.os.PerformanceHintManager::class.java)
+                if (phm != null) {
+                    val targetNanos = 8_333_333L // 120Hz frame budget target
+                    performanceHintSession = phm.createHintSession(intArrayOf(renderThreadTid), targetNanos)
+                    android.util.Log.i("PaintViewModel", "ADPF PerformanceHintSession created for tid $renderThreadTid (target=${targetNanos}ns)")
+                }
+            } catch (t: Throwable) {
+                android.util.Log.w("PaintViewModel", "ADPF PerformanceHintSession init failed: ${t.message}")
+            }
+        }
+    }
+
+    internal fun reportRenderWorkDuration(durationNanos: Long) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (performanceHintSession == null) {
+                initPerformanceHintSession()
+            }
+            try {
+                (performanceHintSession as? android.os.PerformanceHintManager.Session)?.reportActualWorkDuration(durationNanos)
+            } catch (_: Throwable) {}
+        }
+    }
+
+    private fun closePerformanceHintSession() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                (performanceHintSession as? android.os.PerformanceHintManager.Session)?.close()
+            } catch (_: Throwable) {}
+            performanceHintSession = null
+        }
     }
 
     private val persistParamsRunnable = Runnable { persistBrushParams() }
@@ -3543,12 +3583,19 @@ class PaintViewModel : ViewModel() {
         thread.start()
         renderThread = thread
         renderHandler = Handler(thread.looper)
-        // Ensure priority is set to URGENT_DISPLAY
+        // Ensure priority is set to URGENT_DISPLAY and bind affinity to performance cores
         val h = renderHandler
         h?.post {
+            renderThreadTid = android.os.Process.myTid()
             android.os.Process.setThreadPriority(
                 android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY
             )
+            try {
+                ReverieCoreBridge.bindCurrentThreadToPerformanceCores()
+            } catch (t: Throwable) {
+                android.util.Log.w("PaintViewModel", "Failed to bind render thread affinity: ${t.message}")
+            }
+            initPerformanceHintSession()
         }
     }
 
@@ -3632,18 +3679,21 @@ class PaintViewModel : ViewModel() {
             }
         }
         pendingCoreOps.decrementPositive()
-        val tKritaStart = android.os.SystemClock.uptimeMillis()
+        val tKritaStartNs = android.os.SystemClock.elapsedRealtimeNanos()
         val painted = n > 0 && try {
             ReverieCoreBridge.touchStrokeMoveBatch(strokeDrainCoords, n)
         } catch (_: Throwable) {
             false
         }
-        val dtKrita = android.os.SystemClock.uptimeMillis() - tKritaStart
+        val dtKritaNs = android.os.SystemClock.elapsedRealtimeNanos() - tKritaStartNs
+        val dtKrita = dtKritaNs / 1_000_000L
+        var dtRenderNs = 0L
         // Render immediately in-place after ink landed to eliminate message queue roundtrip latency
         if (painted) {
-            val tRenderStart = android.os.SystemClock.uptimeMillis()
+            val tRenderStartNs = android.os.SystemClock.elapsedRealtimeNanos()
             doRender()
-            val dtRender = android.os.SystemClock.uptimeMillis() - tRenderStart
+            dtRenderNs = android.os.SystemClock.elapsedRealtimeNanos() - tRenderStartNs
+            val dtRender = dtRenderNs / 1_000_000L
             val tDone = android.os.SystemClock.uptimeMillis()
             val queueWait = tDispatch - lastQueuedUptime
             val e2e = if (lastQueuedInputEventTime > 0) tDone - lastQueuedInputEventTime else 0L
@@ -3653,6 +3703,9 @@ class PaintViewModel : ViewModel() {
                     "StrokePerf: n=$n queueWait=${queueWait}ms krita=${dtKrita}ms render=${dtRender}ms e2e=${e2e}ms"
                 )
             }
+        }
+        if (n > 0) {
+            reportRenderWorkDuration(dtKritaNs + dtRenderNs)
         }
     }
 

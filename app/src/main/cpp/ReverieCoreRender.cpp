@@ -857,6 +857,17 @@ void ReverieCore::compositeLayersRange(KisPaintDeviceSP out, int startIdx, int e
                 }();
 
                 if (!src && !hasTemp) {
+                    const QRect devExt = dev->extent();
+                    const KoColorSpace *cs = dev->colorSpace();
+                    const bool isDefaultTransparent = !cs || cs->opacityU8(dev->defaultPixel().data()) == 0;
+                    if (isDefaultTransparent && (devExt.isEmpty() || !devExt.intersects(r))) {
+                        const QString &opId = e.node->compositeOpId();
+                        if (opId != COMPOSITE_COPY && opId != COMPOSITE_CLEAR) {
+                            ++i;
+                            continue;
+                        }
+                    }
+
                     // 最热路径: 无洋葱皮、无中转绘制 —— 一次 bitBlt 完事
                     KisPainter painter(out);
                     painter.setOpacityF(qreal(e.node->opacity()) / 255.0);
