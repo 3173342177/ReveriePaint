@@ -1,7 +1,7 @@
 name: Feature Request (English)
 description: Suggest a new feature, workflow improvement, or Krita capability parity
 title: "feat: "
-labels: ["enhancement"]
+labels: ["type: feature"]
 body:
   - type: markdown
     attributes:
