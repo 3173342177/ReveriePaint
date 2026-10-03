@@ -1,0 +1,78 @@
+name: Bug Report (English)
+description: Report a bug, crash, or unexpected behavior in ReveriePaint
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for submitting a bug report! Before opening an issue, please make sure you tested on the latest release and checked existing issues to avoid duplicates
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App Version
+      description: The version or commit hash where the bug occurred (e.g. 1.3.4 or commit SHA)
+      placeholder: "e.g. 1.3.4 (or latest release build)"
+    validations:
+      required: true
+
+  - type: input
+    id: device-info
+    attributes:
+      label: Device & OS
+      description: Device model, Android OS version, and ROM (e.g. Xiaomi Pad 6S Pro / HyperOS 1.0, Samsung Galaxy Tab S9 / One UI 6)
+      placeholder: "e.g. Xiaomi Pad 6S Pro, Android 14 (HyperOS 1.0.12)"
+    validations:
+      required: true
+
+  - type: input
+    id: stylus-info
+    attributes:
+      label: Stylus Model
+      description: If the issue involves pen strokes, pressure, buttons, or latency, please provide the stylus model; write "Touch only" if no stylus was used
+      placeholder: "e.g. Xiaomi Focus Pen / Huawei M-Pencil Gen 3 / Samsung S-Pen / Touch only"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem Description & Reproduction Steps
+      description: Describe what happened, step-by-step instructions to reproduce the issue, and what you expected to happen
+      placeholder: |
+        1. Create a 2048x2048 canvas
+        2. Pick a brush and draw on the layer
+        3. Perform an action and observe crash or stutter
+        Expected behavior: Smooth drawing without crash
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or Screen Recordings
+      description: Visual media helps tremendously in locating and diagnosing issues (drag and drop images/video here, optional)
+      placeholder: "Paste or upload relevant screenshots, GIFs, or video links here"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logcat / Crash Stack Trace
+      description: If the app crashed or printed error logs, paste the relevant log output here (optional)
+      render: shell
+      placeholder: "Paste adb logcat stack trace or console logs here"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and confirmed this is not a duplicate
+          required: true
+        - label: I am using an official APK release from GitHub Releases or MirrorChyan
+          required: false

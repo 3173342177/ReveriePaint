@@ -1,0 +1,67 @@
+name: Performance & Device Issues (English)
+description: Report frame drops, large brush lag, latency, or device-specific compatibility issues
+title: "perf: "
+labels: ["performance", "device-compat"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to report performance bottlenecks, stylus latency, or hardware-specific issues to help us optimize rendering for specific SoCs and architectures
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App Version
+      description: The version or commit hash where the performance issue occurred
+      placeholder: "e.g. 1.3.4"
+    validations:
+      required: true
+
+  - type: input
+    id: hardware-info
+    attributes:
+      label: Device & SoC Chip
+      description: Device model, processor/GPU SoC, and OS (e.g. Xiaomi Pad 6S Pro / Snapdragon 8 Gen 2 / HyperOS, Samsung Galaxy Tab S9 / Snapdragon 8 Gen 2 for Galaxy / One UI)
+      placeholder: "e.g. Xiaomi Pad 6S Pro (Snapdragon 8 Gen 2), Android 14"
+    validations:
+      required: true
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario & Canvas Parameters
+      description: Provide canvas dimensions, layer count, brush name, and brush size where performance drops
+      placeholder: |
+        - Canvas resolution: e.g. 3000 x 2000
+        - Layer count: e.g. 8 layers
+        - Brush name & size: e.g. Basic-5 Size / size scaled above 200px
+        - Touch / Stylus model: e.g. Xiaomi Focus Pen
+    validations:
+      required: true
+
+  - type: textarea
+    id: metrics-and-symptoms
+    attributes:
+      label: Performance Symptoms & PerfHud Readings
+      description: Describe the lag symptoms (e.g. broken stroke segments, frame rate drop, sticky gesture zoom); if you enabled "Performance HUD (PerfHud)" in debug settings, please include the timing stats (ms)
+      placeholder: "e.g. Viewport zoom/pan is 60fps, but drawing with brush size > 150px causes stroke segmentation; PerfHud shows projection composition taking > 18ms"
+    validations:
+      required: true
+
+  - type: textarea
+    id: comparison
+    attributes:
+      label: Comparison with Other Apps on Same Device
+      description: How does the same hardware perform in other painting applications (e.g. Krita Android, HiPaint, ibisPaint) with similar brushes? (optional)
+      placeholder: "e.g. Smooth drawing in Krita Android with equivalent large brush tip"
+    validations:
+      required: false
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Screen Recording or Screenshots
+      description: A video demonstration or PerfHud screenshot is extremely helpful (optional)
+      placeholder: "Paste or attach screen recording / screenshot links here"
+    validations:
+      required: false

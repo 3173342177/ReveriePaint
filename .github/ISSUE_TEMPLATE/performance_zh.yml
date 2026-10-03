@@ -1,0 +1,67 @@
+name: 性能与机型兼容性反馈 (Performance & Device Issues)
+description: 反馈特定处理器/机型上的掉帧、大笔刷延迟、手势卡顿或触控兼容性问题
+title: "perf: "
+labels: ["performance", "device-compat"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        本表单用于收集特定硬件芯片、平板机型或手写笔的性能瓶颈与触控延迟问题，帮助针对具体 SoC 与系统架构进行专项渲染优化
+
+  - type: input
+    id: app-version
+    attributes:
+      label: 应用版本 (App Version)
+      description: 请填写测试时的版本号或 Git commit 哈希
+      placeholder: "例如: 1.3.4"
+    validations:
+      required: true
+
+  - type: input
+    id: hardware-info
+    attributes:
+      label: 设备机型与处理器芯片 (Device & SoC)
+      description: 请注明具体平板机型、处理器/GPU 型号及系统版本（如 小米Pad 6S Pro / 骁龙 8 Gen 2 / HyperOS、华为 MatePad 11.5S / 麒麟 9000WL / 鸿蒙系统）
+      placeholder: "例如: 小米 Pad 6S Pro (骁龙 8 Gen 2), Android 14"
+    validations:
+      required: true
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 发生卡顿的场景与配置 (Scenario & Canvas Parameters)
+      description: 请详细列出卡顿出现时的画布尺寸、图层数量、笔刷类型与画笔半径
+      placeholder: |
+        - 画布分辨率: 例如 3000 x 2000
+        - 图层数量: 例如 8 个图层
+        - 笔刷名称与尺寸: 例如 Basic-5 Size / 尺寸拉到 200px 以上
+        - 触控/手写笔型号: 例如 小米焦点触控笔
+    validations:
+      required: true
+
+  - type: textarea
+    id: metrics-and-symptoms
+    attributes:
+      label: 性能表现与标尺读数 (Performance Symptoms & PerfHud)
+      description: 描述卡顿具体特征（如笔迹成段、帧率骤降、手势缩放粘滞）；如开启了开发者设置中的“性能标尺 (PerfHud)”，请填写画布左上角的耗时数据（如 Render/Blit 毫秒数）
+      placeholder: "例如: 画布手势流畅，但在笔刷尺寸超过 150px 时快速运笔笔画出现明显延迟断点，PerfHud 显示投影合成耗时超 18ms"
+    validations:
+      required: true
+
+  - type: textarea
+    id: comparison
+    attributes:
+      label: 同设备其他软件表现对比 (Comparison with Other Apps)
+      description: 相同硬件设备下，在其他绘画应用（如 Krita Android、HiPaint、爱笔思画等）中的相似画笔/尺寸表现如何？（可选）
+      placeholder: "例如: 在 Krita Android 端使用同款笔刷大尺寸绘制无明显卡顿"
+    validations:
+      required: false
+
+  - type: textarea
+    id: media
+    attributes:
+      label: 录屏或截图 (Screen Recording / PerfHud Screenshot)
+      description: 附带性能标尺或操作过程的录屏可显著提高排查效率（可选）
+      placeholder: "可拖拽粘贴录屏或截图到此处"
+    validations:
+      required: false

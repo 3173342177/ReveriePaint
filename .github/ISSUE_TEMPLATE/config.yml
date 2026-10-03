@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "官方使用指南 / Documentation"
+    url: "https://reveriepaint.lanrhyme.top/docs/"
+    about: "查阅官方功能说明、笔刷与图层使用技巧和常见问题解答"
+  - name: "QQ 交流群 / Community Group"
+    url: "https://qm.qq.com/cgi-bin/qm/qr?k=reveriepaint"
+    about: "加入官方用户交流群 (QQ群号 729283213) 参与即时讨论"
+  - name: "爱发电赞助 / Afdian Support"
+    url: "https://afdian.com/a/LanRhyme"
+    about: "支持独立开发者持续投入 ReveriePaint 维护与开发"

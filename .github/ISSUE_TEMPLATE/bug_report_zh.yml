@@ -1,0 +1,78 @@
+name: 缺陷反馈 (Bug Report)
+description: 反馈 ReveriePaint 在使用中遇到的崩溃、异常行为或显示错误
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提交缺陷反馈！在提单前请先确认已在最新版本中测试，并检索现有 Issue 避免重复提交
+
+  - type: input
+    id: app-version
+    attributes:
+      label: 应用版本 (App Version)
+      description: 请填写发生问题的版本号（如 1.3.4、或 Git commit 哈希）
+      placeholder: "例如: 1.3.4 (或最近 release 构建版本)"
+    validations:
+      required: true
+
+  - type: input
+    id: device-info
+    attributes:
+      label: 设备与系统信息 (Device & OS)
+      description: 请填写具体平板/手机型号、Android 版本及 ROM（如 小米平板 6 Pro / HyperOS 1.0、华为 MatePad Pro / HarmonyOS 4.2）
+      placeholder: "例如: 小米 Pad 6S Pro, Android 14 (HyperOS 1.0.12)"
+    validations:
+      required: true
+
+  - type: input
+    id: stylus-info
+    attributes:
+      label: 手写笔型号 (Stylus Model)
+      description: 如问题涉及笔触、压感、按键或延迟，请填写手写笔型号；若仅用手指触控可填“纯触控”
+      placeholder: "例如: 小米焦点触控笔 / 华为 M-Pencil 第三代 / 三星 S-Pen / 纯触控"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题详细描述与复现步骤 (Description & Reproduction Steps)
+      description: 请详细描述遇到了什么异常、如何一步步复现该问题，以及你预期的正常表现是什么
+      placeholder: |
+        1. 新建 2048x2048 画布
+        2. 选择某笔刷并在图层绘制
+        3. 进行某操作后出现异常闪退或笔画断裂
+        预期表现：应平滑绘制且不发生崩溃
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: 截图或录屏 (Screenshots / Screen Recording)
+      description: 截屏或短视频能极大帮助开发者快速定位问题（可直接拖拽粘贴图片到此处，可选）
+      placeholder: "请在此处粘贴或上传问题相关的截图、GIF 或录屏链接"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或崩溃堆栈 (Logcat / Crash Log)
+      description: 如应用闪退或控制台有报错，请粘贴相关 Logcat 日志（可选）
+      render: shell
+      placeholder: "在此处粘贴 adb logcat 崩溃日志或堆栈信息"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: 提交确认 (Checklist)
+      options:
+        - label: 我已在现有 Issue 中检索，未发现相同或已解决的重复报告
+          required: true
+        - label: 我使用的是官方 GitHub Release 或 Mirror酱渠道获取的安装包
+          required: false

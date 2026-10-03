@@ -1,0 +1,44 @@
+name: 功能与体验建议 (Feature Request)
+description: 提出新功能构想、交互优化或对标 Krita/桌面绘画软件的能力建议
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎分享你对 ReveriePaint 的新功能设想与交互改进建议！清晰的场景与预期将有助于方案评估与落地
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 功能概述与解决的痛点 (Summary & Pain Points)
+      description: 请一句话概括你想新增或改善的功能，以及目前在创作流程中遇到了什么痛点
+      placeholder: "例如: 希望在快捷控制条中加入笔刷历史记录，方便在最近使用的几只画笔间快速来回切换"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望的实现方案或交互设想 (Proposed Solution)
+      description: 描述你理想中的界面交互、操作流程或设计细节
+      placeholder: "例如: 在侧边快捷工具栏长按笔刷图标，弹出一个水平列表展示最近 5 只使用的笔刷预设"
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考软件或对标实现 (References / Alternatives)
+      description: 是否有其他数字绘画软件（如 Krita、Procreate、Clip Studio Paint 等）实现了类似能力？可附上截图或对比说明（可选）
+      placeholder: "例如: Krita 桌面端中通过快速调色板圆盘支持最近画笔切换"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交确认 (Checklist)
+      options:
+        - label: 我已在现有 Issue 与 PR 中检索，确认该建议未被重复提出或正在开发中
+          required: true

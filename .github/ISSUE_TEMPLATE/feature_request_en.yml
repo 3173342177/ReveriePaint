@@ -1,0 +1,44 @@
+name: Feature Request (English)
+description: Suggest a new feature, workflow improvement, or Krita capability parity
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve ReveriePaint! Concrete use cases and clear expectations make feature evaluations much faster
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary & Pain Points
+      description: Briefly describe the proposed feature and what pain points it addresses in your painting workflow
+      placeholder: "e.g. Add quick brush history access in the floating bar to easily switch between recently used brushes"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution & Interaction Design
+      description: Describe how you envision this feature working in the UI and workflow
+      placeholder: "e.g. Long-press on the brush icon on the floating toolbar to reveal a horizontal popup showing the 5 most recent brush presets"
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References / Alternatives
+      description: Are there existing implementations in other drawing apps (such as Krita, Procreate, Clip Studio Paint)? Screenshots or workflow comparisons welcome (optional)
+      placeholder: "e.g. Desktop Krita pop-up palette supports recent brush history"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and PRs to verify this is not already requested or in progress
+          required: true
