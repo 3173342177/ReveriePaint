@@ -830,6 +830,7 @@ public:
     void setBrushRotation(qreal v);
     void setBrushCompositeOp(const QString &op);
     void setBrushPressureDynamics(bool enabled, qreal sizeStrength, qreal opacityStrength, qreal flowStrength, int curveType);
+    void setBrushOptionDynamics(const QString &optionName, bool enabled, const QString &sensorId, const QString &curvePoints, qreal strength);
     void setBrushFollowDirection(bool enabled);
     void setBrushJitter(qreal jitterAngle, qreal jitterSize);
     void setBrushMirror(bool flipX, bool flipY);

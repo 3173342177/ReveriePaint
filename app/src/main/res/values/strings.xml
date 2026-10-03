@@ -1337,6 +1337,34 @@
     <string name="brush_studio_opacity_sensor">不透明度驱动传感器</string>
     <string name="brush_studio_flow_sensor">流量驱动传感器</string>
     <string name="brush_studio_press_curve_preview">曲线响应预览</string>
+    <string name="brush_curve_preset_linear">线性 (Linear)</string>
+    <string name="brush_curve_preset_soft">柔和 (Ease-in)</string>
+    <string name="brush_curve_preset_hard">硬朗 (Ease-out)</string>
+    <string name="brush_curve_preset_scurve">S形曲线 (S-Curve)</string>
+    <string name="brush_curve_preset_peak">拱形峰值 (Peak)</string>
+    <string name="brush_curve_preset_steps">阶梯脉冲 (Steps)</string>
+    <string name="brush_sensor_pressure">压力 (Pressure)</string>
+    <string name="brush_sensor_speed">速度 (Speed)</string>
+    <string name="brush_sensor_drawingangle">运笔方向 (Drawing Angle)</string>
+    <string name="brush_sensor_tilt_elevation">俯仰倾角 (Tilt Elevation)</string>
+    <string name="brush_sensor_tilt_direction">倾斜方位 (Tilt Direction)</string>
+    <string name="brush_sensor_tilt_x">水平倾角 (Tilt X)</string>
+    <string name="brush_sensor_tilt_y">垂直倾角 (Tilt Y)</string>
+    <string name="brush_sensor_rotation">笔身旋转 (Rotation)</string>
+    <string name="brush_sensor_tangential_pressure">滚轮切向 (Tangential)</string>
+    <string name="brush_sensor_fade">行程渐隐 (Fade)</string>
+    <string name="brush_sensor_distance">行程距离 (Distance)</string>
+    <string name="brush_sensor_time">停留时间 (Time)</string>
+    <string name="brush_sensor_fuzzy">随机噪点 (Fuzzy)</string>
+    <string name="brush_dynamics_expand_title">动态响应曲线</string>
+    <string name="brush_dynamics_invert_h">水平反转</string>
+    <string name="brush_dynamics_invert_v">垂直反转</string>
+    <string name="brush_dynamics_reset">重置曲线</string>
+    <string name="brush_dynamics_point_x">输入 X</string>
+    <string name="brush_dynamics_point_y">输出 Y</string>
+    <string name="brush_dynamics_add_point_hint">点击网格添加点，拖拽点微调曲率</string>
+    <string name="brush_dynamics_live_cursor">实时动态响应</string>
+    <string name="brush_dynamics_strength">动态影响强度</string>
 
     <!-- Color Components & Sliders -->
     <string name="color_num_dialog_range">有效范围: %1$s ~ %2$s%3$s</string>

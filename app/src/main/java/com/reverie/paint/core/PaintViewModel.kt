@@ -605,6 +605,39 @@ class PaintViewModel : ViewModel() {
     var brushMaxSizeLimit by mutableDoubleStateOf(500.0)
     var brushSizeScalesWithCanvas by mutableStateOf(true)
 
+    // 独立参数动态响应曲线配置映射表 (Size, Opacity, Flow, Softness, Rotation, Spacing, Scatter, SmudgeRate)
+    val brushDynamicOptions = mutableStateMapOf<String, com.reverie.paint.model.DynamicOptionConfig>()
+
+    // 试画板实时动态光点追踪游标输入与输出数值
+    var scratchpadLiveInput by mutableFloatStateOf(-1f)
+    var scratchpadLiveOutput by mutableFloatStateOf(-1f)
+
+    fun getBrushDynamicOption(key: String): com.reverie.paint.model.DynamicOptionConfig {
+        return brushDynamicOptions[key] ?: com.reverie.paint.model.DynamicOptionConfig.defaultFor(key).also {
+            brushDynamicOptions[key] = it
+        }
+    }
+
+    fun updateBrushDynamicOption(config: com.reverie.paint.model.DynamicOptionConfig) {
+        updateBrushDynamicOption(config.optionKey, config)
+    }
+
+    fun updateBrushDynamicOption(
+        key: String,
+        config: com.reverie.paint.model.DynamicOptionConfig,
+    ) {
+        brushDynamicOptions[key] = config
+        runCore(render = false) {
+            ReverieCoreBridge.setBrushOptionDynamics(
+                optionName = key,
+                enabled = config.enabled,
+                sensorId = config.sensorId,
+                curvePoints = config.toKritaCurveString(),
+                strength = config.strength.toDouble(),
+            )
+        }
+    }
+
     val effectiveBrushMaxSize: Double
         get() {
             val minL = brushMinSizeLimit.coerceAtLeast(0.5)

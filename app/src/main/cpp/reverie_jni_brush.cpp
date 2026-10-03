@@ -245,6 +245,20 @@ Java_com_reverie_paint_core_ReverieCoreBridge_setBrushPressureDynamics(JNIEnv *,
 }
 
 JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_setBrushOptionDynamics(JNIEnv *env, jobject, jstring optionName, jboolean enabled, jstring sensorId, jstring curvePoints, jdouble strength)
+{
+    const char *optStr = env->GetStringUTFChars(optionName, nullptr);
+    const char *sensorStr = env->GetStringUTFChars(sensorId, nullptr);
+    const char *curveStr = env->GetStringUTFChars(curvePoints, nullptr);
+
+    core()->setBrushOptionDynamics(QString::fromUtf8(optStr), enabled == JNI_TRUE, QString::fromUtf8(sensorStr), QString::fromUtf8(curveStr), strength);
+
+    env->ReleaseStringUTFChars(curvePoints, curveStr);
+    env->ReleaseStringUTFChars(sensorId, sensorStr);
+    env->ReleaseStringUTFChars(optionName, optStr);
+}
+
+JNIEXPORT void JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_setBrushFollowDirection(JNIEnv *, jobject, jboolean enabled)
 {
     core()->setBrushFollowDirection(enabled == JNI_TRUE);

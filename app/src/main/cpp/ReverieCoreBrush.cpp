@@ -1411,6 +1411,58 @@ void ReverieCore::setBrushPressureDynamics(bool enabled, qreal sizeStrength, qre
     }
 }
 
+void ReverieCore::setBrushOptionDynamics(const QString &optionName, bool enabled, const QString &sensorId, const QString &curvePoints, qreal strength)
+{
+    if (!m_brushPreset || !m_brushPreset->settings()) return;
+    KisPaintOpSettingsSP s = m_brushPreset->settings();
+
+    QString opt = optionName.trimmed();
+    if (opt.isEmpty()) return;
+    opt = opt.left(1).toUpper() + opt.mid(1);
+
+    if (opt.compare("Size", Qt::CaseInsensitive) == 0) {
+        QMutexLocker locker(&m_sizeCurveMutex);
+        m_sizeCurveOwner = nullptr;
+    }
+
+    const QString pressKey = QStringLiteral("Pressure%1").arg(opt);
+    const QString curveKey = QStringLiteral("%1UseCurve").arg(opt);
+    const QString valKey   = QStringLiteral("%1Value").arg(opt);
+    const QString sensorKey = QStringLiteral("%1Sensor").arg(opt);
+
+    if (!enabled) {
+        s->setProperty(pressKey.toLatin1().constData(), false);
+        s->setProperty(curveKey.toLatin1().constData(), false);
+        return;
+    }
+
+    s->setProperty(pressKey.toLatin1().constData(), true);
+    s->setProperty(curveKey.toLatin1().constData(), true);
+    s->setProperty(valKey.toLatin1().constData(), strength);
+
+    QString formattedCurve = curvePoints.trimmed();
+    if (!formattedCurve.isEmpty() && !formattedCurve.endsWith(';')) {
+        formattedCurve.append(';');
+    }
+    if (formattedCurve.isEmpty()) {
+        formattedCurve = QStringLiteral("0,0;1,1;");
+    }
+
+    QString sensor = sensorId.trimmed().toLower();
+    if (sensor.isEmpty()) {
+        sensor = QStringLiteral("pressure");
+    }
+
+    QString sensorXml;
+    if (sensor == QStringLiteral("drawingangle")) {
+        sensorXml = QStringLiteral("<!DOCTYPE params><params fanCornersStep=\"30\" fanCornersEnabled=\"0\" angleOffset=\"0\" id=\"drawingangle\"><curve>%1</curve></params>").arg(formattedCurve);
+    } else {
+        sensorXml = QStringLiteral("<!DOCTYPE params><params id=\"%1\"><curve>%2</curve></params>").arg(sensor, formattedCurve);
+    }
+
+    s->setProperty(sensorKey.toLatin1().constData(), sensorXml);
+}
+
 void ReverieCore::setBrushFollowDirection(bool enabled)
 {
     if (!m_brushPreset || !m_brushPreset->settings()) return;

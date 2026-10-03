@@ -538,6 +538,13 @@ object ReverieCoreBridge {
         flowStrength: Double,
         curveType: Int,
     )
+    external fun setBrushOptionDynamics(
+        optionName: String,
+        enabled: Boolean,
+        sensorId: String,
+        curvePoints: String,
+        strength: Double,
+    )
     external fun setBrushFollowDirection(enabled: Boolean)
     external fun setBrushJitter(jitterAngle: Double, jitterSize: Double)
     external fun setBrushMirror(flipX: Boolean, flipY: Boolean)

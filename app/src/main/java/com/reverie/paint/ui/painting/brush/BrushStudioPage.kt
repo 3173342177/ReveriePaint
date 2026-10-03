@@ -869,6 +869,15 @@ private fun TipTabContent(
         StudioInnerDivider()
         StudioSliderItem(stringResource(R.string.brush_studio_tip_spikes), vm.brushSpikes.toDouble(), 2.0, 16.0, unit = stringResource(R.string.brush_studio_unit_spikes), textMain = textMain, textSub = textSub) { vm.updateBrushSpikes(it.toInt()) }
         StudioSliderItem(stringResource(R.string.brush_studio_tip_feather_hardness), vm.brushSoftness, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSoftness(it) }
+        BrushDynamicCurveEditor(
+            config = vm.getBrushDynamicOption("Softness"),
+            onConfigChange = { vm.updateBrushDynamicOption(it) },
+            cardBg = cardBg,
+            borderCol = borderCol,
+            textMain = textMain,
+            textSub = textSub,
+            liveInput = vm.scratchpadLiveInput,
+        )
     }
 
     StudioGroupCard(stringResource(R.string.brush_studio_tip_antialias)) {
@@ -1346,8 +1355,27 @@ private fun StrokeTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color
 
     StudioGroupCard(stringResource(R.string.brush_studio_dynamics_spacing_scatter)) {
         StudioSliderItem(stringResource(R.string.brush_studio_dynamics_spacing), vm.brushSpacing, 0.01, 2.5, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSpacing(it) }
+        BrushDynamicCurveEditor(
+            config = vm.getBrushDynamicOption("Spacing"),
+            onConfigChange = { vm.updateBrushDynamicOption(it) },
+            cardBg = cardBg,
+            borderCol = borderCol,
+            textMain = textMain,
+            textSub = textSub,
+            liveInput = vm.scratchpadLiveInput,
+        )
+        StudioInnerDivider()
         StudioSliderItem(stringResource(R.string.brush_studio_dynamics_scatter), vm.brushScatter, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushScatter(it) }
-        StudioSensorChips(stringResource(R.string.brush_studio_scatter_sensor), vm.brushScatterSensor, scatterSensors, { vm.updateBrushScatterSensor(it) }, cardBg, textMain, textSub)
+        BrushDynamicCurveEditor(
+            config = vm.getBrushDynamicOption("Scatter"),
+            onConfigChange = { vm.updateBrushDynamicOption(it) },
+            cardBg = cardBg,
+            borderCol = borderCol,
+            textMain = textMain,
+            textSub = textSub,
+            liveInput = vm.scratchpadLiveInput,
+        )
+        StudioInnerDivider()
         StudioSliderItem(stringResource(R.string.brush_studio_dynamics_fade), vm.brushFade, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushFade(it) }
     }
 
@@ -1379,6 +1407,16 @@ private fun ColorTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Color,
     if (isSmudgeEngine) {
         StudioGroupCard(stringResource(R.string.brush_studio_color_smudge_title)) {
             StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_rate), vm.brushSmudgeRate, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeRate(it) }
+            BrushDynamicCurveEditor(
+                config = vm.getBrushDynamicOption("SmudgeRate"),
+                onConfigChange = { vm.updateBrushDynamicOption(it) },
+                cardBg = cardBg,
+                borderCol = borderCol,
+                textMain = textMain,
+                textSub = textSub,
+                liveInput = vm.scratchpadLiveInput,
+            )
+            StudioInnerDivider()
             StudioSliderItem(stringResource(R.string.brush_studio_color_smudge_length), vm.brushSmudgeLength, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSmudgeLength(it) }
         }
     }
@@ -1424,6 +1462,15 @@ private fun GeometryTabContent(
         StudioInnerDivider()
         StudioSwitchItem(stringResource(R.string.brush_studio_geo_auto_rotate), vm.brushFollowDirection, textMain = textMain) { vm.updateBrushFollowDirection(it) }
         StudioSensorChips(stringResource(R.string.brush_studio_rotation_sensor), vm.brushRotationSensor, rotationSensors, { vm.updateBrushRotationSensor(it) }, cardBg, textMain, textSub)
+        BrushDynamicCurveEditor(
+            config = vm.getBrushDynamicOption("Rotation"),
+            onConfigChange = { vm.updateBrushDynamicOption(it) },
+            cardBg = cardBg,
+            borderCol = borderCol,
+            textMain = textMain,
+            textSub = textSub,
+            liveInput = vm.scratchpadLiveInput,
+        )
     }
 }
 
@@ -1478,14 +1525,41 @@ private fun PressureTabContent(vm: PaintViewModel, cardBg: Color, borderCol: Col
         StudioGroupCard(stringResource(R.string.brush_studio_press_dynamics)) {
             StudioSensorChips(stringResource(R.string.brush_studio_size_sensor), vm.brushSizeSensor, standardSensors, { vm.updateBrushSizeSensor(it) }, cardBg, textMain, textSub)
             StudioSliderItem(stringResource(R.string.brush_studio_press_size), vm.brushPressureSize, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureSize(it) }
+            BrushDynamicCurveEditor(
+                config = vm.getBrushDynamicOption("Size"),
+                onConfigChange = { vm.updateBrushDynamicOption(it) },
+                cardBg = cardBg,
+                borderCol = borderCol,
+                textMain = textMain,
+                textSub = textSub,
+                liveInput = vm.scratchpadLiveInput,
+            )
             StudioInnerDivider()
 
             StudioSensorChips(stringResource(R.string.brush_studio_opacity_sensor), vm.brushOpacitySensor, standardSensors, { vm.updateBrushOpacitySensor(it) }, cardBg, textMain, textSub)
             StudioSliderItem(stringResource(R.string.brush_studio_press_opacity), vm.brushPressureOpacity, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureOpacity(it) }
+            BrushDynamicCurveEditor(
+                config = vm.getBrushDynamicOption("Opacity"),
+                onConfigChange = { vm.updateBrushDynamicOption(it) },
+                cardBg = cardBg,
+                borderCol = borderCol,
+                textMain = textMain,
+                textSub = textSub,
+                liveInput = vm.scratchpadLiveInput,
+            )
             StudioInnerDivider()
 
             StudioSensorChips(stringResource(R.string.brush_studio_flow_sensor), vm.brushFlowSensor, standardSensors, { vm.updateBrushFlowSensor(it) }, cardBg, textMain, textSub)
             StudioSliderItem(stringResource(R.string.brush_studio_press_flow), vm.brushPressureFlow, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushPressureFlow(it) }
+            BrushDynamicCurveEditor(
+                config = vm.getBrushDynamicOption("Flow"),
+                onConfigChange = { vm.updateBrushDynamicOption(it) },
+                cardBg = cardBg,
+                borderCol = borderCol,
+                textMain = textMain,
+                textSub = textSub,
+                liveInput = vm.scratchpadLiveInput,
+            )
             StudioInnerDivider()
 
             StudioSliderItem(stringResource(R.string.brush_studio_press_speed), vm.brushSpeedSize, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSpeedSize(it) }
@@ -1584,7 +1658,27 @@ private fun EngineTabContent(
 
     StudioGroupCard(stringResource(R.string.brush_studio_tab_engine)) {
         StudioSliderItem(stringResource(R.string.brush_studio_engine_opacity), vm.brushOpacity, 0.01, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushOpacity(it) }
+        BrushDynamicCurveEditor(
+            config = vm.getBrushDynamicOption("Opacity"),
+            onConfigChange = { vm.updateBrushDynamicOption(it) },
+            cardBg = cardBg,
+            borderCol = borderCol,
+            textMain = textMain,
+            textSub = textSub,
+            liveInput = vm.scratchpadLiveInput,
+        )
+        StudioInnerDivider()
         StudioSliderItem(stringResource(R.string.brush_studio_engine_flow), vm.brushFlow, 0.01, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushFlow(it) }
+        BrushDynamicCurveEditor(
+            config = vm.getBrushDynamicOption("Flow"),
+            onConfigChange = { vm.updateBrushDynamicOption(it) },
+            cardBg = cardBg,
+            borderCol = borderCol,
+            textMain = textMain,
+            textSub = textSub,
+            liveInput = vm.scratchpadLiveInput,
+        )
+        StudioInnerDivider()
         StudioSliderItem(stringResource(R.string.brush_studio_engine_sharpness), vm.brushSharpness, 0.0, 1.0, isPercent = true, textMain = textMain, textSub = textSub) { vm.updateBrushSharpness(it) }
     }
 
@@ -2102,6 +2196,7 @@ private fun ScratchpadCanvas(
                 val down = awaitFirstDown(requireUnconsumed = false)
                 down.consume()
                 val initP = if (down.pressure > 0f) down.pressure.coerceIn(0.1f, 1.0f) else 1.0f
+                vm.scratchpadLiveInput = initP
                 onStrokeStart(ScratchPoint(down.position.x, down.position.y, initP))
 
                 val pointerId = down.id
@@ -2110,12 +2205,15 @@ private fun ScratchpadCanvas(
                     val change = event.changes.firstOrNull { it.id == pointerId }
                     if (change == null || !change.pressed) {
                         change?.consume()
+                        vm.scratchpadLiveInput = -1f
+                        vm.scratchpadLiveOutput = -1f
                         onStrokeEnd()
                         break
                     }
                     if (change.position != change.previousPosition) {
                         change.consume()
                         val p = if (change.pressure > 0f) change.pressure.coerceIn(0.1f, 1.0f) else initP
+                        vm.scratchpadLiveInput = p
                         val historical = change.historical
                         if (historical.isNotEmpty()) {
                             val batch = ArrayList<ScratchPoint>(historical.size + 1)

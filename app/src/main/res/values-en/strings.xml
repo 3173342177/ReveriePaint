@@ -1337,6 +1337,34 @@
     <string name="brush_studio_opacity_sensor">Opacity Driver Sensor</string>
     <string name="brush_studio_flow_sensor">Flow Driver Sensor</string>
     <string name="brush_studio_press_curve_preview">Curve Response Preview</string>
+    <string name="brush_curve_preset_linear">Linear</string>
+    <string name="brush_curve_preset_soft">Soft (Ease-in)</string>
+    <string name="brush_curve_preset_hard">Hard (Ease-out)</string>
+    <string name="brush_curve_preset_scurve">S-Curve</string>
+    <string name="brush_curve_preset_peak">Peak</string>
+    <string name="brush_curve_preset_steps">Steps</string>
+    <string name="brush_sensor_pressure">Pressure</string>
+    <string name="brush_sensor_speed">Speed</string>
+    <string name="brush_sensor_drawingangle">Drawing Angle</string>
+    <string name="brush_sensor_tilt_elevation">Tilt Elevation</string>
+    <string name="brush_sensor_tilt_direction">Tilt Direction</string>
+    <string name="brush_sensor_tilt_x">Tilt X</string>
+    <string name="brush_sensor_tilt_y">Tilt Y</string>
+    <string name="brush_sensor_rotation">Rotation</string>
+    <string name="brush_sensor_tangential_pressure">Tangential</string>
+    <string name="brush_sensor_fade">Fade</string>
+    <string name="brush_sensor_distance">Distance</string>
+    <string name="brush_sensor_time">Time</string>
+    <string name="brush_sensor_fuzzy">Fuzzy</string>
+    <string name="brush_dynamics_expand_title">Dynamic Curve</string>
+    <string name="brush_dynamics_invert_h">Invert H</string>
+    <string name="brush_dynamics_invert_v">Invert V</string>
+    <string name="brush_dynamics_reset">Reset</string>
+    <string name="brush_dynamics_point_x">Input X</string>
+    <string name="brush_dynamics_point_y">Output Y</string>
+    <string name="brush_dynamics_add_point_hint">Tap grid to add points, drag to adjust curve</string>
+    <string name="brush_dynamics_live_cursor">Live Feedback</string>
+    <string name="brush_dynamics_strength">Dynamic Strength</string>
 
     <!-- Color Components & Sliders -->
     <string name="color_num_dialog_range">Range: %1$s ~ %2$s%3$s</string>
