@@ -79,11 +79,14 @@ fun QuickActionWindow(
     val haptic = LocalHapticFeedback.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val dm = context.resources.displayMetrics
+    val screenWidthPx = dm.widthPixels.toFloat()
+    val screenHeightPx = dm.heightPixels.toFloat()
 
     val currentScreenWidthPx by rememberUpdatedState(screenWidthPx)
     val currentScreenHeightPx by rememberUpdatedState(screenHeightPx)
+
+    val marginPx = with(density) { 8.dp.toPx() }
 
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -108,26 +111,46 @@ fun QuickActionWindow(
 
     var windowSize by remember { mutableStateOf(IntSize.Zero) }
 
-    LaunchedEffect(screenWidthPx, screenHeightPx, windowSize) {
-        if (windowSize.width > 0 && windowSize.height > 0) {
-            val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0f)
-            val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0f)
-            if (vm.quickActionWindowX >= 0f && vm.quickActionWindowY >= 0f) {
-                val clampedX = vm.quickActionWindowX.coerceIn(0f, maxX)
-                val clampedY = vm.quickActionWindowY.coerceIn(0f, maxY)
-                if (clampedX != vm.quickActionWindowX || clampedY != vm.quickActionWindowY) {
-                    vm.quickActionWindowX = clampedX
-                    vm.quickActionWindowY = clampedY
-                    vm.persistQuickActionsState()
-                }
-            }
-        }
-    }
-
     val config = vm.quickActionsConfig
     val isCollapsed = vm.quickActionCollapsed
     val layoutMode = config.layoutMode
     val activeActions = config.actions
+
+    val defaultW = with(density) {
+        if (isCollapsed) 64.dp.toPx()
+        else when (layoutMode) {
+            QuickActionLayoutMode.COLUMN -> 56.dp.toPx()
+            QuickActionLayoutMode.ROW -> 240.dp.toPx()
+            QuickActionLayoutMode.GRID_2 -> 110.dp.toPx()
+            QuickActionLayoutMode.GRID_3 -> 160.dp.toPx()
+        }
+    }
+    val defaultH = with(density) {
+        if (isCollapsed) 44.dp.toPx()
+        else when (layoutMode) {
+            QuickActionLayoutMode.COLUMN -> 280.dp.toPx()
+            QuickActionLayoutMode.ROW -> 76.dp.toPx()
+            QuickActionLayoutMode.GRID_2, QuickActionLayoutMode.GRID_3 -> 160.dp.toPx()
+        }
+    }
+
+    LaunchedEffect(screenWidthPx, screenHeightPx, windowSize, isCollapsed, layoutMode) {
+        val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+        val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+        val minX = marginPx
+        val maxX = (screenWidthPx - curEffectiveW - marginPx).coerceAtLeast(minX)
+        val minY = marginPx
+        val maxY = (screenHeightPx - curEffectiveH - marginPx).coerceAtLeast(minY)
+        if (vm.quickActionWindowX >= 0f && vm.quickActionWindowY >= 0f) {
+            val clampedX = vm.quickActionWindowX.coerceIn(minX, maxX)
+            val clampedY = vm.quickActionWindowY.coerceIn(minY, maxY)
+            if (clampedX != vm.quickActionWindowX || clampedY != vm.quickActionWindowY) {
+                vm.quickActionWindowX = clampedX
+                vm.quickActionWindowY = clampedY
+                vm.persistQuickActionsState()
+            }
+        }
+    }
 
     // 动态圆角：单排为极限胶囊 (CircleShape 或大圆角)，多排为 20dp 圆角矩形，折叠时为小胶囊/圆形
     val windowShape = remember(isCollapsed, layoutMode) {
@@ -142,17 +165,21 @@ fun QuickActionWindow(
     Box(
         modifier = modifier
             .offset {
-                val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0f)
-                val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0f)
+                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                val minX = marginPx
+                val maxX = (screenWidthPx - curEffectiveW - marginPx).coerceAtLeast(minX)
+                val minY = marginPx
+                val maxY = (screenHeightPx - curEffectiveH - marginPx).coerceAtLeast(minY)
                 val x = if (vm.quickActionWindowX >= 0f) {
-                    vm.quickActionWindowX.coerceIn(0f, maxX).roundToInt()
+                    vm.quickActionWindowX.coerceIn(minX, maxX).roundToInt()
                 } else {
-                    ((screenWidthPx - windowSize.width.coerceAtLeast(260)) / 2f).coerceAtLeast(0f).roundToInt()
+                    ((screenWidthPx - curEffectiveW) / 2f).coerceIn(minX, maxX).roundToInt()
                 }
                 val y = if (vm.quickActionWindowY >= 0f) {
-                    vm.quickActionWindowY.coerceIn(0f, maxY).roundToInt()
+                    vm.quickActionWindowY.coerceIn(minY, maxY).roundToInt()
                 } else {
-                    ((screenHeightPx - windowSize.height.coerceAtLeast(140)) / 2f).coerceAtLeast(0f).roundToInt()
+                    ((screenHeightPx - curEffectiveH) / 2f).coerceIn(minY, maxY).roundToInt()
                 }
                 IntOffset(x, y)
             }
@@ -163,15 +190,17 @@ fun QuickActionWindow(
                 .onSizeChanged { size ->
                     windowSize = size
                     if (size.width > 0 && size.height > 0) {
-                        val maxX = (screenWidthPx - size.width).coerceAtLeast(0f)
-                        val maxY = (screenHeightPx - size.height).coerceAtLeast(0f)
+                        val minX = marginPx
+                        val maxX = (screenWidthPx - size.width - marginPx).coerceAtLeast(minX)
+                        val minY = marginPx
+                        val maxY = (screenHeightPx - size.height - marginPx).coerceAtLeast(minY)
                         if (vm.quickActionWindowX < 0f || vm.quickActionWindowY < 0f) {
-                            vm.quickActionWindowX = (maxX / 2f).coerceIn(0f, maxX)
-                            vm.quickActionWindowY = (maxY / 2f).coerceIn(0f, maxY)
+                            vm.quickActionWindowX = (maxX / 2f).coerceIn(minX, maxX)
+                            vm.quickActionWindowY = (maxY / 2f).coerceIn(minY, maxY)
                             vm.persistQuickActionsState()
                         } else {
-                            val clampedX = vm.quickActionWindowX.coerceIn(0f, maxX)
-                            val clampedY = vm.quickActionWindowY.coerceIn(0f, maxY)
+                            val clampedX = vm.quickActionWindowX.coerceIn(minX, maxX)
+                            val clampedY = vm.quickActionWindowY.coerceIn(minY, maxY)
                             if (clampedX != vm.quickActionWindowX || clampedY != vm.quickActionWindowY) {
                                 vm.quickActionWindowX = clampedX
                                 vm.quickActionWindowY = clampedY
@@ -207,33 +236,20 @@ fun QuickActionWindow(
                             onDragCancel = { vm.persistQuickActionsState() },
                         ) { change, dragAmount ->
                             change.consume()
-                            val maxX = (currentScreenWidthPx - windowSize.width).coerceAtLeast(0f)
-                            val maxY = (currentScreenHeightPx - windowSize.height).coerceAtLeast(0f)
-                            vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(0f, maxX)
-                            vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(0f, maxY)
+                            val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                            val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                            val curMinX = marginPx
+                            val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                            val curMinY = marginPx
+                            val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                            vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
+                            vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                         }
                     }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                // 拖动手柄
-                Box(
-                    modifier = Modifier
-                        .width(10.dp)
-                        .height(26.dp)
-                        .padding(start = 2.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(3.dp)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(1.5.dp))
-                            .background(Morandi.subText.copy(alpha = 0.5f))
-                    )
-                }
-
                 // 展开图标
                 val expandSource = remember { MutableInteractionSource() }
                 Box(
@@ -291,40 +307,50 @@ fun QuickActionWindow(
                     modifier = Modifier
                         .then(
                             when (layoutMode) {
-                                QuickActionLayoutMode.ROW -> Modifier.fillMaxWidth().height(26.dp)
-                                QuickActionLayoutMode.COLUMN -> Modifier.width(44.dp).height(24.dp)
-                                QuickActionLayoutMode.GRID_2, QuickActionLayoutMode.GRID_3 -> Modifier.fillMaxWidth().height(26.dp)
+                                QuickActionLayoutMode.ROW -> Modifier.widthIn(min = 120.dp)
+                                QuickActionLayoutMode.COLUMN -> Modifier.width(44.dp)
+                                QuickActionLayoutMode.GRID_2 -> Modifier.width(96.dp)
+                                QuickActionLayoutMode.GRID_3 -> Modifier.width(144.dp)
                             }
                         )
+                        .height(24.dp)
                         .pointerInput(Unit) {
                             detectDragGestures(
                                 onDragEnd = { vm.persistQuickActionsState() },
                                 onDragCancel = { vm.persistQuickActionsState() },
                             ) { change, dragAmount ->
                                 change.consume()
-                                val maxX = (currentScreenWidthPx - windowSize.width).coerceAtLeast(0f)
-                                val maxY = (currentScreenHeightPx - windowSize.height).coerceAtLeast(0f)
-                                vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(0f, maxX)
-                                vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(0f, maxY)
+                                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                val curMinX = marginPx
+                                val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                val curMinY = marginPx
+                                val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
+                                vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                             }
                         },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     if (layoutMode == QuickActionLayoutMode.COLUMN) {
-                        // 单列窄胶囊模式下的极简拖动手柄 (纯拖拽手柄，绝无点击冲突)
+                        // 单列窄胶囊模式下的极简拖动手柄与折叠
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(24.dp),
+                                .height(20.dp)
+                                .clickable {
+                                    vm.quickActionCollapsed = true
+                                    vm.persistQuickActionsState()
+                                },
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .width(22.dp)
+                                    .width(20.dp)
                                     .height(3.5.dp)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(Morandi.subText.copy(alpha = 0.5f))
+                                    .background(Morandi.subText.copy(alpha = 0.45f))
                             )
                         }
                     } else {
@@ -359,22 +385,6 @@ fun QuickActionWindow(
                                 color = Morandi.subText,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
-                            )
-                        }
-
-                        // 居中微小拖拽条
-                        Box(
-                            modifier = Modifier
-                                .weight(1f, fill = false)
-                                .height(20.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(20.dp)
-                                    .height(3.dp)
-                                    .clip(RoundedCornerShape(1.5.dp))
-                                    .background(Morandi.subText.copy(alpha = 0.35f))
                             )
                         }
 
@@ -454,52 +464,20 @@ fun QuickActionWindow(
                                 )
                             }
 
-                            // 单列底部操作区：分割线 + 折叠/配置按钮
+                            // 单列底部配置齿轮
                             Box(
                                 modifier = Modifier
-                                    .width(28.dp)
-                                    .height(1.dp)
-                                    .background(Morandi.border.copy(alpha = 0.5f))
-                            )
-                            Row(
-                                modifier = Modifier.width(44.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically,
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { showEditDialog = true },
+                                contentAlignment = Alignment.Center,
                             ) {
-                                // 折叠
-                                Box(
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .clip(CircleShape)
-                                        .clickable {
-                                            vm.quickActionCollapsed = true
-                                            vm.persistQuickActionsState()
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(9.dp)
-                                            .height(2.5.dp)
-                                            .clip(RoundedCornerShape(1.dp))
-                                            .background(Morandi.subText)
-                                    )
-                                }
-                                // 编辑齿轮
-                                Box(
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .clip(CircleShape)
-                                        .clickable { showEditDialog = true },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_settings),
-                                        contentDescription = "Edit",
-                                        tint = Morandi.subText,
-                                        modifier = Modifier.size(12.dp),
-                                    )
-                                }
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_settings),
+                                    contentDescription = "Edit",
+                                    tint = Morandi.subText.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(16.dp),
+                                )
                             }
                         }
                     }
@@ -545,7 +523,6 @@ fun QuickActionWindow(
         // ---- 就近微型 Toast 提示 (智能贴合悬浮窗侧边或上方，提供操作即时反馈) ----
         val toastText = actionToastText
         val toastIcon = actionToastIcon
-        val screenWidthPx = context.resources.displayMetrics.widthPixels
         val densityDpi = density.density
         val spacingPx = with(density) { 10.dp.roundToPx() }
 

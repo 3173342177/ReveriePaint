@@ -108,24 +108,39 @@ fun QuickBrushWindow(
     }
 
     val configuration = LocalConfiguration.current
-    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val dm = context.resources.displayMetrics
+    val screenWidthPx = dm.widthPixels.toFloat()
+    val screenHeightPx = dm.heightPixels.toFloat()
 
     val currentScreenWidthPx by rememberUpdatedState(screenWidthPx)
     val currentScreenHeightPx by rememberUpdatedState(screenHeightPx)
 
-    LaunchedEffect(screenWidthPx, screenHeightPx, windowSize) {
-        if (windowSize.width > 0 && windowSize.height > 0) {
-            val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0f)
-            val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0f)
-            if (vm.quickBrushWindowX >= 0f && vm.quickBrushWindowY >= 0f) {
-                val clampedX = vm.quickBrushWindowX.coerceIn(0f, maxX)
-                val clampedY = vm.quickBrushWindowY.coerceIn(0f, maxY)
-                if (clampedX != vm.quickBrushWindowX || clampedY != vm.quickBrushWindowY) {
-                    vm.quickBrushWindowX = clampedX
-                    vm.quickBrushWindowY = clampedY
-                    vm.persistQuickBrushState()
-                }
+    val marginPx = with(density) { 8.dp.toPx() }
+    val defaultW = with(density) {
+        if (isCollapsed) 64.dp.toPx()
+        else if (isVertical) 54.dp.toPx()
+        else 240.dp.toPx()
+    }
+    val defaultH = with(density) {
+        if (isCollapsed) 44.dp.toPx()
+        else if (isVertical) 260.dp.toPx()
+        else 54.dp.toPx()
+    }
+
+    LaunchedEffect(screenWidthPx, screenHeightPx, windowSize, isCollapsed, isVertical) {
+        val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+        val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+        val minX = marginPx
+        val maxX = (screenWidthPx - curEffectiveW - marginPx).coerceAtLeast(minX)
+        val minY = marginPx
+        val maxY = (screenHeightPx - curEffectiveH - marginPx).coerceAtLeast(minY)
+        if (vm.quickBrushWindowX >= 0f && vm.quickBrushWindowY >= 0f) {
+            val clampedX = vm.quickBrushWindowX.coerceIn(minX, maxX)
+            val clampedY = vm.quickBrushWindowY.coerceIn(minY, maxY)
+            if (clampedX != vm.quickBrushWindowX || clampedY != vm.quickBrushWindowY) {
+                vm.quickBrushWindowX = clampedX
+                vm.quickBrushWindowY = clampedY
+                vm.persistQuickBrushState()
             }
         }
     }
@@ -137,17 +152,21 @@ fun QuickBrushWindow(
     Box(
         modifier = modifier
             .offset {
-                val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0f)
-                val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0f)
+                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                val minX = marginPx
+                val maxX = (screenWidthPx - curEffectiveW - marginPx).coerceAtLeast(minX)
+                val minY = marginPx
+                val maxY = (screenHeightPx - curEffectiveH - marginPx).coerceAtLeast(minY)
                 val x = if (vm.quickBrushWindowX >= 0f) {
-                    vm.quickBrushWindowX.coerceIn(0f, maxX).roundToInt()
+                    vm.quickBrushWindowX.coerceIn(minX, maxX).roundToInt()
                 } else {
-                    ((screenWidthPx - windowSize.width.coerceAtLeast(240)) / 2f).coerceAtLeast(0f).roundToInt()
+                    ((screenWidthPx - curEffectiveW) / 2f).coerceIn(minX, maxX).roundToInt()
                 }
                 val y = if (vm.quickBrushWindowY >= 0f) {
-                    vm.quickBrushWindowY.coerceIn(0f, maxY).roundToInt()
+                    vm.quickBrushWindowY.coerceIn(minY, maxY).roundToInt()
                 } else {
-                    ((screenHeightPx - windowSize.height.coerceAtLeast(100)) / 2f).coerceAtLeast(0f).roundToInt()
+                    ((screenHeightPx - curEffectiveH) / 2f).coerceIn(minY, maxY).roundToInt()
                 }
                 IntOffset(x, y)
             }
@@ -158,15 +177,17 @@ fun QuickBrushWindow(
                 .onSizeChanged { size ->
                     windowSize = size
                     if (size.width > 0 && size.height > 0) {
-                        val maxX = (screenWidthPx - size.width).coerceAtLeast(0f)
-                        val maxY = (screenHeightPx - size.height).coerceAtLeast(0f)
+                        val minX = marginPx
+                        val maxX = (screenWidthPx - size.width - marginPx).coerceAtLeast(minX)
+                        val minY = marginPx
+                        val maxY = (screenHeightPx - size.height - marginPx).coerceAtLeast(minY)
                         if (vm.quickBrushWindowX < 0f || vm.quickBrushWindowY < 0f) {
-                            vm.quickBrushWindowX = (maxX / 2f).coerceIn(0f, maxX)
-                            vm.quickBrushWindowY = (maxY / 2f).coerceIn(0f, maxY)
+                            vm.quickBrushWindowX = (maxX / 2f).coerceIn(minX, maxX)
+                            vm.quickBrushWindowY = (maxY / 2f).coerceIn(minY, maxY)
                             vm.persistQuickBrushState()
                         } else {
-                            val clampedX = vm.quickBrushWindowX.coerceIn(0f, maxX)
-                            val clampedY = vm.quickBrushWindowY.coerceIn(0f, maxY)
+                            val clampedX = vm.quickBrushWindowX.coerceIn(minX, maxX)
+                            val clampedY = vm.quickBrushWindowY.coerceIn(minY, maxY)
                             if (clampedX != vm.quickBrushWindowX || clampedY != vm.quickBrushWindowY) {
                                 vm.quickBrushWindowX = clampedX
                                 vm.quickBrushWindowY = clampedY
@@ -202,33 +223,20 @@ fun QuickBrushWindow(
                                 onDragCancel = { vm.persistQuickBrushState() },
                             ) { change, dragAmount ->
                                 change.consume()
-                                val maxX = (currentScreenWidthPx - windowSize.width).coerceAtLeast(0f)
-                                val maxY = (currentScreenHeightPx - windowSize.height).coerceAtLeast(0f)
-                                vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(0f, maxX)
-                                vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(0f, maxY)
+                                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                val curMinX = marginPx
+                                val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                val curMinY = marginPx
+                                val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
+                                vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                             }
                         }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    // 拖动手柄
-                    Box(
-                        modifier = Modifier
-                            .width(10.dp)
-                            .height(26.dp)
-                            .padding(start = 2.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(3.dp)
-                                .height(14.dp)
-                                .clip(RoundedCornerShape(1.5.dp))
-                                .background(Morandi.subText.copy(alpha = 0.5f))
-                        )
-                    }
-
                     val expandSource = remember { MutableInteractionSource() }
                     Box(
                         modifier = Modifier
@@ -281,28 +289,36 @@ fun QuickBrushWindow(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
-                        // 顶部拖动手柄 (纯拖拽手柄，绝无点击冲突)
+                        // 顶部拖动手柄与折叠
                         Box(
                             modifier = Modifier
                                 .width(42.dp)
-                                .height(22.dp)
+                                .height(20.dp)
                                 .pointerInput(Unit) {
                                     detectDragGestures(
                                         onDragEnd = { vm.persistQuickBrushState() },
                                         onDragCancel = { vm.persistQuickBrushState() },
                                     ) { change, dragAmount ->
                                         change.consume()
-                                        val maxX = (currentScreenWidthPx - windowSize.width).coerceAtLeast(0f)
-                                        val maxY = (currentScreenHeightPx - windowSize.height).coerceAtLeast(0f)
-                                        vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(0f, maxX)
-                                        vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(0f, maxY)
+                                        val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                        val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                        val curMinX = marginPx
+                                        val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                        val curMinY = marginPx
+                                        val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                        vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
+                                        vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                                     }
+                                }
+                                .clickable {
+                                    vm.quickBrushCollapsed = true
+                                    vm.persistQuickBrushState()
                                 },
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .width(20.dp)
+                                    .width(18.dp)
                                     .height(3.5.dp)
                                     .clip(RoundedCornerShape(2.dp))
                                     .background(Morandi.subText.copy(alpha = 0.5f))
@@ -362,35 +378,15 @@ fun QuickBrushWindow(
                                 .background(Morandi.border.copy(alpha = 0.5f))
                         )
 
-                        // 底部操作区 (折叠、齿轮管理与关闭)
+                        // 底部操作区 (齿轮管理与关闭)
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            // 折叠按钮
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        vm.quickBrushCollapsed = true
-                                        vm.persistQuickBrushState()
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .width(9.dp)
-                                        .height(2.5.dp)
-                                        .clip(RoundedCornerShape(1.dp))
-                                        .background(Morandi.subText)
-                                )
-                            }
-
                             // 齿轮配置
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(22.dp)
                                     .clip(CircleShape)
                                     .clickable { showManageDialog = true },
                                 contentAlignment = Alignment.Center,
@@ -406,7 +402,7 @@ fun QuickBrushWindow(
                             // 关闭
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(22.dp)
                                     .clip(CircleShape)
                                     .clickable { onClose() },
                                 contentAlignment = Alignment.Center,
@@ -427,40 +423,30 @@ fun QuickBrushWindow(
                             .wrapContentSize()
                             .padding(horizontal = 6.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
-                        // 独立的左侧垂直拖动手柄 (纯手柄，无点击冲突)
-                        Box(
+                        // 拖动手柄与操作区
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
                             modifier = Modifier
-                                .width(14.dp)
-                                .height(36.dp)
                                 .pointerInput(Unit) {
                                     detectDragGestures(
                                         onDragEnd = { vm.persistQuickBrushState() },
                                         onDragCancel = { vm.persistQuickBrushState() },
                                     ) { change, dragAmount ->
                                         change.consume()
-                                        val maxX = (currentScreenWidthPx - windowSize.width).coerceAtLeast(0f)
-                                        val maxY = (currentScreenHeightPx - windowSize.height).coerceAtLeast(0f)
-                                        vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(0f, maxX)
-                                        vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(0f, maxY)
+                                        val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                        val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                        val curMinX = marginPx
+                                        val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                        val curMinY = marginPx
+                                        val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                        vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
+                                        vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                                     }
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(3.5.dp)
-                                    .height(18.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Morandi.subText.copy(alpha = 0.5f))
-                            )
-                        }
-
-                        // 操作按钮区 (折叠 + 齿轮)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                }
+                                .padding(end = 2.dp),
                         ) {
                             // 折叠按钮
                             Box(
