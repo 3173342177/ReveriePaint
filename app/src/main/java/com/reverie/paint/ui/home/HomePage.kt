@@ -17,9 +17,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -460,200 +466,146 @@ fun HomePage(vm: PaintViewModel) {
 
                             Spacer(Modifier.weight(1f))
 
-                            AnimatedVisibility(
-                                visible = isSearchActive,
-                                enter = fadeIn(tween(180)) + expandHorizontally(expandFrom = Alignment.End),
-                                exit = fadeOut(tween(150)) + shrinkHorizontally(shrinkTowards = Alignment.End),
-                            ) {
-                                OutlinedTextField(
-                                    value = vm.searchQuery,
-                                    onValueChange = { vm.searchQuery = it },
-                                    placeholder = { Text(stringResource(R.string.gallery_search_hint), color = colors.subText, fontSize = 13.sp) },
-                                    singleLine = true,
-                                    trailingIcon = {
-                                        ReIconButton(
-                                            R.drawable.ic_x,
-                                            "Close",
-                                            {
-                                                vm.searchQuery = ""
-                                                isSearchActive = false
-                                            },
-                                            size = 30.dp,
-                                            tint = colors.subText,
-                                            iconSize = 18.dp,
-                                        )
-                                    },
-                                    colors =
-                                        OutlinedTextFieldDefaults.colors(
-                                            focusedTextColor = colors.text,
-                                            unfocusedTextColor = colors.text,
-                                            focusedBorderColor = colors.accent,
-                                            unfocusedBorderColor = colors.border,
-                                            focusedContainerColor = colors.panelHi,
-                                            unfocusedContainerColor = colors.panelHi,
-                                            cursorColor = colors.accent,
-                                        ),
-                                    modifier =
-                                        Modifier
-                                            .width(220.dp)
-                                            .height(44.dp),
-                                )
-                            }
-
-                            if (!isSearchActive) {
-                                if (isSelectMode) {
-                                    val haptic = LocalHapticFeedback.current
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        val allSelected = displayProjects.isNotEmpty() && selectedProjects.size == displayProjects.size
-                                        ReTextButton(
-                                            text = if (allSelected) stringResource(R.string.gallery_deselect_all) else stringResource(R.string.gallery_select_all),
-                                            onClick = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                if (allSelected) {
-                                                    selectedProjects.clear()
-                                                } else {
-                                                    selectedProjects.clear()
-                                                    selectedProjects.addAll(displayProjects)
-                                                }
-                                            },
-                                            textColor = colors.accent,
-                                            fontWeight = FontWeight.Medium,
-                                            fontSize = 14.sp,
-                                        )
-
-                                        ReTextButton(
-                                            stringResource(R.string.common_done),
-                                            onClick = {
-                                                isSelectMode = false
-                                                selectedProjects.clear()
-                                            },
-                                            textColor = colors.accent,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp,
-                                        )
-                                    }
+                            AnimatedContent(
+                                targetState = isSearchActive,
+                                transitionSpec = {
+                                    (fadeIn(tween(160)) + scaleIn(tween(160), initialScale = 0.94f))
+                                        .togetherWith(fadeOut(tween(100)) + scaleOut(tween(100), targetScale = 0.94f))
+                                },
+                                label = "HomeTopBarActionTransition",
+                            ) { searching ->
+                                if (searching) {
+                                    HomeSearchBar(
+                                        query = vm.searchQuery,
+                                        onQueryChange = { vm.searchQuery = it },
+                                        onClose = {
+                                            vm.searchQuery = ""
+                                            isSearchActive = false
+                                        },
+                                        colors = colors,
+                                    )
                                 } else {
-                                    // Top Bar Buttons Group
-                                    Row(
-                                        modifier =
-                                            Modifier
-                                                .clip(RoundedCornerShape(20.dp))
-                                                .background(colors.panel.copy(alpha = 0.85f))
-                                                .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-                                                .padding(4.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        // Search icon button
-                                        Box(
-                                            modifier =
-                                                Modifier
-                                                    .size(34.dp)
-                                                    .clip(CircleShape)
-                                                    .clickable { isSearchActive = true },
-                                             contentAlignment = Alignment.Center,
+                                    if (isSelectMode) {
+                                        val haptic = LocalHapticFeedback.current
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         ) {
-                                            Icon(
-                                                painterResource(R.drawable.ic_search),
-                                                contentDescription = stringResource(R.string.common_search),
-                                                tint = colors.icon,
-                                                modifier = Modifier.size(18.dp),
+                                            val allSelected = displayProjects.isNotEmpty() && selectedProjects.size == displayProjects.size
+                                            ReTextButton(
+                                                text = if (allSelected) stringResource(R.string.gallery_deselect_all) else stringResource(R.string.gallery_select_all),
+                                                onClick = {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    if (allSelected) {
+                                                        selectedProjects.clear()
+                                                    } else {
+                                                        selectedProjects.clear()
+                                                        selectedProjects.addAll(displayProjects)
+                                                    }
+                                                },
+                                                textColor = colors.accent,
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 14.sp,
+                                            )
+
+                                            ReTextButton(
+                                                stringResource(R.string.common_done),
+                                                onClick = {
+                                                    isSelectMode = false
+                                                    selectedProjects.clear()
+                                                },
+                                                textColor = colors.accent,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
                                             )
                                         }
-
-                                        // More Menu icon button
-                                        Box {
+                                    } else {
+                                        // Top Bar Buttons Group
+                                        Row(
+                                            modifier =
+                                                Modifier
+                                                    .clip(RoundedCornerShape(21.dp))
+                                                    .background(colors.panel.copy(alpha = 0.85f))
+                                                    .border(1.dp, colors.border, RoundedCornerShape(21.dp))
+                                                    .padding(4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            // Search icon button
                                             Box(
                                                 modifier =
                                                     Modifier
                                                         .size(34.dp)
                                                         .clip(CircleShape)
-                                                        .clickable { showMoreMenu = true },
+                                                        .clickable { isSearchActive = true },
                                                 contentAlignment = Alignment.Center,
                                             ) {
                                                 Icon(
-                                                    painterResource(R.drawable.ic_dots_vertical),
-                                                    contentDescription = stringResource(R.string.common_more),
+                                                    painterResource(R.drawable.ic_search),
+                                                    contentDescription = stringResource(R.string.common_search),
                                                     tint = colors.icon,
                                                     modifier = Modifier.size(18.dp),
                                                 )
                                             }
 
-                                            DropdownMenu(
-                                                expanded = showMoreMenu,
-                                                onDismissRequest = { showMoreMenu = false },
-                                                modifier =
-                                                    Modifier
-                                                        .background(
-                                                            colors.panel,
-                                                        ).border(1.dp, colors.border, RoundedCornerShape(10.dp)),
-                                            ) {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.common_import), color = colors.text) },
-                                                    onClick = {
-                                                        showMoreMenu = false
-                                                        importLauncher.launch(arrayOf("*/*"))
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            painterResource(R.drawable.ic_import),
-                                                            contentDescription = null,
-                                                            tint = colors.icon,
-                                                            modifier = Modifier.size(18.dp),
-                                                        )
-                                                    },
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.gallery_select), color = colors.text) },
-                                                    onClick = {
-                                                        showMoreMenu = false
-                                                        isSelectMode = true
-                                                        selectedProjects.clear()
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            painterResource(R.drawable.ic_circle_check),
-                                                            contentDescription = null,
-                                                            tint = colors.icon,
-                                                            modifier = Modifier.size(18.dp),
-                                                        )
-                                                    },
-                                                )
-                                                val defaultFolderName = stringResource(R.string.gallery_new_stack_default, (System.currentTimeMillis() % 1000).toInt())
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.gallery_new_stack), color = colors.text) },
-                                                    onClick = {
-                                                        showMoreMenu = false
-                                                        newFolderName = defaultFolderName
-                                                        showNewFolderDialog = true
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            painterResource(R.drawable.ic_folder_plus),
-                                                            contentDescription = null,
-                                                            tint = colors.icon,
-                                                            modifier = Modifier.size(18.dp),
-                                                        )
-                                                    },
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.gallery_refresh), color = colors.text) },
-                                                    onClick = {
-                                                        showMoreMenu = false
-                                                        vm.refreshProjects()
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            painterResource(R.drawable.ic_refresh),
-                                                            contentDescription = null,
-                                                            tint = colors.icon,
-                                                            modifier = Modifier.size(18.dp),
-                                                        )
-                                                    },
-                                                )
+                                            // More Menu icon button
+                                            Box {
+                                                Box(
+                                                    modifier =
+                                                        Modifier
+                                                            .size(34.dp)
+                                                            .clip(CircleShape)
+                                                            .clickable { showMoreMenu = true },
+                                                    contentAlignment = Alignment.Center,
+                                                ) {
+                                                    Icon(
+                                                        painterResource(R.drawable.ic_dots_vertical),
+                                                        contentDescription = stringResource(R.string.common_more),
+                                                        tint = colors.icon,
+                                                        modifier = Modifier.size(18.dp),
+                                                    )
+                                                }
+
+                                                HomeDropdownMenu(
+                                                    expanded = showMoreMenu,
+                                                    onDismissRequest = { showMoreMenu = false },
+                                                ) {
+                                                    HomeDropdownMenuItem(
+                                                        text = stringResource(R.string.common_import),
+                                                        icon = R.drawable.ic_import,
+                                                        onClick = {
+                                                            showMoreMenu = false
+                                                            importLauncher.launch(arrayOf("*/*"))
+                                                        },
+                                                    )
+                                                    HomeDropdownMenuItem(
+                                                        text = stringResource(R.string.gallery_select),
+                                                        icon = R.drawable.ic_circle_check,
+                                                        onClick = {
+                                                            showMoreMenu = false
+                                                            isSelectMode = true
+                                                            selectedProjects.clear()
+                                                        },
+                                                    )
+                                                    val defaultFolderName = stringResource(R.string.gallery_new_stack_default, (System.currentTimeMillis() % 1000).toInt())
+                                                    HomeDropdownMenuItem(
+                                                        text = stringResource(R.string.gallery_new_stack),
+                                                        icon = R.drawable.ic_folder_plus,
+                                                        onClick = {
+                                                            showMoreMenu = false
+                                                            newFolderName = defaultFolderName
+                                                            showNewFolderDialog = true
+                                                        },
+                                                    )
+                                                    HomeDropdownMenuItem(
+                                                        text = stringResource(R.string.gallery_refresh),
+                                                        icon = R.drawable.ic_refresh,
+                                                        onClick = {
+                                                            showMoreMenu = false
+                                                            vm.refreshProjects()
+                                                        },
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -1253,17 +1205,13 @@ fun HomePage(vm: PaintViewModel) {
                                             }
 
                                             // Long-press Context Dropdown Menu
-                                            DropdownMenu(
+                                            HomeDropdownMenu(
                                                 expanded = longPressedProject == p,
                                                 onDismissRequest = { longPressedProject = null },
-                                                modifier =
-                                                    Modifier
-                                                        .background(
-                                                            colors.panel,
-                                                        ).border(1.dp, colors.border, RoundedCornerShape(10.dp)),
                                             ) {
-                                                DropdownMenuItem(
-                                                    text = { Text(if (p.isFolder) stringResource(R.string.gallery_action_open_stack) else stringResource(R.string.gallery_action_open_artwork), color = colors.text) },
+                                                HomeDropdownMenuItem(
+                                                    text = if (p.isFolder) stringResource(R.string.gallery_action_open_stack) else stringResource(R.string.gallery_action_open_artwork),
+                                                    icon = R.drawable.ic_external_link,
                                                     onClick = {
                                                         longPressedProject = null
                                                         if (p.isFolder) {
@@ -1273,110 +1221,63 @@ fun HomePage(vm: PaintViewModel) {
                                                             vm.loadProject(p)
                                                         }
                                                     },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            painterResource(R.drawable.ic_external_link),
-                                                            contentDescription = null,
-                                                            tint = colors.icon,
-                                                            modifier = Modifier.size(18.dp),
-                                                        )
-                                                    },
                                                 )
                                                 if (!p.isFolder && p.hasRecording) {
-                                                    DropdownMenuItem(
-                                                        text = { Text(stringResource(R.string.gallery_action_replay), color = colors.accent) },
+                                                    HomeDropdownMenuItem(
+                                                        text = stringResource(R.string.gallery_action_replay),
+                                                        icon = R.drawable.ic_play,
+                                                        textColor = colors.accent,
+                                                        iconColor = colors.accent,
                                                         onClick = {
                                                             longPressedProject = null
                                                             vm.goReplay(p)
                                                         },
-                                                        leadingIcon = {
-                                                            Icon(
-                                                                painterResource(R.drawable.ic_play),
-                                                                contentDescription = null,
-                                                                tint = colors.accent,
-                                                                modifier = Modifier.size(18.dp),
-                                                            )
-                                                        },
                                                     )
                                                 }
                                                 if (!p.isFolder) {
-                                                    DropdownMenuItem(
-                                                        text = { Text(stringResource(R.string.gallery_action_share_artwork), color = colors.text) },
+                                                    HomeDropdownMenuItem(
+                                                        text = stringResource(R.string.gallery_action_share_artwork),
+                                                        icon = R.drawable.ic_share,
                                                         onClick = {
                                                             longPressedProject = null
                                                             shareProjectFile(context, p)
                                                         },
-                                                        leadingIcon = {
-                                                            Icon(
-                                                                painterResource(R.drawable.ic_share),
-                                                                contentDescription = null,
-                                                                tint = colors.icon,
-                                                                modifier = Modifier.size(18.dp),
-                                                            )
-                                                        },
                                                     )
-                                                    DropdownMenuItem(
-                                                        text = { Text(stringResource(R.string.home_draft_duplicate), color = colors.text) },
+                                                    HomeDropdownMenuItem(
+                                                        text = stringResource(R.string.home_draft_duplicate),
+                                                        icon = R.drawable.ic_copy,
                                                         onClick = {
                                                             longPressedProject = null
                                                             vm.duplicateProject(p)
                                                         },
-                                                        leadingIcon = {
-                                                            Icon(
-                                                                painterResource(R.drawable.ic_copy),
-                                                                contentDescription = null,
-                                                                tint = colors.icon,
-                                                                modifier = Modifier.size(18.dp),
-                                                            )
-                                                        },
                                                     )
-                                                    DropdownMenuItem(
-                                                        text = { Text(stringResource(R.string.gallery_action_move_to_stack), color = colors.text) },
+                                                    HomeDropdownMenuItem(
+                                                        text = stringResource(R.string.gallery_action_move_to_stack),
+                                                        icon = R.drawable.ic_folder_symlink,
                                                         onClick = {
                                                             longPressedProject = null
                                                             targetMoveProjects = listOf(p)
                                                             showMoveDialog = true
                                                         },
-                                                        leadingIcon = {
-                                                            Icon(
-                                                                painterResource(R.drawable.ic_folder_symlink),
-                                                                contentDescription = null,
-                                                                tint = colors.icon,
-                                                                modifier = Modifier.size(18.dp),
-                                                            )
-                                                        },
                                                     )
                                                 }
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.home_draft_rename), color = colors.text) },
+                                                HomeDropdownMenuItem(
+                                                    text = stringResource(R.string.home_draft_rename),
+                                                    icon = R.drawable.ic_pencil,
                                                     onClick = {
                                                         longPressedProject = null
                                                         targetRenameProject = p
                                                         newProjectName = p.name
                                                         showRenameDialog = true
                                                     },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            painterResource(R.drawable.ic_pencil),
-                                                            contentDescription = null,
-                                                            tint = colors.icon,
-                                                            modifier = Modifier.size(18.dp),
-                                                        )
-                                                    },
                                                 )
-                                                DropdownMenuItem(
-                                                    text = { Text(if (p.isFolder) stringResource(R.string.gallery_action_delete_stack) else stringResource(R.string.gallery_action_delete_artwork), color = Color(0xFFFF5252)) },
+                                                HomeDropdownMenuItem(
+                                                    text = if (p.isFolder) stringResource(R.string.gallery_action_delete_stack) else stringResource(R.string.gallery_action_delete_artwork),
+                                                    icon = R.drawable.ic_trash,
+                                                    isDestructive = true,
                                                     onClick = {
                                                         longPressedProject = null
                                                         projectToDelete = p
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            painterResource(R.drawable.ic_trash),
-                                                            contentDescription = null,
-                                                            tint = Color(0xFFFF5252),
-                                                            modifier = Modifier.size(18.dp),
-                                                        )
                                                     },
                                                 )
                                             }
@@ -1451,3 +1352,152 @@ fun HomePage(vm: PaintViewModel) {
         )
     }
 }
+
+@Composable
+private fun HomeSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClose: () -> Unit,
+    colors: AppColors,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    Row(
+        modifier = modifier
+            .width(260.dp)
+            .height(42.dp)
+            .clip(RoundedCornerShape(21.dp))
+            .background(colors.panel.copy(alpha = 0.90f))
+            .border(1.dp, colors.border, RoundedCornerShape(21.dp))
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_search),
+            contentDescription = null,
+            tint = colors.subText,
+            modifier = Modifier.size(17.dp),
+        )
+
+        Box(modifier = Modifier.weight(1f)) {
+            if (query.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.gallery_search_hint),
+                    color = colors.subText.copy(alpha = 0.7f),
+                    fontSize = 13.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = colors.text,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Normal,
+                ),
+                cursorBrush = SolidColor(colors.accent),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .clickable {
+                    if (query.isNotEmpty()) {
+                        onQueryChange("")
+                    } else {
+                        onClose()
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_x),
+                contentDescription = "Close",
+                tint = colors.subText,
+                modifier = Modifier.size(15.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val colors = Theme.current
+    val menuShape = RoundedCornerShape(16.dp)
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        shape = menuShape,
+        containerColor = colors.panelHi.copy(alpha = 0.98f),
+        tonalElevation = 0.dp,
+        shadowElevation = 14.dp,
+        border = BorderStroke(1.dp, colors.border.copy(alpha = 0.7f)),
+        modifier = modifier
+            .widthIn(min = 168.dp)
+            .padding(vertical = 4.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun HomeDropdownMenuItem(
+    text: String,
+    icon: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isDestructive: Boolean = false,
+    textColor: Color? = null,
+    iconColor: Color? = null,
+) {
+    val colors = Theme.current
+    val effectiveTextColor = textColor ?: if (isDestructive) Color(0xFFFF5252) else colors.text
+    val effectiveIconColor = iconColor ?: if (isDestructive) Color(0xFFFF5252) else colors.icon
+
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = text,
+                color = effectiveTextColor,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        },
+        onClick = onClick,
+        leadingIcon = {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = effectiveIconColor,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        colors = MenuDefaults.itemColors(
+            textColor = effectiveTextColor,
+            leadingIconColor = effectiveIconColor,
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+        modifier = modifier
+            .height(40.dp)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(10.dp)),
+    )
+}
+
