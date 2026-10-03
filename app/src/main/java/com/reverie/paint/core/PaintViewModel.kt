@@ -414,13 +414,17 @@ class PaintViewModel : ViewModel() {
      * AGSL 侧这一份仅用于"本帧文档脏区"基线(它不再建纹理, 见 `CanvasTouchView.drawCanvas`)。
      */
     internal fun pollLiquifyGpuPreview() {
-        // Phase 5 · C2: GLES 侧自己躲掉了(EGL/着色器/交换失败) ⇒ **当帧**把引擎切回 CPU 预览。
+        if (liquifyPresentation.isPending(liquifyPresentationGesture)) return
+        // GLES failure: retire the independent preview and restore document projection.
         // "要么 GPU 画, 要么引擎画"是这条线不可破的底线; 恢复动作必须在引擎线程做(JNI 时序由
         // ViewModel 保证), 只做一次 —— 失败后 LiquifyGlesPreview.failed 会挡掉后续手势的重试。
         if (LiquifyGlesPreview.failed && !lqGlesRecovered) {
             lqGlesRecovered = true
             LiquifyGlesPreview.clear()
-            ReverieCoreBridge.setLiquifyPreviewHostDrawMode(0)
+            // The old preview base must be retired together with the failed surface.
+            // 这里已经在引擎线程上, 可直接调 JNI。
+            ReverieCoreBridge.setLiquifyPreviewBaseRect(0, 0, 0, 0)
+            ReverieCoreBridge.setLiquifyPreviewHostDrawMode(2)
             return
         }
         if (!LiquifyGpuPreview.requested) {
@@ -466,7 +470,15 @@ class PaintViewModel : ViewModel() {
         // 脏区基线两条路都要: GLES 接管时 AGSL 侧不会被 draw(不会建纹理), 只贡献脏区计算
         LiquifyGpuPreview.update(crop, src, grid)
         if (useGles) {
-            LiquifyGlesPreview.update(crop, src, grid)
+            val underlay = if (src != null && LiquifyGlesPreview.fieldArmed) {
+                ByteArray(src.size).also {
+                    if (!ReverieCoreBridge.liquifyPreviewUnderlayPixelsInto(it)) {
+                        LiquifyGlesPreview.markFailed()
+                    }
+                }
+            } else null
+            if (LiquifyGlesPreview.failed) return
+            LiquifyGlesPreview.update(crop, src, grid, underlay)
             // 上报实际在画的那条路的读数(语义与 AGSL 侧同名字段一致)
             // Phase 3B: 源纹理上传次数(正常恒为 1; > 1 说明高速拖动中 rebase 过频)
             PerfTrace.liquifyUpload(LiquifyGlesPreview.sourceUploadCount)
@@ -3814,6 +3826,14 @@ class PaintViewModel : ViewModel() {
         h.post(r)
     }
 
+    @Volatile internal var liquifyPresentationGesture = 0L
+    internal val liquifyPresentation = com.reverie.paint.model.LiquifyPresentationFence<Bitmap>()
+
+    internal fun onLiquifyBitmapDrawn(bitmap: Bitmap) {
+        if (!liquifyPresentation.isPending(liquifyPresentationGesture)) return
+        if (liquifyPresentation.consume(liquifyPresentationGesture, bitmap)) LiquifyGpuPreview.clear()
+    }
+
     internal var renderDeferCount = 0
 
     internal fun doRender() {
@@ -3891,6 +3911,9 @@ class PaintViewModel : ViewModel() {
         if (!ok) {
             if (ReverieCoreBridge.renderPendingDirty()) {
                 rh?.postDelayed({ doRender() }, 8L)
+            } else if (liquifyPresentation.isPending(liquifyPresentationGesture)) {
+                displayBitmap?.let { liquifyPresentation.publish(liquifyPresentationGesture, it) }
+                com.reverie.paint.ui.painting.canvas.CanvasTouchView.activeTouchView?.invalidateFromRender()
             }
             return
         }
@@ -3914,6 +3937,7 @@ class PaintViewModel : ViewModel() {
         backBuffer = front
         frontBuffer = rendered
         displayBitmap = rendered
+        liquifyPresentation.publish(liquifyPresentationGesture, rendered)
 
         // 纹理重传代理量: 每翻转一次, 下一帧 HWUI 都要把整张 Bitmap 纹理重传一遍
         // (HWUI 不做局部纹理更新), 这是本项目最大的带宽开销

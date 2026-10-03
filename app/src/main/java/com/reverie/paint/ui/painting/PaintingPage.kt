@@ -319,6 +319,7 @@ fun PaintingPage(
     val tfState = remember { TransformState() }
     var gradientType by remember { mutableStateOf(0) }
     var liquifyStrength by remember { mutableStateOf(0.9f) }
+    var liquifyHardness by remember { mutableStateOf(0.5f) }
     var liquifyMode by remember { mutableStateOf(0) }
     var liquifyBrushSize by remember { mutableStateOf(60f) }
     // Point-click shape tools share the canvas vertex list
@@ -681,6 +682,7 @@ fun PaintingPage(
                 fillTolerance = vm.fillTolerance,
                 gradientType = gradientType,
                 liquifyStrength = liquifyStrength,
+                liquifyHardness = liquifyHardness,
                 liquifyMode = liquifyMode,
                 liquifyBrushSize = liquifyBrushSize,
                 overlayPanelsOpen = (brushPanelOpen && !(vm.panelPinningEnabled && vm.isBrushPanelPinned)) ||
@@ -1359,6 +1361,8 @@ fun PaintingPage(
                 vm = vm,
                 strength = liquifyStrength,
                 onStrength = { liquifyStrength = it },
+                hardness = liquifyHardness,
+                onHardness = { liquifyHardness = it },
                 mode = liquifyMode,
                 onMode = { liquifyMode = it },
                 brushSize = liquifyBrushSize,

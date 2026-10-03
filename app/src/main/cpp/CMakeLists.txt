@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.22)
 project(ReveriePaintNative)
 
+# Direct WSL/NDK builds need the same optimized engine as Gradle's native mode.
+# An unspecified configuration otherwise silently compiles the pixel loops at O0.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Native engine build configuration" FORCE)
+endif()
+add_compile_options($<$<CONFIG:Release>:-O2>)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -177,6 +184,20 @@ set(KRITA_LIBS
     ${KRITA_BIN_DIR}/lib/libkritahatchingpaintop.so
 )
 
+# Some RGB8 Android pigment bundles have no OpenEXR/half exports even when
+# their generated KoConfig.h enables it. Keep the default upstream behavior;
+# allow these bundles to compile the masking factory without unsupported FLOAT16.
+option(REVERIE_MASKING_FLOAT16 "Masking factory supports the pigment library FLOAT16 ABI" ON)
+set(REVERIE_MASK_FACTORY ${KRITA_SRC_DIR}/libs/ui/tool/strokes/KisMaskingBrushCompositeOpFactory.cpp)
+if(NOT REVERIE_MASKING_FLOAT16)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${REVERIE_MASK_FACTORY}")
+    file(READ ${REVERIE_MASK_FACTORY} REVERIE_MASK_FACTORY_TEXT)
+    string(REPLACE "#ifdef HAVE_OPENEXR" "#if 0 // Android pigment bundle has no FLOAT16 ABI"
+        REVERIE_MASK_FACTORY_TEXT "${REVERIE_MASK_FACTORY_TEXT}")
+    set(REVERIE_MASK_FACTORY ${CMAKE_CURRENT_BINARY_DIR}/KisMaskingBrushCompositeOpFactoryRgb.cpp)
+    file(WRITE ${REVERIE_MASK_FACTORY} "${REVERIE_MASK_FACTORY_TEXT}")
+endif()
+
 add_library(reverie_jni SHARED
     reverie_jni_core.cpp
     reverie_jni_layers.cpp
@@ -218,7 +239,7 @@ add_library(reverie_jni SHARED
     # (上游版本无条件查询 GrayA/U8, Android 无 lcms2 插件与 Gray ICC 时返回
     #  nullptr, 水彩类预设落笔即 SIGSEGV)。详见文件头注释。
     ReverieMaskingBrushRenderer.cpp
-    ${KRITA_SRC_DIR}/libs/ui/tool/strokes/KisMaskingBrushCompositeOpFactory.cpp
+    ${REVERIE_MASK_FACTORY}
 )
 
 target_include_directories(reverie_jni PRIVATE

@@ -8,6 +8,10 @@
  * ReverieCoreInternal.h, public API in ReverieCore.h)
  * ============================================================ */
 #include "ReverieCoreInternal.h"
+#include "PixelAlpha.h"
+#include "PixelRegion.h"
+#include "LiquifyMaterializeBatch.h"
+#include "LiquifyPixelSampling.h"
 #include "kis_liquify_transform_worker.h"
 #include <QtConcurrent/QtConcurrentMap>
 #include <chrono>
@@ -353,17 +357,19 @@ bool warpInverseField(const LiquifyInverseField &field, KisPaintDeviceSP src, Ki
                       const QRect &area, const QRect &doc)
 {
     if (!src || !dst || area.isEmpty() || doc.isEmpty()) return false;
-    if (src->colorSpace()->pixelSize() != 4) return false;
+    const int ps = src->colorSpace()->pixelSize();
+    if (ps != 4 && ps != 1) return false;
     float left = float(area.left()), top = float(area.top());
     float right = float(area.right()), bottom = float(area.bottom());
     // Bounds of a bilinear map attain their extrema at grid vertices. Include
     // every pixel here as the scratch offsets are also used by the sampling pass.
     thread_local std::vector<LiquifyInverseField::Point> offsets;
     offsets.resize(size_t(area.width()) * area.height());
+    LiquifyInverseField::SamplingCache cache;
     for (int y = 0; y < area.height(); ++y) {
         for (int x = 0; x < area.width(); ++x) {
             const float px = float(area.x() + x), py = float(area.y() + y);
-            const auto off = field.sample(px + .5f, py + .5f);
+            const auto off = field.sample(px + .5f, py + .5f, &cache);
             offsets[size_t(y) * area.width() + x] = off;
             left = std::min(left, px - off.x); right = std::max(right, px - off.x);
             top = std::min(top, py - off.y); bottom = std::max(bottom, py - off.y);
@@ -373,27 +379,32 @@ bool warpInverseField(const LiquifyInverseField &field, KisPaintDeviceSP src, Ki
                              QPoint(int(std::ceil(right)) + 1, int(std::ceil(bottom)) + 1)) & doc;
     if (need.isEmpty()) return false;
     thread_local QByteArray source, output;
-    source.resize(need.width() * need.height() * 4);
-    output.resize(area.width() * area.height() * 4);
+    source.resize(qint64(need.width()) * need.height() * ps);
+    output.resize(qint64(area.width()) * area.height() * ps);
     src->readBytes(reinterpret_cast<quint8 *>(source.data()), need.x(), need.y(), need.width(), need.height());
     const auto *bytes = reinterpret_cast<const quint8 *>(source.constData());
     auto *result = reinterpret_cast<quint8 *>(output.data());
     for (int y = 0; y < area.height(); ++y) {
         for (int x = 0; x < area.width(); ++x) {
             const auto off = offsets[size_t(y) * area.width() + x];
-            const float u = std::clamp(float(area.x() + x - need.x()) - off.x, 0.f, float(need.width() - 1));
-            const float v = std::clamp(float(area.y() + y - need.y()) - off.y, 0.f, float(need.height() - 1));
-            const int ix = int(u), iy = int(v);
-            const int jx = std::min(ix + 1, need.width() - 1), jy = std::min(iy + 1, need.height() - 1);
-            const float ax = u - ix, ay = v - iy;
-            for (int c = 0; c < 4; ++c) {
-                const float a = bytes[(size_t(iy) * need.width() + ix) * 4 + c];
-                const float b = bytes[(size_t(iy) * need.width() + jx) * 4 + c];
-                const float d = bytes[(size_t(jy) * need.width() + ix) * 4 + c];
-                const float e = bytes[(size_t(jy) * need.width() + jx) * 4 + c];
-                result[(size_t(y) * area.width() + x) * 4 + c] =
-                    quint8(std::clamp((a + (b - a) * ax) * (1 - ay) + (d + (e - d) * ax) * ay, 0.f, 255.f));
+            if (off.x == 0.f && off.y == 0.f) {
+                const auto *identity = bytes + (size_t(area.y() + y - need.y()) * need.width() +
+                    area.x() + x - need.x()) * ps;
+                auto *out = result + (size_t(y) * area.width() + x) * ps;
+                if (ps == 1 || identity[3]) memcpy(out, identity, ps);
+                else memset(out, 0, ps);
+                continue;
             }
+            const float u = float(area.x() + x - need.x()) - off.x;
+            const float v = float(area.y() + y - need.y()) - off.y;
+            const int ix = int(std::floor(u)), iy = int(std::floor(v));
+            static constexpr uint8_t transparent[4] = {};
+            const auto pixel = [&](int px, int py) -> const uint8_t * {
+                return px < 0 || py < 0 || px >= need.width() || py >= need.height()
+                    ? transparent : bytes + (size_t(py) * need.width() + px) * ps;
+            };
+            LiquifyPixelSampling::bilinear(pixel(ix,iy),pixel(ix+1,iy),pixel(ix,iy+1),pixel(ix+1,iy+1),
+                u-ix,v-iy,ps,result + (size_t(y)*area.width()+x)*ps);
         }
     }
     dst->writeBytes(result, area.x(), area.y(), area.width(), area.height());
@@ -492,12 +503,14 @@ void publishLiquifyStats(qint64 totalMs, qint64 warpMs, qint64 seedMs, qint64 bl
 // ---------------------------------------------------------------------------
 bool ReverieCore::liquifyPreviewHostDraw() const
 {
-    if (m_liquifyPreviewHostDrawMode >= 0) return m_liquifyPreviewHostDrawMode != 0;
+    if (m_liquifyPreviewHostDrawMode >= 0) return m_liquifyPreviewHostDrawMode == 1;
     return liquifyPreviewGpuRequested();
 }
 
 bool ReverieCore::liquifyPreviewWanted() const
 {
+    // Complex stacks need normal document projection, not a target-layer overlay.
+    if (m_liquifyPreviewHostDrawMode == 2 || m_liquifyGraphProjection) return false;
     // Kotlin 侧显式写了绘制模式(>= 0)就等于"这次手势要预览": 没有数据线时靠构建档位
     // (app/build.gradle.kts 的 -PlqTestProfile)也能测, 不必先设 property。
     // 0 = 引擎侧 CPU 叠加, 1 = 主机侧(AGSL)绘制。
@@ -507,7 +520,7 @@ bool ReverieCore::liquifyPreviewWanted() const
 
 void ReverieCore::setLiquifyPreviewHostDrawMode(int mode)
 {
-    m_liquifyPreviewHostDrawMode = mode < 0 ? -1 : (mode > 0 ? 1 : 0);
+    m_liquifyPreviewHostDrawMode = mode < 0 ? -1 : qMin(mode, 2);
 }
 
 void ReverieCore::resetLiquifyWorker()
@@ -517,6 +530,7 @@ void ReverieCore::resetLiquifyWorker()
         t.worker = nullptr;
         t.src.clear();
         t.dst.clear();
+        t.maskedDst.clear();
     }
     m_liquifyInverseField.reset();
     m_liquifyWorkerBounds = QRect();
@@ -525,6 +539,10 @@ void ReverieCore::resetLiquifyWorker()
     // Phase 6/7: 分帧物化队列与去重键随 worker 一起作废(队列里的区域属于上一段手势的网格)
     m_liquifyMatQueue.clear();
     m_liquifyMatKeys.clear();
+    // 预览基座随手势一起摘掉: 目标图层必须立刻回到画布合成里(否则那块区域会一直少一层),
+    // 摘掉时会把旧矩形标脏, 让下一次渲染按真实文档重读。
+    invalidateLiquifyPreviewBase();
+    m_liquifyPreviewBaseLayer = -1;
     m_liquifyApplyIntervalMs = LIQUIFY_APPLY_MIN_INTERVAL_MS;
     m_liquifyPrecision = 16;
     m_liquifyPreviewTarget = -1;
@@ -535,11 +553,31 @@ void ReverieCore::resetLiquifyWorker()
     // 释放预览缓冲: bounds 可能上百万像素, 不 squeeze 就会把容量留到下一次手势
     m_liquifyPreviewSrc = QVector<quint8>();
     m_liquifyPreviewOut = QVector<quint8>();
+    m_liquifyPreviewUnderlay = QVector<quint8>();
     m_liquifyPreviewSrcRgba = QVector<quint8>();
     s_liquifyDeltaBudgetPx.store(LIQUIFY_DELTA_BUDGET_DEFAULT_PX);
 }
 
-void ReverieCore::liquifyApplyLocked(const QRect &deltaRect)
+void ReverieCore::liquifyRecomposeProjection(const QRect &area)
+{
+    if (!m_document || m_soloedNode || area.isEmpty()) return;
+    if (m_liquifyGraphProjection) {
+        // The flat synchronous compositor reads paint devices and treats masks
+        // as ordinary leaves. Only Krita can evaluate transform/filter masks,
+        // inherited alpha and pass-through groups with the correct dependency area.
+        recompositeProjection();
+        markDirty(); // Transform/filter masks may affect pixels outside the dab.
+        return;
+    }
+    KisPaintDeviceSP projection = m_document->projection();
+    const QRect clipped = area & QRect(0, 0, m_document->width(), m_document->height());
+    if (projection && !clipped.isEmpty()) {
+        projection->clear(clipped);
+        compositeLayersRange(projection, 0, m_layers.size(), clipped);
+    }
+}
+
+void ReverieCore::liquifyApplyLocked(const QRect &deltaRect, bool compositeProjection)
 {
     if (m_liquifyTargets.isEmpty() || !m_document) {
         return;
@@ -596,17 +634,27 @@ void ReverieCore::liquifyApplyLocked(const QRect &deltaRect)
             // Transparent samples are valid warped pixels, not holes to fill.
             tSeedMs += QDateTime::currentMSecsSinceEpoch() - ts0;
             const qint64 tb0 = QDateTime::currentMSecsSinceEpoch();
+            KisPaintDeviceSP result = t.dst;
+            if (m_selection || (t.layer && t.layer->alphaLocked())) {
+                // Apply coverage to the pristine source, never to a previously
+                // materialized result. Repeated soft-selection writes otherwise
+                // approach full coverage and depend on the drain/frame budget.
+                if (!t.maskedDst) t.maskedDst = new KisPaintDevice(t.device->colorSpace());
+                t.maskedDst->makeCloneFrom(t.src, area);
+                KisPainter masked(t.maskedDst);
+                masked.setCompositeOpId(COMPOSITE_COPY);
+                if (m_selection) masked.setSelection(m_selection);
+                masked.setChannelFlags(t.layer && t.layer->alphaLocked()
+                    ? t.layer->channelLockFlags() : QBitArray());
+                masked.bitBlt(area.topLeft(), t.dst, area);
+                masked.end();
+                result = t.maskedDst;
+            }
             KisPainter p(t.device);
             p.setCompositeOpId(COMPOSITE_COPY);
-            if (m_selection) {
-                p.setSelection(m_selection);
-            }
-            // Alpha-locked layer keeps its silhouette: only the colour
-            // channels follow the warp (same flags the stroke path uses)
-            p.setChannelFlags(t.layer && t.layer->alphaLocked() ? t.layer->channelLockFlags()
-                                                                : QBitArray());
-            p.bitBlt(area.topLeft(), t.dst, area);
+            p.bitBlt(area.topLeft(), result, area);
             p.end();
+            t.written = true;
             t.device->setDirty(area);
             tBlitMs += QDateTime::currentMSecsSinceEpoch() - tb0;
             dirtyUnion = dirtyUnion.isNull() ? area : dirtyUnion.united(area);
@@ -619,15 +667,7 @@ void ReverieCore::liquifyApplyLocked(const QRect &deltaRect)
         // 渲染路径此时读投影就会拿到半更新像素 (白线/撕裂的第二个成因)。放在这里做,
         // 重活就落在"按 20~64ms 节流的 apply"上, 而不是每个输入事件一次的渲染路径上 ——
         // 大笔刷下这是数量级的差别 (200px 笔刷单次脏区可达数百万像素)。
-        if (!m_soloedNode && m_document) {
-            KisPaintDeviceSP proj = m_document->projection();
-            const QRect c = dirtyUnion.intersected(
-                QRect(0, 0, m_document->width(), m_document->height()));
-            if (proj && !c.isEmpty()) {
-                proj->clear(c);
-                compositeLayersRange(proj, 0, m_layers.size(), c);
-            }
-        }
+        if (compositeProjection) liquifyRecomposeProjection(dirtyUnion);
         tCompositeMs = QDateTime::currentMSecsSinceEpoch() - tc0;
     }
     m_liquifyLastApplyMs = QDateTime::currentMSecsSinceEpoch();
@@ -679,7 +719,7 @@ void ReverieCore::liquifyEnqueueMaterialize(const QRect &rect)
         for (int x = clipped.left() / width * width; x <= clipped.right(); x += width) {
             const qint64 key = (qint64(y) << 32) | quint32(x);
             if (m_liquifyMatKeys.contains(key)) continue;
-            m_liquifyMatKeys.append(key);
+            m_liquifyMatKeys.insert(key);
             m_liquifyMatQueue.append(QRect(x, y, width, height).intersected(
                 QRect(0, 0, m_document->width(), m_document->height())));
         }
@@ -692,27 +732,36 @@ bool ReverieCore::liquifyDrainMaterialize(bool force)
     const qint64 budget = liquifyMatBudgetMs();
     // 预算 0 = 关闭分帧物化: 队列只在抬笔/超限的 force 调用里被清空(旧行为)
     if (!force && budget <= 0) return false;
-    // 出队即清去重键(同一区域之后可以再次入队 —— 那时它又有了新位移)
-    const auto consume = [this](const QRect &band) {
-        const qint64 key = (qint64(band.y()) << 32) | quint32(band.x());
-        m_liquifyMatKeys.removeOne(key);
-        // 每个行带独立物化(选区/Alpha 锁/脏区/投影合成语义与整块物化逐条一致):
-        // 同一像素反复物化是幂等的(build-up 语义下位移不会再变), 分带与整块结果相同。
-        liquifyApplyLocked(band);
-        // Writeback is a cache of original(p - field(p)); the field stays intact.
-    };
-    if (force) {
-        // 收口路径(抬笔 / 队列超限): 必须全部落盘, 不做时间检查
-        while (!m_liquifyMatQueue.isEmpty()) {
-            consume(m_liquifyMatQueue.takeFirst());
-        }
-        return true;
-    }
     const qint64 t0 = QDateTime::currentMSecsSinceEpoch();
+    QRect changed;
     while (!m_liquifyMatQueue.isEmpty()) {
-        // 先把第一带做掉(保证前进), 之后按预算停 —— 预算再小也不会"空转不前进"
-        consume(m_liquifyMatQueue.takeFirst());
-        if (QDateTime::currentMSecsSinceEpoch() - t0 >= budget) break;
+        // Adjacent tiles on one row share a single warp/painter/composite operation.
+        // Keep the interactive quantum bounded; pen-up can consume a full row.
+        QRect band = m_liquifyMatQueue.first();
+        const int maxWidth = force ? m_document->width() : 512;
+        const int count = LiquifyMaterializeBatch::adjacentCount(m_liquifyMatQueue, maxWidth);
+        band = band.united(m_liquifyMatQueue[count - 1]);
+        for (int i = 0; i < count; ++i) {
+            const QRect &tile = m_liquifyMatQueue[i];
+            m_liquifyMatKeys.remove((qint64(tile.y()) << 32) | quint32(tile.x()));
+        }
+        m_liquifyMatQueue.remove(0, count);
+        // Warp/copy multiple bands first. Recompose once per drain, not once per
+        // 32-row chunk: no renderer can observe this engine-thread batch midway.
+        liquifyApplyLocked(band, false);
+        changed = changed.isEmpty() ? band : changed.united(band);
+        if (!force && QDateTime::currentMSecsSinceEpoch() - t0 >= budget) break;
+    }
+    if (!changed.isEmpty() && !m_soloedNode && m_document) {
+        const qint64 compositeStart = QDateTime::currentMSecsSinceEpoch();
+        liquifyRecomposeProjection(changed);
+        const qint64 compositeMs = QDateTime::currentMSecsSinceEpoch() - compositeStart;
+        const qint64 totalMs = QDateTime::currentMSecsSinceEpoch() - t0;
+        s_liquifyStats[LqComposite].store(compositeMs, std::memory_order_relaxed);
+        s_liquifyStats[LqTotal].store(totalMs, std::memory_order_relaxed);
+        s_liquifyStats[LqAreaPx].store(qint64(changed.width()) * changed.height(), std::memory_order_relaxed);
+        m_liquifyLastApplyMs = QDateTime::currentMSecsSinceEpoch();
+        m_liquifyApplyIntervalMs = qBound<qint64>(LIQUIFY_APPLY_MIN_INTERVAL_MS, totalMs * 2, 64);
     }
     return m_liquifyMatQueue.isEmpty();
 }
@@ -730,6 +779,15 @@ void ReverieCore::liquifyBegin(const QVector<int> &layers)
     }
     resetLiquifyWorker();
     m_liquifyTargets.clear();
+    m_liquifyGraphProjection = false;
+    for (const LayerEntry &entry : m_layers) {
+        const KisGroupLayer *group = dynamic_cast<KisGroupLayer *>(entry.node);
+        if (entry.node && (dynamic_cast<KisMask *>(entry.node) || entry.clipped ||
+            (group && group->passThroughMode()))) {
+            m_liquifyGraphProjection = true;
+            break;
+        }
+    }
 
     // Resolve the target set: explicit list (multi-select), else the
     // current layer. Duplicate and out-of-range entries are skipped, group
@@ -741,6 +799,16 @@ void ReverieCore::liquifyBegin(const QVector<int> &layers)
     QVector<KisPaintDeviceSP> seen;
     for (int idx : targets) {
         if (idx < 0 || idx >= m_layers.size()) continue;
+        const LayerEntry &entry = m_layers[idx];
+        // Projections belong to the graph, not to an editable source. In particular
+        // writing a group projection disappears on the next graph refresh.
+        if (!isLayerEditable(idx) || !entry.node ||
+            (!dynamic_cast<KisPaintLayer *>(entry.node) && !dynamic_cast<KisMask *>(entry.node))) continue;
+        bool locked = false;
+        for (KisNodeSP node = entry.node; node; node = node->parent()) {
+            if (node->userLocked()) { locked = true; break; }
+        }
+        if (locked) continue;
         KisPaintDeviceSP dev = layerPaintDeviceFor(m_layers[idx]);
         if (!dev) continue;
         bool dup = false;
@@ -770,14 +838,28 @@ void ReverieCore::liquifyBegin(const QVector<int> &layers)
             break;
         }
     }
+    // 预览基座: 记下预览目标图层在 **m_layers** 里的下标 —— 预览期间画布要把它排除掉,
+    // 否则被形变搬走的原始像素会留在原地(透明画布上的残影)。解析不到(遮罩/投影等非图层
+    // 目标)就保持 -1, 此时退回改动前的行为, 绝不猜。
+    m_liquifyPreviewBaseLayer = -1;
+    if (m_liquifyPreviewTarget >= 0) {
+        const KisPaintDeviceSP pv = m_liquifyTargets[m_liquifyPreviewTarget].device;
+        for (int i = 0; i < m_layers.size(); ++i) {
+            if (m_layers[i].node && layerPaintDeviceFor(m_layers[i]) == pv) {
+                m_liquifyPreviewBaseLayer = i;
+                break;
+            }
+        }
+    }
     RPC_TRACE("liquifyBegin req=%d targets=%d previewTarget=%d cur=%d layerN=%d active=%d",
               int(layers.size()), int(m_liquifyTargets.size()), m_liquifyPreviewTarget,
               m_currentLayer, int(m_layers.size()), int(m_liquifyTxnActive));
     if (m_liquifyTargets.isEmpty()) {
         return;
     }
-    int fieldStep = 1;
-    while (fieldStep < 16 && fieldStep * 2 <= m_liquifyBrushSize / 16.0) fieldStep *= 2;
+    const int fieldStep = LiquifyInverseField::stepForDocument(
+        m_liquifyProfessional ? 0 : m_document->width(), m_liquifyProfessional ? 0 : m_document->height(),
+        float(m_liquifyBrushSize / (m_liquifyProfessional ? 4 : 1)));
     m_liquifyInverseField.reset(m_document->width(), m_document->height(), fieldStep);
     m_liquifyTxnActive = true;
     // The grid workers need the dab position - they are created lazily by
@@ -814,7 +896,8 @@ void ReverieCore::liquifyEnd()
     QVector<KUndo2Command *> children;
     for (LiquifyTarget &t : m_liquifyTargets) {
         if (t.txn) {
-            children << t.txn->endAndTake();
+            if (t.written) children << t.txn->endAndTake();
+            else t.txn->end();
             delete t.txn;
             t.txn = nullptr;
         }
@@ -877,7 +960,8 @@ void ReverieCore::liquifyCancel()
 bool ReverieCore::liquifyFieldSource(int x, int y, int w, int h)
 {
     // 只允许"手势进行中"取源: 这条路唯一的调用点是 liquifyBegin 之后, 手滑传进来也不该动状态
-    if (!m_document || !m_liquifyTxnActive || m_liquifyTargets.size() != 1) return false;
+    if (!m_document || !m_liquifyTxnActive || m_liquifyGraphProjection ||
+        m_liquifyTargets.size() != 1) return false;
     const QRect docRect(0, 0, m_document->width(), m_document->height());
     const QRect b = QRect(x, y, w, h).intersected(docRect);
     if (b.isEmpty() || b.width() <= 0 || b.height() <= 0) return false;
@@ -891,9 +975,36 @@ bool ReverieCore::liquifyFieldSource(int x, int y, int w, int h)
     if (pi < 0 || pi >= m_liquifyTargets.size() || !m_liquifyTargets[pi].visible) return false;
     KisPaintDeviceSP src = m_liquifyTargets[pi].device;
     if (!src) return false;
+    KisPaintLayer *layer = m_liquifyTargets[pi].layer;
+    // Enforce this at the engine boundary as well as in the UI mirror. A child
+    // mask's effect is not present in raw paintDevice pixels.
+    if (!layer || layer->childCount() != 0 || layer->opacity() != 255 ||
+        layer->compositeOpId() != COMPOSITE_OVER || layer->alphaLocked() ||
+        layer->alphaChannelDisabled() || m_selection || m_soloedNode) return false;
     const KoColorSpace *cs = src->colorSpace();
     const int ps = cs ? cs->pixelSize() : 0;
     if (ps != 4) return false;
+
+    // Only a top-level topmost paint layer can be composed over a static underlay.
+    // Layers above the target (including adjustments) require document projection.
+    const int targetIndex = m_liquifyPreviewBaseLayer;
+    if (targetIndex < 0 || targetIndex >= m_layers.size() || m_layers[targetIndex].depth != 0)
+        return false;
+    for (int i = targetIndex + 1; i < m_layers.size(); ++i) {
+        if (m_layers[i].visible) return false;
+    }
+    KisPaintDeviceSP underlay(new KisPaintDevice(cs));
+    underlay->clear(b);
+    compositeLayersRange(underlay, 0, m_layers.size(), b, targetIndex);
+    m_liquifyPreviewUnderlay.resize(int(px) * 4);
+    thread_local QVector<quint8> underlayBand;
+    underlayBand.resize(b.width() * 64 * 4);
+    for (int row = 0; row < b.height(); row += 64) {
+        const int rows = qMin(64, b.height() - row);
+        underlay->readBytes(underlayBand.data(), b.x(), b.y() + row, b.width(), rows);
+        PixelAlpha::toDisplay(underlayBand.constData(),
+            m_liquifyPreviewUnderlay.data() + qint64(row) * b.width() * 4, size_t(rows) * b.width());
+    }
 
     // 按需只准备**消费端真正要的那一份**:
     //  - 主机侧绘制(AGSL/GLES 覆盖层)只吃 RGBA8888 ⇒ 逐行带从 device 读并展开即可;
@@ -911,12 +1022,7 @@ bool ReverieCore::liquifyFieldSource(int x, int y, int w, int h)
             src->readBytes(bandBuf.data(), b.x(), b.y() + y0, b.width(), rows);
             const quint8 *s = bandBuf.constData();
             quint8 *d = m_liquifyPreviewSrcRgba.data() + qint64(y0) * b.width() * 4;
-            for (qint64 i = 0, n = qint64(rows) * b.width(); i < n; ++i) {
-                d[i * 4 + 0] = s[i * 4 + 2]; // BGRA -> RGBA(预乘; 与既有主机侧绘制同一假设)
-                d[i * 4 + 1] = s[i * 4 + 1];
-                d[i * 4 + 2] = s[i * 4 + 0];
-                d[i * 4 + 3] = s[i * 4 + 3];
-            }
+            PixelAlpha::toDisplay(s, d, size_t(rows) * b.width());
         }
     } else {
         m_liquifyPreviewSrc.resize(int(px) * ps);
@@ -944,7 +1050,9 @@ bool ReverieCore::liquifyFieldCommitPtr(int x, int y, int w, int h, const quint8
 {
     // 稳定性硬闸: 只接受"手势进行中"的提交, 且范围/字节数都在明确定义的上限内。
     // 高压连续测试下这里是这条路唯一的大块数据入口, 任何越界都会直接崩进程。
-    if (!m_document || !m_liquifyTxnActive || m_liquifyTargets.isEmpty()) return false;
+    if (!m_document || !m_liquifyTxnActive || !m_liquifyFieldMode ||
+        m_liquifyTargets.size() != 1 || !m_liquifyTargets[0].layer ||
+        m_liquifyTargets[0].device->colorSpace()->pixelSize() != 4) return false;
     if (w <= 0 || h <= 0 || !rgba) return false;
     const qint64 pxIn = qint64(w) * qint64(h);
     if (pxIn > LIQUIFY_FIELD_COMMIT_MAX_PX) return false;
@@ -969,7 +1077,7 @@ bool ReverieCore::liquifyFieldCommitPtr(int x, int y, int w, int h, const quint8
         const QRect a = area.intersected(clipRect);
         if (a.isEmpty()) continue;
         if (!t.dst) t.dst = new KisPaintDevice(t.device->colorSpace());
-        // RGBA(预乘) -> 设备字节序(BGRA, 也是预乘): 逐行转换后写进 dst, 再按选区分块回写。
+        // Premultiplied RGBA readback -> straight BGRA device pixels, then selection-aware copy.
         // bottomUp = GL 读回的原始行序(首行是矩形最后一行), 在这里翻正 —— 免得 Kotlin 侧
         // 再走一遍整块像素。
         const int rowBytes = a.width() * ps;
@@ -981,12 +1089,7 @@ bool ReverieCore::liquifyFieldCommitPtr(int x, int y, int w, int h, const quint8
             if (srcRow < 0 || srcRow >= h) continue;
             const quint8 *srow = rgba + (qint64(srcRow) * w + (a.x() - x)) * ps;
             quint8 *drow = rowBuf.data();
-            for (int c = 0; c < a.width(); ++c) {
-                drow[c * 4 + 0] = srow[c * 4 + 2];
-                drow[c * 4 + 1] = srow[c * 4 + 1];
-                drow[c * 4 + 2] = srow[c * 4 + 0];
-                drow[c * 4 + 3] = srow[c * 4 + 3];
-            }
+            PixelAlpha::toDevice(srow, drow, size_t(a.width()));
             t.dst->writeBytes(drow, a.x(), dstRow, a.width(), 1);
         }
         const qint64 tb0 = QDateTime::currentMSecsSinceEpoch();
@@ -999,6 +1102,7 @@ bool ReverieCore::liquifyFieldCommitPtr(int x, int y, int w, int h, const quint8
         p.setChannelFlags(t.layer && t.layer->alphaLocked() ? t.layer->channelLockFlags() : QBitArray());
         p.bitBlt(a.topLeft(), t.dst, a);
         p.end();
+        t.written = true;
         t.device->setDirty(a);
         tBlitMs += QDateTime::currentMSecsSinceEpoch() - tb0;
         dirtyUnion = dirtyUnion.isNull() ? a : dirtyUnion.united(a);
@@ -1009,15 +1113,7 @@ bool ReverieCore::liquifyFieldCommitPtr(int x, int y, int w, int h, const quint8
         markRegionDirty(dirtyUnion);
         // 与 liquifyApplyLocked 逐行同义: 让后台调度器之外的那次同步合成立刻发生, 否则渲染
         // 路径此刻读投影会拿到半更新像素(白线/撕裂的第二个成因)
-        if (!m_soloedNode && m_document) {
-            KisPaintDeviceSP proj = m_document->projection();
-            const QRect c = dirtyUnion.intersected(
-                QRect(0, 0, m_document->width(), m_document->height()));
-            if (proj && !c.isEmpty()) {
-                proj->clear(c);
-                compositeLayersRange(proj, 0, m_layers.size(), c);
-            }
-        }
+        liquifyRecomposeProjection(dirtyUnion);
         tCompositeMs = QDateTime::currentMSecsSinceEpoch() - tc0;
     }
 
@@ -1060,9 +1156,8 @@ void ReverieCore::liquifyRebaseStats(qint64 *out)
     }
 }
 
-// 导出当前液化网格状态(只读)。数据来源是 worker 自己的 originalPoints/transformedPoints ——
-// 也就是 run() 做分段线性 warping 用的那一份网格, 所以"预览用的几何"与"最终提交的几何"同源。
-// 注意 transformedPoints() 是非 const 访问器, 因此本函数不能是 const。
+// Legacy grid consumers sample the authoritative backward field on demand.
+// Field preview and document materialization do not need a rebuilt worker grid.
 ReverieCore::LiquifyGridExport ReverieCore::liquifyGridExport()
 {
     LiquifyGridExport out;
@@ -1072,8 +1167,7 @@ ReverieCore::LiquifyGridExport ReverieCore::liquifyGridExport()
 
     const QSize gs = w->gridSize();
     const QVector<QPointF> &orig = w->originalPoints();
-    QVector<QPointF> &dst = w->transformedPoints();
-    const int n = qMin(orig.size(), dst.size());
+    const int n = orig.size();
     // 数据不完整就整体放弃: 宁可没有预览, 也不给上层一份错位的位移场
     if (gs.width() <= 0 || gs.height() <= 0 || n <= 0 || n != gs.width() * gs.height()) {
         return out;
@@ -1086,9 +1180,11 @@ ReverieCore::LiquifyGridExport ReverieCore::liquifyGridExport()
     out.count = n;
     out.original.reserve(n);
     out.offset.reserve(n);
+    LiquifyInverseField::SamplingCache cache;
     for (int i = 0; i < n; ++i) {
         out.original.append(orig[i]);
-        out.offset.append(dst[i] - orig[i]);
+        const auto off = m_liquifyInverseField.sample(float(orig[i].x()), float(orig[i].y()), &cache);
+        out.offset.append(QPointF(off.x, off.y));
     }
     return out;
 }
@@ -1119,12 +1215,14 @@ void ReverieCore::liquifyPreviewCaptureLocked()
         m_liquifyPreviewH = 0;
         m_liquifyPreviewOut = QVector<quint8>();
         m_liquifyPreviewSrcRgba = QVector<quint8>();
+        invalidateLiquifyPreviewBase();
         return;
     }
     KisPaintDeviceSP src = m_liquifyTargets[pi].src;
     const QRect b = m_liquifyWorkerBounds;
     if (!src || b.isEmpty() || b.width() <= 0 || b.height() <= 0) {
         m_liquifyPreview = false;
+        invalidateLiquifyPreviewBase();
         return;
     }
     const KoColorSpace *cs = src->colorSpace();
@@ -1138,6 +1236,14 @@ void ReverieCore::liquifyPreviewCaptureLocked()
     m_liquifyPreviewSrc.resize(b.width() * b.height() * ps);
     src->readBytes(m_liquifyPreviewSrc.data(), b.x(), b.y(), b.width(), b.height());
 
+    // 预览基座(残影修复): 本段手势的预览就盖在这块 worker bounds 上, 所以画布在这块里必须
+    // **排除目标图层** —— 形变后的目标图层由预览(引擎 CPU 叠加或 GPU 覆盖层)提供。
+    // 场通路的裁剪是整篇文档(真正出图的只有受影响矩形), 基座矩形改由 Kotlin 侧推送,
+    // 见 setLiquifyPreviewBaseRect —— 两条路互斥: 场通路不进这个函数。
+    if (!m_liquifyFieldMode) {
+        setLiquifyPreviewBaseRect(b.x(), b.y(), b.width(), b.height());
+    }
+
     // Phase 2B: 主机侧绘制要的是"未形变"的源裁剪(RGBA8888, 1 像素 = 1 文档像素), 它在 rebase 时
     // 才需要重建, 因此整段手势只上传一次纹理。超过预算就放弃, 由调用方回退到 CPU 预览。
     const qint64 px = qint64(b.width()) * qint64(b.height());
@@ -1145,12 +1251,8 @@ void ReverieCore::liquifyPreviewCaptureLocked()
         m_liquifyPreviewSrcRgba.resize(int(px) * 4);
         const quint8 *s = m_liquifyPreviewSrc.constData();
         quint8 *d = m_liquifyPreviewSrcRgba.data();
-        for (qint64 i = 0; i < px; ++i) {
-            d[i * 4 + 0] = s[i * 4 + 2]; // BGRA -> RGBA (与 1:1 渲染路径同一假设)
-            d[i * 4 + 1] = s[i * 4 + 1];
-            d[i * 4 + 2] = s[i * 4 + 0];
-            d[i * 4 + 3] = s[i * 4 + 3];
-        }
+        PixelAlpha::toDisplay(s, d, size_t(px));
+
         // 主机侧绘制时引擎不生成预览像素: 明确把 CPU 预览尺寸归零, 免得两套叠加同时生效
         m_liquifyPreviewW = 0;
         m_liquifyPreviewH = 0;
@@ -1179,6 +1281,13 @@ void ReverieCore::liquifyPreviewBuildLocked()
     const QVector<QPointF> &orig = w->originalPoints();
     QVector<QPointF> &dst = w->transformedPoints();
     const int n = qMin(orig.size(), dst.size());
+    // Only this legacy CPU preview consumes transformedPoints. Populate it here,
+    // rather than traversing every target's whole grid after each input batch.
+    LiquifyInverseField::SamplingCache cache;
+    for (int i = 0; i < n; ++i) {
+        const auto off = m_liquifyInverseField.sample(float(orig[i].x()), float(orig[i].y()), &cache);
+        dst[i] = orig[i] + QPointF(off.x, off.y);
+    }
     const QRect b = m_liquifyWorkerBounds;
     const int cols = gs.width();
     const int rows = gs.height();
@@ -1234,32 +1343,25 @@ void ReverieCore::liquifyPreviewBuildLocked()
             qreal oy = 0.0;
             gridOffset(docX, docY, &ox, &oy);
             // 反向采样: 源位置 = 目标位置 - 位移(与 Krita 的前向搬运在纯平移下等价)
-            const qreal u = qBound<qreal>(0.0, docX - ox - b.left(), bw - 1.0);
-            const qreal v = qBound<qreal>(0.0, docY - oy - b.top(), bh - 1.0);
-            const int x0 = int(u);
-            const int y0 = int(v);
-            const int x1 = qMin(x0 + 1, bw - 1);
-            const int y1 = qMin(y0 + 1, bh - 1);
+            const qreal u = docX - ox - b.left() - 0.5;
+            const qreal v = docY - oy - b.top() - 0.5;
+            const int x0 = int(std::floor(u));
+            const int y0 = int(std::floor(v));
             const qreal fx = u - x0;
             const qreal fy = v - y0;
-            const quint8 *p00 = src + (size_t(y0) * bw + x0) * ps;
-            const quint8 *p10 = src + (size_t(y0) * bw + x1) * ps;
-            const quint8 *p01 = src + (size_t(y1) * bw + x0) * ps;
-            const quint8 *p11 = src + (size_t(y1) * bw + x1) * ps;
+            const quint8 transparent[4] = {0, 0, 0, 0};
+            const auto pixel = [&](int x, int y) -> const quint8 * {
+                return x >= 0 && x < bw && y >= 0 && y < bh
+                    ? src + (size_t(y) * bw + x) * ps : transparent;
+            };
+            const quint8 *p00 = pixel(x0, y0);
+            const quint8 *p10 = pixel(x0 + 1, y0);
+            const quint8 *p01 = pixel(x0, y0 + 1);
+            const quint8 *p11 = pixel(x0 + 1, y0 + 1);
             quint8 *o = out + (size_t(py) * pw + px) * 4;
-            // 文档色彩空间是 8bit BGRA(与 1:1 渲染路径同一假设): 采样后交换 R/B 输出 RGBA
-            for (int ch = 0; ch < 4; ++ch) {
-                const qreal top = p00[ch] * (1 - fx) + p10[ch] * fx;
-                const qreal bot = p01[ch] * (1 - fx) + p11[ch] * fx;
-                const quint8 val = quint8(qBound<qreal>(0.0, top * (1 - fy) + bot * fy, 255.0));
-                if (ch == 0) {
-                    o[2] = val;
-                } else if (ch == 2) {
-                    o[0] = val;
-                } else {
-                    o[ch] = val;
-                }
-            }
+            uint8_t straight[4];
+            PixelAlpha::bilinear(p00,p10,p01,p11,float(fx),float(fy),straight);
+            PixelAlpha::toDisplay(straight,o,1);
         }
     }
     // 预览区必须进入脏区: renderToBuffer 的增量路径只重读脏区, 不标脏就永远叠不上去。
@@ -1303,10 +1405,129 @@ void ReverieCore::liquifyPreviewSourceMeta(int *out)
     out[6] = int(m_liquifyPreviewSeq);
 }
 
+bool ReverieCore::liquifyPreviewUnderlayPixels(quint8 *out)
+{
+    if (!out || !m_liquifyFieldMode || m_liquifyPreviewUnderlay.isEmpty()) return false;
+    memcpy(out, m_liquifyPreviewUnderlay.constData(), size_t(m_liquifyPreviewUnderlay.size()));
+    return true;
+}
+
 void ReverieCore::liquifyPreviewSourcePixels(quint8 *out)
 {
     if (!out || m_liquifyPreviewSrcRgba.isEmpty()) return;
     memcpy(out, m_liquifyPreviewSrcRgba.constData(), size_t(m_liquifyPreviewSrcRgba.size()));
+}
+
+// ---------------------------------------------------------------------------
+// 预览基座(透明残影修复, 见 docs/LIQUIFY-TRANSPARENCY.md 第三轮):
+//
+// 交互预览只携带**目标图层**的形变像素, 却被叠在"已经合成好的文档"之上。于是被形变搬走的
+// 那些原始像素会留在原地透出来 —— 画布不透明时形变后的像素把原地盖住, 看不出来; 一旦画布
+// 是透明的(或图层本身有透明区), 原地与被搬过来的内容同时可见, 就是用户看到的"残影"。
+//
+// 修法**完全不碰液化算法**(几何、参数、流程、写回像素都不变): 预览期间把画布里"预览覆盖的
+// 那块区域"换成"不含目标图层"的底图, 目标图层改由预览提供 —— 预览对同一块区域是**替换**
+// 而不是叠加。
+// ---------------------------------------------------------------------------
+
+void ReverieCore::setLiquifyPreviewBaseRect(int x, int y, int w, int h)
+{
+    if (!m_document) return;
+    if (w <= 0 || h <= 0) {
+        // 清空: 手势结束 / 场通路回退(此时目标图层必须马上回到画布里)。
+        invalidateLiquifyPreviewBase();
+        return;
+    }
+    // 只在"手势进行中 + 有可见的预览目标 + 解析得到它在 m_layers 里的下标"时才排除。
+    // 解析不到(遮罩/投影等非图层目标)就什么都不做 —— 退回改动前的行为, 绝不猜。
+    if (!m_liquifyTxnActive || m_liquifyPreviewTarget < 0 || m_liquifyPreviewBaseLayer < 0) return;
+    const QRect docRect(0, 0, m_document->width(), m_document->height());
+    const QRect r = QRect(x, y, w, h).intersected(docRect);
+    if (r.isEmpty() || r == m_liquifyPreviewBaseRect) return;
+    const QRect old = m_liquifyPreviewBaseRect;
+    m_liquifyPreviewBaseRect = r;
+    if (!old.isEmpty() && !r.contains(old)) {
+        // 旧区不再被覆盖(经典通路的 worker 窗口是整体平移的): 那块必须按真实文档重读一次,
+        // 否则会一直"少一层"。
+        m_liquifyPreviewBaseBuilt = QRect();
+        markRegionDirty(old);
+    }
+    ensureLiquifyPreviewBase();
+}
+
+void ReverieCore::ensureLiquifyPreviewBase()
+{
+    if (!m_document || m_liquifyPreviewBaseLayer < 0) return;
+    const QRect fresh = m_liquifyPreviewBaseRect;
+    if (fresh.isEmpty()) return;
+    const QRect old = m_liquifyPreviewBaseBuilt;
+    if (old == fresh) return;
+    if (!m_liquifyPreviewBaseDev) {
+        m_liquifyPreviewBaseDev = KisPaintDeviceSP(new KisPaintDevice(m_document->colorSpace()));
+    }
+    // 单调增长(场通路的受影响矩形)时只补新增的边带, 引擎代价与笔刷同阶;
+    // 非单调(经典通路的窗口平移)才整块重算。
+    QVector<QRect> need;
+    if (old.isEmpty() || !fresh.contains(old)) {
+        need.append(fresh);
+    } else {
+        if (fresh.top() < old.top())
+            need.append(QRect(fresh.left(), fresh.top(), fresh.width(), old.top() - fresh.top()));
+        if (fresh.bottom() > old.bottom())
+            need.append(QRect(fresh.left(), old.bottom() + 1, fresh.width(),
+                              fresh.bottom() - old.bottom()));
+        if (fresh.left() < old.left())
+            need.append(QRect(fresh.left(), old.top(), old.left() - fresh.left(), old.height()));
+        if (fresh.right() > old.right())
+            need.append(QRect(old.right() + 1, old.top(), fresh.right() - old.right(), old.height()));
+    }
+    for (const QRect &band : need) {
+        if (band.isEmpty()) continue;
+        m_liquifyPreviewBaseDev->clear(band);
+        // "整摞减去目标图层": 其余图层按原顺序合成一次(excludeIdx 递归进组, 组内的目标也能排除),
+        // 结果与全量投影只差被排除的那一层。
+        compositeLayersRange(m_liquifyPreviewBaseDev, 0, m_layers.size(), band,
+                             m_liquifyPreviewBaseLayer);
+        // 这块要进脏区, 否则渲染的增量路径不会重读它(基座就永远上不了画布)。
+        markRegionDirty(band);
+    }
+    m_liquifyPreviewBaseBuilt = fresh;
+}
+
+void ReverieCore::readLiquifyDisplayRegion(KisPaintDeviceSP projection, quint8 *buffer, const QRect &region)
+{
+    if (!projection || !buffer || region.isEmpty()) return;
+    if (m_liquifyPreviewBaseLayer >= 0 && m_liquifyPreviewBaseDev &&
+        m_liquifyPreviewBaseBuilt.contains(region)) {
+        // Avoid reading the projection only to overwrite every pixel with the base.
+        m_liquifyPreviewBaseDev->readBytes(buffer, region.x(), region.y(), region.width(), region.height());
+        return;
+    }
+    projection->readBytes(buffer, region.x(), region.y(), region.width(), region.height());
+    // Replace straight device pixels BEFORE alpha conversion and viewport filtering.
+    // The same document-space operation serves full, dirty and scaled renders.
+    if (!buffer || region.isEmpty() || m_liquifyPreviewBaseLayer < 0 ||
+        !m_liquifyPreviewBaseDev || m_liquifyPreviewBaseBuilt.isEmpty()) return;
+    const QRect r = region.intersected(m_liquifyPreviewBaseBuilt);
+    if (r.isEmpty()) return;
+    thread_local QVector<quint8> baseBand;
+    const int bytes = r.width() * r.height() * 4;
+    if (baseBand.size() < bytes) baseBand.resize(bytes);
+    m_liquifyPreviewBaseDev->readBytes(baseBand.data(), r.x(), r.y(), r.width(), r.height());
+    PixelRegion::replace(buffer, region.width(), region.height(), r.x() - region.x(), r.y() - region.y(),
+                         baseBand.constData(), r.width(), r.height());
+}
+
+void ReverieCore::invalidateLiquifyPreviewBase()
+{
+    if (!m_liquifyPreviewBaseRect.isEmpty() && m_document) {
+        // 这块区域接下来必须按**真实文档**重读一次 —— 不标脏, 抬笔后画布里会一直缺一层。
+        markRegionDirty(m_liquifyPreviewBaseRect.intersected(
+            QRect(0, 0, m_document->width(), m_document->height())));
+    }
+    m_liquifyPreviewBaseRect = QRect();
+    m_liquifyPreviewBaseBuilt = QRect();
+    m_liquifyPreviewBaseDev.clear();
 }
 
 // 把低分辨率预览混合进显示缓冲。buffer 是 RGBA8888 的整帧/整视口缓冲(w×h), 文档坐标 →
@@ -1354,11 +1575,11 @@ void ReverieCore::blendLiquifyPreview(quint8 *buffer, int w, int h, const QRect 
                 drow[3] = 255;
                 continue;
             }
-            // source-over (straight alpha, 与 1:1 路径同为非预乘)
+            // Source-over of two premultiplied display pixels.
             const int ia = 255 - sa;
-            drow[0] = quint8((s[0] * sa + drow[0] * ia + 127) / 255);
-            drow[1] = quint8((s[1] * sa + drow[1] * ia + 127) / 255);
-            drow[2] = quint8((s[2] * sa + drow[2] * ia + 127) / 255);
+            drow[0] = quint8(s[0] + (drow[0] * ia + 127) / 255);
+            drow[1] = quint8(s[1] + (drow[1] * ia + 127) / 255);
+            drow[2] = quint8(s[2] + (drow[2] * ia + 127) / 255);
             drow[3] = quint8(qMin(255, sa + (drow[3] * ia + 127) / 255));
         }
     }
@@ -1386,7 +1607,9 @@ void ReverieCore::liquify(int fx, int fy, int tx, int ty, qreal strength, int mo
 void ReverieCore::liquifyAt(qreal fx, qreal fy, qreal tx, qreal ty, qreal strength, int mode)
 {
     if (!std::isfinite(fx) || !std::isfinite(fy) || !std::isfinite(tx) || !std::isfinite(ty)
-        || !std::isfinite(strength) || strength <= 0 || (fx == tx && fy == ty)) return;
+        || !std::isfinite(strength) || strength <= 0 || !std::isfinite(m_liquifyBrushSize) ||
+        mode < 0 || mode > (m_liquifyProfessional ? 6 : 4) ||
+        ((fx == tx && fy == ty) && !(m_liquifyProfessional && mode >= 1 && mode <= 4))) return;
     KisImageSP image = m_document ? m_document : KisImageSP();
     if (!image) return;
 
@@ -1555,22 +1778,18 @@ void ReverieCore::liquifyAt(qreal fx, qreal fy, qreal tx, qreal ty, qreal streng
         }
     }
 
-    m_liquifyInverseField.apply(float(fx), float(fy), float(tx), float(ty), float(s), float(size), mode);
-    // Legacy preview transport carries BACKWARD offsets, never forward Krita points.
-    if (m_liquifyBatchRemaining == 0) for (LiquifyTarget &t : m_liquifyTargets) {
-        if (!t.worker) continue;
-        const auto &orig = t.worker->originalPoints();
-        auto &trans = t.worker->transformedPoints();
-        for (int i = 0; i < orig.size(); ++i) {
-            const auto off = m_liquifyInverseField.sample(float(orig[i].x()), float(orig[i].y()));
-            trans[i] = orig[i] + QPointF(off.x, off.y);
-        }
-    }
+    m_liquifyInverseField.apply(float(fx), float(fy), float(tx), float(ty), float(s), float(size), mode,
+                               m_liquifyProfessional, float(m_liquifyHardness));
 
     // Accumulate the delta region of dabs not yet written back (build-up
     // displacements never change once applied, so only new dabs' influence
     // needs the re-transformed pixels)
-    const int infl = qRound(size * 3.2) + 8;
+    // Inverse-map dabs have compact support at radius 2.5*size, not the legacy
+    // preview window's 3.2*size. Keep one interpolation footprint as padding.
+    const int fieldStep = LiquifyInverseField::stepForDocument(
+        m_liquifyProfessional ? 0 : image->width(), m_liquifyProfessional ? 0 : image->height(),
+        float(size / (m_liquifyProfessional ? 4 : 1)));
+    const int infl = qCeil(size * (m_liquifyProfessional ? .5 : 2.5)) + fieldStep + 2;
     const QRect dab = QRectF(qMin(fx, tx) - infl, qMin(fy, ty) - infl,
                     qAbs(tx - fx) + 2 * infl, qAbs(ty - fy) + 2 * infl).toAlignedRect()
                     .intersected(QRect(0, 0, image->width(), image->height()));

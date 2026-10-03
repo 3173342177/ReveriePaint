@@ -1411,6 +1411,8 @@ private fun recordLayerSet(
 /** One undo transaction for a whole liquify drag gesture. Selected layers
  *  (multi-select) warp together as one undo step. */
 internal fun PaintViewModel.liquifyBegin() {
+    liquifyPresentationGesture++
+    liquifyPresentation.cancel()
     val layers = editTargetLayers()
     val multi = layers.size > 1 || selectedLayerIndices.isNotEmpty()
     if (recorder.recording) {
@@ -1420,23 +1422,54 @@ internal fun PaintViewModel.liquifyBegin() {
     val arr = if (multi) layers.toIntArray() else null
     // Phase 2B: 每次手势开始时定一次"预览由谁画"(GPU 覆盖层 / 引擎侧 CPU 叠加), 并显式写进
     // 引擎 —— 这样 property 与 Kotlin 侧判定即使不一致, 也不会两边都不画。
-    val hostDrawMode = LiquifyGpuPreview.decideForGesture()
+    val only = this.layers.lastOrNull { it.visible }
+    val allowHostDraw = layers.size == 1 && only != null && only.index == currentLayerIndex &&
+        this.layers.none { it.nodeType >= 10 || it.clipped || it.isGroup } &&
+        only.visible && only.depth == 0 && only.nodeType == 0 && !only.isGroup && !only.isStrokeLayer &&
+        !only.locked && !only.isBackground && !only.clipped && !only.alphaLocked && only.opacity == 1.0 &&
+        only.blendMode == "normal" && !hasSelection && !anim.enabled && !pixelGridEnabled &&
+        displayBitmap != null && this.layers.none { it.soloed } && LiquifyGlesPreview.fieldEnabled &&
+        LiquifyGpuPreview.hostDrawOverride != LiquifyGpuPreview.HOST_OVERRIDE_AGSL
+    val hostDrawMode = LiquifyGpuPreview.decideForGesture(allowHostDraw)
     runCore(render = false) {
         ReverieCoreBridge.setLiquifyPreviewHostDrawMode(hostDrawMode)
         ReverieCoreBridge.liquifyBegin(arr)
     }
 }
 
-internal fun PaintViewModel.liquifyEnd() {
-    if (recorder.recording) {
-        recorder.toolOp(T_LIQUIFY_END)
+internal fun PaintViewModel.configureLiquifyProfile(hardness: Float) {
+    val h = hardness.coerceIn(0f, 1f)
+    if (recorder.recording) recorder.toolOp(com.reverie.paint.model.RecordingEvents.T_LIQUIFY_PROFILE) {
+        it.u8(1)
+        it.f32(h)
     }
-    // 先摘覆盖层: 抬笔后的精确结果由下面的 materialize + 立即渲染给出, 不能与旧预览同帧共存
-    LiquifyGpuPreview.clear()
-    runCore(after = {
-        scheduleRender(immediate = true)
-        refreshLayerThumbs()
-    }) {
+    runCore(render = false) { ReverieCoreBridge.setLiquifyProfile(true, h.toDouble()) }
+}
+
+internal fun PaintViewModel.liquifyUseEnginePreview() {
+    LiquifyGpuPreview.decideForGesture(allowHostDraw = false)
+    runCore(render = false) { ReverieCoreBridge.setLiquifyPreviewHostDrawMode(2) }
+}
+
+/** Recover an interrupted GPU gesture without recording its already recorded dabs twice. */
+internal fun PaintViewModel.replayLiquifyFieldDabs(dabs: FloatArray, count: Int, stride: Int) {
+    if (count <= 0) return
+    val packed = FloatArray(count * LiquifyPath.DAB_STRIDE)
+    for (i in 0 until count) {
+        val b = i * stride
+        LiquifyPath.packDab(
+            packed, i, dabs[b], dabs[b + 1], dabs[b + 2], dabs[b + 3], dabs[b + 5], dabs[b + 4].toInt(),
+        )
+    }
+    runCore { ReverieCoreBridge.liquifyDabs(packed, count) }
+}
+
+internal fun PaintViewModel.liquifyEnd() {
+    if (recorder.recording) recorder.toolOp(T_LIQUIFY_END)
+    val gesture = liquifyPresentationGesture
+    val retirePreview = LiquifyGpuPreview.requested
+    runCore(after = { refreshLayerThumbs() }) {
+        if (retirePreview && gesture == liquifyPresentationGesture) liquifyPresentation.arm(gesture)
         ReverieCoreBridge.liquifyEnd()
     }
 }
@@ -1448,6 +1481,24 @@ internal fun PaintViewModel.liquifyEnd() {
  * (整篇文档, 每段手势只取一次)。返回 false 表示这条路走不通(超预算 / 非 8bit BGRA),
  * 调用方必须回退经典路径 —— 绝不允许"场也不画、引擎也没动"。
  */
+/**
+ * Phase 8(透明残影修复): 把"本次预览真正覆盖的文档矩形"交给引擎(**引擎线程**)。
+ *
+ * 场通路的源裁剪是整篇文档, 但真正出图的只有受影响矩形。引擎据此把这块区域的画布合成换成
+ * "不含液化目标图层"的底图, 于是预览对同一块区域是**替换**而不是叠加 —— 被形变搬走的原始
+ * 像素不会再留在原地透出来(透明画布 / 半透明图层上就是用户看到的残影)。
+ *
+ * 不走 [runCore] 之外的任何路径: 矩形变化时引擎只重算新增的那圈边带(见 LiquifyPath
+ * .quantizedPreviewRect), 因此没有"每帧一次大区域合成"的性能代价。
+ */
+internal fun PaintViewModel.liquifyPreviewBase(x: Int, y: Int, w: Int, h: Int) {
+    if (renderHandler == null) return
+    val gesture = LiquifyGlesPreview.gestureId
+    runCore {
+        if (gesture == LiquifyGlesPreview.gestureId) ReverieCoreBridge.setLiquifyPreviewBaseRect(x, y, w, h)
+    }
+}
+
 internal fun PaintViewModel.liquifyFieldSource(x: Int, y: Int, w: Int, h: Int): Boolean {
     // This returns queue acceptance, not a local variable written later by runCore.
     // A field image is one layer; multi-layer edits must use the shared native map.
@@ -1504,18 +1555,20 @@ internal fun PaintViewModel.liquifyFieldEndFromOverlay(
         recorder.toolOp(T_LIQUIFY_END)
     }
     val gesture = LiquifyGlesPreview.gestureId
+    val presentationGesture = liquifyPresentationGesture
     val replayDabs = dabs.copyOf(dabCount * dabStride)
     val x = rect[0]
     val y = rect[1]
     val w = rect[2]
     val h = rect[3]
     runCore(after = {
-        if (gesture == LiquifyGlesPreview.gestureId) LiquifyGpuPreview.clear()
-        scheduleRender(immediate = true)
         refreshLayerThumbs()
     }) {
-        val pixels = LiquifyGlesPreview.readbackCommit(x, y, w, h, LIQUIFY_FIELD_COMMIT_TIMEOUT_MS, gesture)
+        var completed = false
         try {
+            val pixels = LiquifyGlesPreview.readbackCommit(
+                x, y, w, h, LIQUIFY_FIELD_COMMIT_TIMEOUT_MS, gesture,
+            )
             var ok = false
             if (pixels != null) {
                 // 返回值 = 引擎是否**真的**接受了这次提交(尺寸闸/手势状态/像素长度任一不满足
@@ -1545,11 +1598,13 @@ internal fun PaintViewModel.liquifyFieldEndFromOverlay(
                 }
                 ReverieCoreBridge.liquifyDabs(lqReplayPack, n)
             }
+            completed = true
         } finally {
+            if (presentationGesture == liquifyPresentationGesture) liquifyPresentation.arm(presentationGesture)
             // 收口**必须**执行: 若这里因异常跳过 liquifyEnd, 引擎的事务会一直挂着 ——
             // 之后每一次 liquifyBegin 都会被"已有事务"挡掉, 表现就是"液化彻底失灵直到取消"。
             try {
-                ReverieCoreBridge.liquifyEnd()
+                if (completed) ReverieCoreBridge.liquifyEnd() else ReverieCoreBridge.liquifyCancel()
             } catch (t: Throwable) {
                 android.util.Log.e("ReverieCore", "liquifyEnd failed, force cancel", t)
                 try {
@@ -1588,6 +1643,7 @@ internal fun PaintViewModel.recordLiquifyDab(
 }
 
 internal fun PaintViewModel.liquifyCancel() {
+    liquifyPresentation.cancel()
     if (recorder.recording) {
         recorder.toolOp(T_LIQUIFY_CANCEL)
     }

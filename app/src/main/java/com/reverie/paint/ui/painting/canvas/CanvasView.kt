@@ -74,6 +74,7 @@ fun CanvasView(
     fillTolerance: Int = 24,
     gradientType: Int = 0,
     liquifyStrength: Float = 0.9f,
+    liquifyHardness: Float = 0.5f,
     liquifyMode: Int = 0,
     liquifyBrushSize: Float = 60f,
 
@@ -310,6 +311,7 @@ fun CanvasView(
                 touchView.fillTolerance = fillTolerance
                 touchView.gradientType = gradientType
                 touchView.liquifyStrength = liquifyStrength
+                touchView.liquifyHardness = liquifyHardness
                 touchView.liquifyBrushSize = liquifyBrushSize
                 touchView.filterSessionActive = filterSessionActive
                 touchView.onFilterSlideDelta = onFilterSlideDelta

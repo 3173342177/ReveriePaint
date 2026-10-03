@@ -274,6 +274,7 @@ Java_com_reverie_paint_core_ReverieCoreBridge_liquifyBegin(JNIEnv *env, jobject,
     if (layers != nullptr) {
         const jsize n = env->GetArrayLength(layers);
         jint *elems = env->GetIntArrayElements(layers, nullptr);
+        if (!elems) return; // JNI allocation failure must not dereference a null array.
         for (int i = 0; i < n; ++i) {
             list.append(int(elems[i]));
         }
@@ -465,6 +466,29 @@ Java_com_reverie_paint_core_ReverieCoreBridge_liquifyPreviewSourcePixelsInto(JNI
     env->ReleaseByteArrayElements(out, dst, 0);
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_liquifyPreviewUnderlayPixelsInto(
+    JNIEnv *env, jobject, jbyteArray out)
+{
+    if (!out) return JNI_FALSE;
+    int meta[7] = {};
+    core()->liquifyPreviewSourceMeta(meta);
+    const qint64 bytes = qint64(meta[0]) * meta[1] * 4;
+    if (bytes <= 0 || env->GetArrayLength(out) < bytes) return JNI_FALSE;
+    jbyte *dst = env->GetByteArrayElements(out, nullptr);
+    if (!dst) return JNI_FALSE;
+    const bool ok = core()->liquifyPreviewUnderlayPixels(reinterpret_cast<quint8 *>(dst));
+    env->ReleaseByteArrayElements(out, dst, ok ? 0 : JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_setLiquifyProfile(JNIEnv *, jobject, jboolean professional,
+                                                            jdouble hardness)
+{
+    core()->setLiquifyProfile(professional == JNI_TRUE, hardness);
+}
+
 JNIEXPORT jbyteArray JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_liquifyPreviewSourcePixels(JNIEnv *env, jobject)
 {
@@ -488,6 +512,16 @@ Java_com_reverie_paint_core_ReverieCoreBridge_setLiquifyPreviewHostDrawMode(
 {
     // -1 跟随 system property / 0 强制引擎侧叠加(AGSL 初始化失败时的回退入口) / 1 强制主机侧绘制。
     core()->setLiquifyPreviewHostDrawMode(int(mode));
+}
+
+// 覆盖层上报"本帧预览真正覆盖的文档矩形"(场通路的裁剪是整篇文档, 真正出图的只有受影响矩形)。
+// 引擎据此把这块区域的画布合成换成"不含液化目标图层"的底图, 修掉形变搬走原始像素后的残影。
+// w/h <= 0 = 清空。只在引擎线程调用(调用方走 runCore)。
+JNIEXPORT void JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_setLiquifyPreviewBaseRect(
+    JNIEnv *, jobject, jint x, jint y, jint w, jint h)
+{
+    core()->setLiquifyPreviewBaseRect(int(x), int(y), int(w), int(h));
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -6,6 +6,7 @@ package com.reverie.paint.ui.painting.canvas
 
 import android.content.Context
 import android.graphics.SurfaceTexture
+import android.opengl.EGLExt
 import android.opengl.EGL14
 import android.opengl.EGLConfig
 import android.opengl.EGLContext
@@ -14,7 +15,7 @@ import android.opengl.EGLSurface
 import android.opengl.GLES20
 import android.opengl.GLES30
 import android.os.SystemClock
-import android.util.Half
+import com.reverie.paint.model.LiquifyHalfFloat
 import android.util.Log
 import android.view.TextureView
 import com.reverie.paint.core.LiquifyGlesPreview
@@ -159,7 +160,9 @@ internal class LiquifyGlesOverlay(context: Context) :
         return true
     }
 
-    override fun onSurfaceTextureUpdated(st: SurfaceTexture) = Unit
+    override fun onSurfaceTextureUpdated(st: SurfaceTexture) {
+        targetTouchView?.onLiquifyFramePresented(st.timestamp)
+    }
 
     override fun onDetachedFromWindow() {
         stopRendering()
@@ -240,6 +243,8 @@ internal class LiquifyGlesOverlay(context: Context) :
                 try {
                     GLES20.glViewport(0, 0, egl.viewportW, egl.viewportH)
                     // 全透明清屏: 未绘制处必须让画布透过来
+                    GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
+                    GLES20.glColorMask(true, true, true, true)
                     GLES20.glClearColor(0f, 0f, 0f, 0f)
                     GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                     if (frame.valid) {
@@ -261,7 +266,9 @@ internal class LiquifyGlesOverlay(context: Context) :
                     bailOut("渲染帧异常: ${t.javaClass.simpleName}")
                     break
                 }
-                if (!egl.swapBuffers()) {
+                val timestamp = System.nanoTime()
+                LiquifyGlesPreview.stageDrawRect(frame, timestamp)
+                if (!egl.swapBuffers(timestamp)) {
                     bailOut("swapBuffers 失败")
                     break
                 }
@@ -288,6 +295,11 @@ internal class LiquifyGlesOverlay(context: Context) :
 
         private var program = 0
         private var aPos = -1
+        private var uSceneSize = -1
+        private var uUnderlay = -1
+        private var uUseUnderlay = -1
+        private var underlayTex = 0
+        private var underlayGen = -1L
         private var uRect = -1
         private var uSrc = -1
         private var uGrid = -1
@@ -327,6 +339,8 @@ internal class LiquifyGlesOverlay(context: Context) :
         private var dabURadius = -1
         private var dabUGain = -1
         private var dabUMode = -1
+        private var dabUProfessional = -1
+        private var dabUHardness = -1
         private var dabUOldField = -1
         private var dabUOutputOffset = -1
         private var fieldScratchTex = 0
@@ -411,6 +425,9 @@ internal class LiquifyGlesOverlay(context: Context) :
             }
             program = p
             aPos = GLES20.glGetAttribLocation(p, "aPos")
+            uSceneSize = GLES20.glGetUniformLocation(p, "uSceneSize")
+            uUnderlay = GLES20.glGetUniformLocation(p, "uUnderlay")
+            uUseUnderlay = GLES20.glGetUniformLocation(p, "uUseUnderlay")
             uRect = GLES20.glGetUniformLocation(p, "uRect")
             uSrc = GLES20.glGetUniformLocation(p, "uSrc")
             uGrid = GLES20.glGetUniformLocation(p, "uGrid")
@@ -436,8 +453,9 @@ internal class LiquifyGlesOverlay(context: Context) :
             }
             quad = ShaderCache.unitQuad()
             srcTex = createTexture()
+            underlayTex = createTexture()
             gridTex = createTexture()
-            if (srcTex == 0 || gridTex == 0) {
+            if (srcTex == 0 || gridTex == 0 || underlayTex == 0) {
                 failReason = "纹理创建失败"
                 return false
             }
@@ -445,17 +463,26 @@ internal class LiquifyGlesOverlay(context: Context) :
             GLES20.glUniform1i(uSrc, TEX_UNIT_SRC)
             GLES20.glUniform1i(uGrid, TEX_UNIT_GRID)
             GLES20.glUniform1i(uField, TEX_UNIT_FIELD)
+            GLES20.glUniform1i(uUnderlay, TEX_UNIT_UNDERLAY)
             GLES20.glDisable(GLES20.GL_DEPTH_TEST)
             GLES20.glDisable(GLES20.GL_CULL_FACE)
             // 源像素是预乘的 ⇒ 预乘 source-over(与 AGSL 路径同义, 见类注释第 3 条)
             GLES20.glEnable(GLES20.GL_BLEND)
-            GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+            GLES20.glBlendEquationSeparate(GLES20.GL_FUNC_ADD, GLES20.GL_FUNC_ADD)
+            GLES20.glBlendFuncSeparate(
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+            )
             // C3 的场是可选加速路径: 建不起来只回退网格, 绝不带走整条 GLES 预览
             prepareField()
             return true
         }
 
         fun release() {
+            if (underlayTex != 0) {
+                GLES20.glDeleteTextures(1, intArrayOf(underlayTex), 0)
+                underlayTex = 0
+            }
             if (program != 0) {
                 GLES20.glDeleteProgram(program)
                 program = 0
@@ -518,6 +545,19 @@ internal class LiquifyGlesOverlay(context: Context) :
         fun render(f: LiquifyGlesPreview.Frame, w: Int, h: Int) {
             if (w <= 0 || h <= 0) return
             if (f.src != null) uploadSrc(f)
+            f.underlay?.let { bytes ->
+                val buf = srcBytes ?: return
+                val need = f.cropW * f.cropH * 4
+                if (bytes.size < need || buf.capacity() < need) return
+                buf.clear()
+                buf.put(bytes, 0, need).position(0)
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + TEX_UNIT_UNDERLAY)
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, underlayTex)
+                GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, f.cropW, f.cropH,
+                    0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buf)
+                underlayGen = f.srcGen
+            }
+            if (f.fieldArmed && underlayGen != f.srcGen) return
             if (f.grid != null) uploadGrid(f)
             // 纹理尺寸与当前裁剪/网格不一致(例如源像素长度不符被丢弃) ⇒ 这一帧不画, 免得错位
             if (srcTexW != f.cropW || srcTexH != f.cropH) return
@@ -531,6 +571,7 @@ internal class LiquifyGlesOverlay(context: Context) :
                 // 无效帧/提前 return 的帧不会把补点吞掉(见 LiquifyGlesPreview.takeDabs)
                 LiquifyGlesPreview.takeDabs(f)
                 accumulateDabs(f)
+                if (!fieldUnavailable) LiquifyGlesPreview.acknowledgeDabs(f)
                 // 累加 pass 把视口挪到了各 dab 的包围盒 ⇒ 呈现 pass 必须回到整视口
                 GLES20.glViewport(0, 0, w, h)
             }
@@ -574,6 +615,10 @@ internal class LiquifyGlesOverlay(context: Context) :
             // 场的文档尺寸 = 场纹素 × 降采样比(场与裁剪逐像素对齐, 所以原点就是裁剪原点)
             val res = fieldRes.toFloat()
             GLES20.glUniform2f(uFieldSize, (fieldW * res).coerceAtLeast(1f), (fieldH * res).coerceAtLeast(1f))
+            GLES20.glUniform2f(uSceneSize, f.sceneWidth, f.sceneHeight)
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + TEX_UNIT_UNDERLAY)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, underlayTex)
+            GLES20.glUniform1f(uUseUnderlay, if (f.fieldArmed) 1f else 0f)
             GLES20.glUniform4f(uRect, rect[0], rect[1], rect[2], rect[3])
 
             val q = quad ?: return
@@ -606,6 +651,8 @@ internal class LiquifyGlesOverlay(context: Context) :
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, commitFbo)
             GLES20.glDisable(GLES20.GL_BLEND)
             GLES20.glViewport(0, 0, w, h)
+            GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
+            GLES20.glColorMask(true, true, true, true)
             GLES20.glClearColor(0f, 0f, 0f, 0f)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             GLES20.glUseProgram(program)
@@ -633,6 +680,9 @@ internal class LiquifyGlesOverlay(context: Context) :
             // 提交**不做**"绘制矩形"裁剪: 那只用于显示分流(整篇文档的裁剪会让覆盖层盖住整屏)
             GLES20.glUniform2f(uDrawOrigin, 0f, 0f)
             GLES20.glUniform2f(uDrawSize, 0f, 0f)
+            // Commit contains layer pixels only; never bake the display checkerboard.
+            GLES20.glUniform2f(uSceneSize, 0f, 0f)
+            GLES20.glUniform1f(uUseUnderlay, 0f)
             GLES20.glUniform4f(uRect, -1f, -1f, 1f, 1f)
 
             var out: ByteArray? = null
@@ -660,7 +710,8 @@ internal class LiquifyGlesOverlay(context: Context) :
                 }
                 buf.position(0)
                 buf.get(bytes, 0, need)
-                out = bytes
+                // Reject failed draws/readbacks instead of committing stale reusable bytes.
+                if (GLES20.glGetError() == GLES20.GL_NO_ERROR) out = bytes
             }
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
             GLES20.glEnable(GLES20.GL_BLEND)
@@ -757,8 +808,8 @@ internal class LiquifyGlesOverlay(context: Context) :
             half.clear()
             for (i in 0 until count) {
                 val b = LiquifyGridMeta.HEADER + i * LiquifyGridMeta.STRIDE
-                half.put(Half.toHalf(grid[b + 2]))     // dx
-                half.put(Half.toHalf(grid[b + 3]))     // dy
+                half.put(LiquifyHalfFloat.encode(grid[b + 2]))     // dx
+                half.put(LiquifyHalfFloat.encode(grid[b + 3]))     // dy
                 half.put(0)
                 half.put(0)
             }
@@ -814,6 +865,8 @@ internal class LiquifyGlesOverlay(context: Context) :
             dabURadius = GLES20.glGetUniformLocation(p, "uDabRadius")
             dabUGain = GLES20.glGetUniformLocation(p, "uDabGain")
             dabUMode = GLES20.glGetUniformLocation(p, "uDabMode")
+            dabUProfessional = GLES20.glGetUniformLocation(p, "uProfessional")
+            dabUHardness = GLES20.glGetUniformLocation(p, "uHardness")
             dabUOldField = GLES20.glGetUniformLocation(p, "uOldField")
             dabUOutputOffset = GLES20.glGetUniformLocation(p, "uOutputOffset")
             fieldScratchTex = createTexture()
@@ -884,7 +937,7 @@ internal class LiquifyGlesOverlay(context: Context) :
                 return false
             }
             if (f.cropW <= 0 || f.cropH <= 0) return false
-            var res = LiquifyGlesPreview.fieldRes
+            var res = maxOf(f.fieldStep, LiquifyGlesPreview.fieldRes)
             var w = (f.cropW + res - 1) / res
             var h = (f.cropH + res - 1) / res
             // 位移的尾端本来是双线性, 降一半几乎看不出来 ⇒ 先降分辨率再考虑回退
@@ -916,6 +969,8 @@ internal class LiquifyGlesOverlay(context: Context) :
                     return false
                 }
                 GLES20.glViewport(0, 0, w, h)
+                GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
+                GLES20.glColorMask(true, true, true, true)
                 GLES20.glClearColor(0f, 0f, 0f, 0f)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                 GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
@@ -938,6 +993,8 @@ internal class LiquifyGlesOverlay(context: Context) :
                 GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES20.GL_TEXTURE_2D, fieldTex, 0,
             )
             GLES20.glViewport(0, 0, fieldW, fieldH)
+            GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
+            GLES20.glColorMask(true, true, true, true)
             GLES20.glClearColor(0f, 0f, 0f, 0f)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
@@ -962,6 +1019,10 @@ internal class LiquifyGlesOverlay(context: Context) :
             q.position(0)
             GLES20.glVertexAttribPointer(dabAPos, 2, GLES20.GL_FLOAT, false, 0, q)
             var drawn = 0
+            GLES30.glFramebufferTexture2D(
+                GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0,
+                GLES20.GL_TEXTURE_2D, fieldScratchTex, 0,
+            )
             for (i in 0 until f.dabCount) {
                 val b = i * LiquifyGlesPreview.DAB_STRIDE
                 val cx = (f.dabs[b] + f.dabs[b + 2]) * 0.5f
@@ -975,20 +1036,17 @@ internal class LiquifyGlesOverlay(context: Context) :
                 val h = y1 - y0
                 if (w <= 0 || h <= 0) continue
                 GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + TEX_UNIT_FIELD)
-                if (w > fieldScratchW || h > fieldScratchH) {
-                    fieldScratchW = maxOf(w, fieldScratchW)
-                    fieldScratchH = maxOf(h, fieldScratchH)
+                val resized = w > fieldScratchW || h > fieldScratchH
+                if (resized) {
+                    fieldScratchW = maxOf((w + 63) / 64 * 64, fieldScratchW)
+                    fieldScratchH = maxOf((h + 63) / 64 * 64, fieldScratchH)
                     GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, fieldScratchTex)
                     GLES30.glTexImage2D(
                         GLES20.GL_TEXTURE_2D, 0, GLES30.GL_RGBA16F, fieldScratchW, fieldScratchH, 0,
                         GLES20.GL_RGBA, GLES30.GL_HALF_FLOAT, null,
                     )
                 }
-                GLES30.glFramebufferTexture2D(
-                    GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0,
-                    GLES20.GL_TEXTURE_2D, fieldScratchTex, 0,
-                )
-                if (GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER) != GLES30.GL_FRAMEBUFFER_COMPLETE) {
+                if (resized && GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER) != GLES30.GL_FRAMEBUFFER_COMPLETE) {
                     giveUpField("scratch FBO incomplete")
                     break
                 }
@@ -1000,6 +1058,8 @@ internal class LiquifyGlesOverlay(context: Context) :
                 GLES20.glUniform1f(dabURadius, radius)
                 GLES20.glUniform1f(dabUGain, f.dabs[b + 5])
                 GLES20.glUniform1i(dabUMode, f.dabs[b + 4].toInt())
+                GLES20.glUniform1i(dabUProfessional, if (f.professional) 1 else 0)
+                GLES20.glUniform1f(dabUHardness, f.hardness * .85f)
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
                 GLES20.glCopyTexSubImage2D(GLES20.GL_TEXTURE_2D, 0, x0, y0, 0, 0, w, h)
                 drawn++
@@ -1007,7 +1067,11 @@ internal class LiquifyGlesOverlay(context: Context) :
             GLES20.glDisableVertexAttribArray(dabAPos)
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
             GLES20.glEnable(GLES20.GL_BLEND)
-            GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+            GLES20.glBlendEquationSeparate(GLES20.GL_FUNC_ADD, GLES20.GL_FUNC_ADD)
+            GLES20.glBlendFuncSeparate(
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+            )
             fieldDabsInGesture += drawn
         }
 
@@ -1161,7 +1225,8 @@ internal class LiquifyGlesOverlay(context: Context) :
             display != EGL14.EGL_NO_DISPLAY &&
                 EGL14.eglMakeCurrent(display, surface, surface, context)
 
-        fun swapBuffers(): Boolean =
+        fun swapBuffers(timestamp: Long): Boolean =
+            EGLExt.eglPresentationTimeANDROID(display, surface, timestamp) &&
             display != EGL14.EGL_NO_DISPLAY && EGL14.eglSwapBuffers(display, surface)
 
         fun release() {
@@ -1216,9 +1281,26 @@ internal class LiquifyGlesOverlay(context: Context) :
             uniform vec2 uGridSize;
             uniform vec2 uFieldOrigin;
             uniform vec2 uFieldSize;
+            uniform vec2 uSceneSize;
+            uniform highp sampler2D uUnderlay;
+            uniform float uUseUnderlay;
             uniform vec2 uDrawOrigin;
             uniform vec2 uDrawSize;
 
+            vec4 sourcePixel(vec2 index) {
+                vec2 valid = step(vec2(0.0), index) * (vec2(1.0) - step(uCropSize, index));
+                return texture2D(uSrc, (index + 0.5) / uCropSize) * valid.x * valid.y;
+            }
+            vec4 sourceAt(vec2 pixel) {
+                // Fast hardware filtering for the interior; explicit transparent border at edges.
+                if (all(greaterThanEqual(pixel, vec2(0.5))) &&
+                    all(lessThanEqual(pixel, uCropSize - 0.5)))
+                    return texture2D(uSrc, pixel / uCropSize);
+                vec2 q = pixel - 0.5;
+                vec2 i = floor(q), f = fract(q);
+                return mix(mix(sourcePixel(i), sourcePixel(i + vec2(1.0,0.0)), f.x),
+                           mix(sourcePixel(i + vec2(0.0,1.0)), sourcePixel(i + vec2(1.0)), f.x), f.y);
+            }
             void main() {
                 // gl_FragCoord 的 y 向上, 画布坐标 y 向下 ⇒ 翻回画布坐标
                 vec2 frag = vec2(gl_FragCoord.x, uViewSize.y - gl_FragCoord.y);
@@ -1254,7 +1336,19 @@ internal class LiquifyGlesOverlay(context: Context) :
                     }
                     off = texture2D(uGrid, (g + 0.5) / uGridSize).rg;
                 }
-                gl_FragColor = texture2D(uSrc, (doc - uCropOrigin - off) / uCropSize);
+                vec4 color = sourceAt(doc - uCropOrigin - off);
+                if (uSceneSize.x > 0.0 && uSceneSize.y > 0.0) {
+                    if (uUseUnderlay > 0.5) {
+                        vec4 base = texture2D(uUnderlay, (doc - uCropOrigin) / uCropSize);
+                        color = color + base * (1.0 - color.a);
+                    }
+                    // Match CanvasTouchView's centered BitmapShader coordinates.
+                    vec2 cell = floor(((doc - uCropOrigin) / uCropSize - 0.5) * uSceneSize / 24.0);
+                    float parity = mod(cell.x + cell.y, 2.0);
+                    vec3 checker = mix(vec3(1.0), vec3(228.0,230.0,235.0)/255.0, parity);
+                    color = vec4(color.rgb + checker * (1.0 - color.a), 1.0);
+                }
+                gl_FragColor = color;
             }
         """.trimIndent()
 
@@ -1274,6 +1368,8 @@ internal class LiquifyGlesOverlay(context: Context) :
             uniform float uDabRadius;
             uniform float uDabGain;
             uniform int uDabMode;
+            uniform int uProfessional;
+            uniform float uHardness;
 
             vec2 decodeField(vec2 index) {
                 index = clamp(index, vec2(0.0), uFieldTexSize - 1.0);
@@ -1291,8 +1387,17 @@ internal class LiquifyGlesOverlay(context: Context) :
                 vec2 doc = uFieldOrigin + (gl_FragCoord.xy + uOutputOffset) * uFieldStep;
                 vec2 d = doc - uDabCenter;
                 float r = length(d) / max(uDabRadius, 0.5);
-                float t = 1.0 - smoothstep(0.0, 1.0, r);
+                float h = uProfessional == 1 ? uHardness : 0.0;
+                float t = 1.0 - smoothstep(h, 1.0, r);
+                if (t == 0.0) {
+                    // Identity outside the circle: preserve both half-float parts.
+                    gl_FragColor = texture2D(uOldField,
+                        (gl_FragCoord.xy + uOutputOffset) / uFieldTexSize);
+                    return;
+                }
                 vec2 delta = uDabDelta * (uDabGain * t);
+                if (uDabMode == 5) delta = vec2(uDabDelta.y, -uDabDelta.x) * (uDabGain * t);
+                if (uDabMode == 6) delta = vec2(-uDabDelta.y, uDabDelta.x) * (uDabGain * t);
                 if (uDabMode == 1 || uDabMode == 2) {
                     float scale = exp((uDabMode == 1 ? -1.0 : 1.0) * uDabGain * t);
                     delta = d * (1.0 - scale);
@@ -1301,7 +1406,8 @@ internal class LiquifyGlesOverlay(context: Context) :
                     float c = cos(angle), s = sin(angle);
                     delta = d - vec2(d.x * c - d.y * s, d.x * s + d.y * c);
                 }
-                float retain = uDabMode == 0 ? 1.0 / (1.0 + 2.0 * length(delta) / uDabRadius) : 1.0;
+                float retain = uProfessional == 0 && uDabMode == 0 ?
+                    1.0 / (1.0 + 2.0 * length(delta) / uDabRadius) : 1.0;
                 vec2 value = delta + sampleField(doc - delta) * retain;
                 vec2 quantum = exp2(max(vec2(-14.0), floor(log2(max(abs(value), vec2(1e-20))))) - 10.0);
                 vec2 hi = floor(value / quantum + 0.5) * quantum;
@@ -1366,6 +1472,7 @@ internal class LiquifyGlesOverlay(context: Context) :
         private const val TEX_UNIT_SRC = 0
         private const val TEX_UNIT_GRID = 1
         private const val TEX_UNIT_FIELD = 2
+        private const val TEX_UNIT_UNDERLAY = 3
 
         /** 标尺"场"一格的状态码(见 `Renderer.reportField`)。 */
         private const val STATE_UNKNOWN = -1

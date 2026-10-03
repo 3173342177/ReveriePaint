@@ -634,6 +634,7 @@ object ReverieCoreBridge {
 
     /** Commit the liquify drag transaction. */
     external fun liquifyEnd()
+    external fun setLiquifyProfile(professional: Boolean, hardness: Double)
 
     /** Revert the whole liquify drag. */
     external fun liquifyCancel()
@@ -874,12 +875,21 @@ object ReverieCoreBridge {
 
     /** 未形变的 bounds 裁剪(RGBA8888, 1 像素 = 1 文档像素)。只在 rebase 后取一次。 */
     external fun liquifyPreviewSourcePixels(): ByteArray?
+    external fun liquifyPreviewUnderlayPixelsInto(out: ByteArray): Boolean
 
     /**
      * 覆盖引擎的"主机侧绘制"判定: -1 跟随 system property(默认), 0 强制引擎侧 CPU 叠加,
-     * 1 强制主机侧绘制。AGSL 不可用/初始化失败时用 0 回退, 保证"要么 GPU 画, 要么引擎画"。
+     * 1 强制主机侧绘制, 2 禁用单图层预览并正常物化/合成文档
+     * AGSL 不可用/初始化失败时用 0 回退
      */
     external fun setLiquifyPreviewHostDrawMode(mode: Int)
+
+    /**
+     * 覆盖层上报"本帧预览真正覆盖的文档矩形"(场通路的源裁剪是整篇文档, 真正出图的只有受影响
+     * 矩形)。引擎据此把这块区域的画布合成换成"不含液化目标图层"的底图, 消除形变搬走原始像素
+     * 后的残影(透明画布/半透明图层尤其明显)。w/h <= 0 = 清空。
+     */
+    external fun setLiquifyPreviewBaseRect(x: Int, y: Int, w: Int, h: Int)
 
     external fun saveRevpAsync(
         path: String,
