@@ -77,9 +77,13 @@ fun QuickActionWindow(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val screenWidthPx = context.resources.displayMetrics.widthPixels
-    val screenHeightPx = context.resources.displayMetrics.heightPixels
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+
+    val currentScreenWidthPx by rememberUpdatedState(screenWidthPx)
+    val currentScreenHeightPx by rememberUpdatedState(screenHeightPx)
 
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -104,6 +108,22 @@ fun QuickActionWindow(
 
     var windowSize by remember { mutableStateOf(IntSize.Zero) }
 
+    LaunchedEffect(screenWidthPx, screenHeightPx, windowSize) {
+        if (windowSize.width > 0 && windowSize.height > 0) {
+            val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0f)
+            val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0f)
+            if (vm.quickActionWindowX >= 0f && vm.quickActionWindowY >= 0f) {
+                val clampedX = vm.quickActionWindowX.coerceIn(0f, maxX)
+                val clampedY = vm.quickActionWindowY.coerceIn(0f, maxY)
+                if (clampedX != vm.quickActionWindowX || clampedY != vm.quickActionWindowY) {
+                    vm.quickActionWindowX = clampedX
+                    vm.quickActionWindowY = clampedY
+                    vm.persistQuickActionsState()
+                }
+            }
+        }
+    }
+
     val config = vm.quickActionsConfig
     val isCollapsed = vm.quickActionCollapsed
     val layoutMode = config.layoutMode
@@ -122,15 +142,17 @@ fun QuickActionWindow(
     Box(
         modifier = modifier
             .offset {
+                val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0f)
+                val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0f)
                 val x = if (vm.quickActionWindowX >= 0f) {
-                    vm.quickActionWindowX.roundToInt()
+                    vm.quickActionWindowX.coerceIn(0f, maxX).roundToInt()
                 } else {
-                    ((screenWidthPx - windowSize.width.coerceAtLeast(260)) / 2).coerceAtLeast(0)
+                    ((screenWidthPx - windowSize.width.coerceAtLeast(260)) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 val y = if (vm.quickActionWindowY >= 0f) {
-                    vm.quickActionWindowY.roundToInt()
+                    vm.quickActionWindowY.coerceIn(0f, maxY).roundToInt()
                 } else {
-                    ((screenHeightPx - windowSize.height.coerceAtLeast(140)) / 2).coerceAtLeast(0)
+                    ((screenHeightPx - windowSize.height.coerceAtLeast(140)) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 IntOffset(x, y)
             }
@@ -141,8 +163,8 @@ fun QuickActionWindow(
                 .onSizeChanged { size ->
                     windowSize = size
                     if (size.width > 0 && size.height > 0) {
-                        val maxX = (screenWidthPx - size.width).coerceAtLeast(0).toFloat()
-                        val maxY = (screenHeightPx - size.height).coerceAtLeast(0).toFloat()
+                        val maxX = (screenWidthPx - size.width).coerceAtLeast(0f)
+                        val maxY = (screenHeightPx - size.height).coerceAtLeast(0f)
                         if (vm.quickActionWindowX < 0f || vm.quickActionWindowY < 0f) {
                             vm.quickActionWindowX = (maxX / 2f).coerceIn(0f, maxX)
                             vm.quickActionWindowY = (maxY / 2f).coerceIn(0f, maxY)
@@ -180,24 +202,43 @@ fun QuickActionWindow(
                 modifier = Modifier
                     .wrapContentSize()
                     .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
+                        detectDragGestures(
+                            onDragEnd = { vm.persistQuickActionsState() },
+                            onDragCancel = { vm.persistQuickActionsState() },
+                        ) { change, dragAmount ->
                             change.consume()
-                            val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0).toFloat()
-                            val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0).toFloat()
+                            val maxX = (currentScreenWidthPx - windowSize.width).coerceAtLeast(0f)
+                            val maxY = (currentScreenHeightPx - windowSize.height).coerceAtLeast(0f)
                             vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(0f, maxX)
                             vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(0f, maxY)
-                            vm.persistQuickActionsState()
                         }
                     }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                // 拖动手柄
+                Box(
+                    modifier = Modifier
+                        .width(10.dp)
+                        .height(26.dp)
+                        .padding(start = 2.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(1.5.dp))
+                            .background(Morandi.subText.copy(alpha = 0.5f))
+                    )
+                }
+
                 // 展开图标
                 val expandSource = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(30.dp)
                         .clip(CircleShape)
                         .background(Morandi.accent.copy(alpha = 0.18f))
                         .pressScale(expandSource, pressedScale = 0.88f)
@@ -215,7 +256,7 @@ fun QuickActionWindow(
                         painter = painterResource(R.drawable.ic_shortcut),
                         contentDescription = stringResource(R.string.quick_action_window_title),
                         tint = Morandi.accent,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(17.dp),
                     )
                 }
 
@@ -250,44 +291,40 @@ fun QuickActionWindow(
                     modifier = Modifier
                         .then(
                             when (layoutMode) {
-                                QuickActionLayoutMode.ROW -> Modifier.widthIn(min = 120.dp)
-                                QuickActionLayoutMode.COLUMN -> Modifier.width(44.dp)
-                                QuickActionLayoutMode.GRID_2 -> Modifier.width(96.dp)
-                                QuickActionLayoutMode.GRID_3 -> Modifier.width(144.dp)
+                                QuickActionLayoutMode.ROW -> Modifier.fillMaxWidth().height(26.dp)
+                                QuickActionLayoutMode.COLUMN -> Modifier.width(44.dp).height(24.dp)
+                                QuickActionLayoutMode.GRID_2, QuickActionLayoutMode.GRID_3 -> Modifier.fillMaxWidth().height(26.dp)
                             }
                         )
-                        .height(24.dp)
                         .pointerInput(Unit) {
-                            detectDragGestures { change, dragAmount ->
+                            detectDragGestures(
+                                onDragEnd = { vm.persistQuickActionsState() },
+                                onDragCancel = { vm.persistQuickActionsState() },
+                            ) { change, dragAmount ->
                                 change.consume()
-                                val maxX = (screenWidthPx - windowSize.width).coerceAtLeast(0).toFloat()
-                                val maxY = (screenHeightPx - windowSize.height).coerceAtLeast(0).toFloat()
+                                val maxX = (currentScreenWidthPx - windowSize.width).coerceAtLeast(0f)
+                                val maxY = (currentScreenHeightPx - windowSize.height).coerceAtLeast(0f)
                                 vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(0f, maxX)
                                 vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(0f, maxY)
-                                vm.persistQuickActionsState()
                             }
                         },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     if (layoutMode == QuickActionLayoutMode.COLUMN) {
-                        // 单列窄胶囊模式下的极简拖动手柄
+                        // 单列窄胶囊模式下的极简拖动手柄 (纯拖拽手柄，绝无点击冲突)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(20.dp)
-                                .clickable {
-                                    vm.quickActionCollapsed = true
-                                    vm.persistQuickActionsState()
-                                },
+                                .height(24.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .width(20.dp)
+                                    .width(22.dp)
                                     .height(3.5.dp)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(Morandi.subText.copy(alpha = 0.45f))
+                                    .background(Morandi.subText.copy(alpha = 0.5f))
                             )
                         }
                     } else {
@@ -322,6 +359,22 @@ fun QuickActionWindow(
                                 color = Morandi.subText,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
+                            )
+                        }
+
+                        // 居中微小拖拽条
+                        Box(
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .height(20.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(20.dp)
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(1.5.dp))
+                                    .background(Morandi.subText.copy(alpha = 0.35f))
                             )
                         }
 
@@ -401,20 +454,52 @@ fun QuickActionWindow(
                                 )
                             }
 
-                            // 单列底部配置齿轮
+                            // 单列底部操作区：分割线 + 折叠/配置按钮
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable { showEditDialog = true },
-                                contentAlignment = Alignment.Center,
+                                    .width(28.dp)
+                                    .height(1.dp)
+                                    .background(Morandi.border.copy(alpha = 0.5f))
+                            )
+                            Row(
+                                modifier = Modifier.width(44.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_settings),
-                                    contentDescription = "Edit",
-                                    tint = Morandi.subText.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(16.dp),
-                                )
+                                // 折叠
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            vm.quickActionCollapsed = true
+                                            vm.persistQuickActionsState()
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(9.dp)
+                                            .height(2.5.dp)
+                                            .clip(RoundedCornerShape(1.dp))
+                                            .background(Morandi.subText)
+                                    )
+                                }
+                                // 编辑齿轮
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .clickable { showEditDialog = true },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_settings),
+                                        contentDescription = "Edit",
+                                        tint = Morandi.subText,
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                }
                             }
                         }
                     }

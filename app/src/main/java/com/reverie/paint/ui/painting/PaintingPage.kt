@@ -1919,7 +1919,7 @@ fun PaintingPage(
             visible = vm.referenceWindowOpen,
             enter = fadeIn(Motion.enterSpring()) + androidx.compose.animation.scaleIn(Motion.enterSpring(), initialScale = 0.92f),
             exit = fadeOut(Motion.exitTween(150)) + androidx.compose.animation.scaleOut(Motion.exitTween(150), targetScale = 0.92f),
-            modifier = Modifier.zIndex(8f),
+            modifier = Modifier.zIndex(70f),
         ) {
             ReferenceWindow(
                 vm = vm,
@@ -1934,7 +1934,7 @@ fun PaintingPage(
             visible = vm.quickActionWindowOpen,
             enter = fadeIn(Motion.enterSpring()) + androidx.compose.animation.scaleIn(Motion.enterSpring(), initialScale = 0.92f),
             exit = fadeOut(Motion.exitTween(150)) + androidx.compose.animation.scaleOut(Motion.exitTween(150), targetScale = 0.92f),
-            modifier = Modifier.zIndex(9f),
+            modifier = Modifier.zIndex(75f),
         ) {
             com.reverie.paint.ui.painting.quickaction.QuickActionWindow(
                 vm = vm,
@@ -1952,7 +1952,7 @@ fun PaintingPage(
             visible = vm.quickBrushWindowOpen,
             enter = fadeIn(Motion.enterSpring()) + androidx.compose.animation.scaleIn(Motion.enterSpring(), initialScale = 0.92f),
             exit = fadeOut(Motion.exitTween(150)) + androidx.compose.animation.scaleOut(Motion.exitTween(150), targetScale = 0.92f),
-            modifier = Modifier.zIndex(9.1f),
+            modifier = Modifier.zIndex(76f),
         ) {
             com.reverie.paint.ui.painting.quickbrush.QuickBrushWindow(
                 vm = vm,
