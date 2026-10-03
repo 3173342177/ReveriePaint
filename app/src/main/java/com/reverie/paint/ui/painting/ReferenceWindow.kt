@@ -979,7 +979,7 @@ private fun ReferenceImagesView(
 
         withTransform({
             translate(centerX, centerY)
-            rotate(rotation)
+            rotate(rotation, pivot = Offset.Zero)
             scale(
                 scaleX = if (isFlipped) -finalScale else finalScale,
                 scaleY = finalScale,
@@ -1041,7 +1041,7 @@ private fun ReferenceSingleBitmapView(
 
         withTransform({
             translate(centerX, centerY)
-            rotate(rotation)
+            rotate(rotation, pivot = Offset.Zero)
             scale(
                 scaleX = if (isFlipped) -finalScale else finalScale,
                 scaleY = finalScale,
@@ -1273,21 +1273,6 @@ private fun ReferenceColorLoupe(
             radius = innerRadius,
             center = loupeCenter,
             style = Stroke(width = 1.5.dp.toPx())
-        )
-
-        // Center crosshair inside the loupe
-        val crosshairInner = 6.dp.toPx()
-        drawLine(
-            color = Color.Black.copy(alpha = 0.7f),
-            start = Offset(loupeCenter.x - crosshairInner, loupeCenter.y),
-            end = Offset(loupeCenter.x + crosshairInner, loupeCenter.y),
-            strokeWidth = 1.5.dp.toPx()
-        )
-        drawLine(
-            color = Color.Black.copy(alpha = 0.7f),
-            start = Offset(loupeCenter.x, loupeCenter.y - crosshairInner),
-            end = Offset(loupeCenter.x, loupeCenter.y + crosshairInner),
-            strokeWidth = 1.5.dp.toPx()
         )
 
         // Crosshair at the target touch point

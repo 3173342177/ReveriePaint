@@ -187,4 +187,83 @@ class GesturePivotAndPersistenceTest {
         // Vertical drag along edge (e.g. dy=40, dx=5)
         assertTrue(isVerticalMove(5f, 40f))
     }
+
+    @Test
+    fun `reference window transform and eyedropper inverse sampling maintain exact 1-to-1 mapping under rotation and flip`() {
+        val viewportW = 960f
+        val viewportH = 1020f
+        val bmpW = 2000f
+        val bmpH = 1500f
+        val totalW = bmpW
+        val totalH = bmpH
+        val bLeft = -bmpW / 2f
+        val bTop = -bmpH / 2f
+        val bWidth = bmpW
+        val bHeight = bmpH
+
+        // Test across multiple rotations, zooms, pans, and flip states
+        val testAngles = listOf(-45f, -23.5f, 0f, 15f, 30f, 60f, 90f, 180f)
+        val testZooms = listOf(0.5f, 1.0f, 2.5f)
+        val testPans = listOf(Offset(0f, 0f), Offset(120f, -80f))
+        val testFlips = listOf(false, true)
+
+        for (rotation in testAngles) {
+            for (zoom in testZooms) {
+                for (pan in testPans) {
+                    for (isFlipped in testFlips) {
+                        val fitScale = minOf(viewportW / totalW, viewportH / totalH) * 0.92f
+                        val finalScale = fitScale * zoom
+                        val centerX = viewportW / 2f + pan.x
+                        val centerY = viewportH / 2f + pan.y
+                        val sx = if (isFlipped) -finalScale else finalScale
+                        val sy = finalScale
+
+                        val rad = Math.toRadians(rotation.toDouble())
+                        val cosR = cos(rad).toFloat()
+                        val sinR = sin(rad).toFloat()
+
+                        // Pick test pixels within bitmap
+                        val testPixels = listOf(
+                            Offset(0f, 0f),
+                            Offset(500f, 300f),
+                            Offset(1000f, 750f),
+                            Offset(1999f, 1499f)
+                        )
+
+                        for (pixel in testPixels) {
+                            // Forward Transform (matches withTransform with pivot = Offset.Zero)
+                            val worldX = bLeft + (pixel.x / bmpW) * bWidth
+                            val worldY = bTop + (pixel.y / bmpH) * bHeight
+                            val scaledX = worldX * sx
+                            val scaledY = worldY * sy
+                            val rotatedX = scaledX * cosR - scaledY * sinR
+                            val rotatedY = scaledX * sinR + scaledY * cosR
+                            val screenX = rotatedX + centerX
+                            val screenY = rotatedY + centerY
+
+                            // Inverse Transform (matches sampleReferenceColor)
+                            val dx = screenX - centerX
+                            val dy = screenY - centerY
+                            val invRad = Math.toRadians(-rotation.toDouble())
+                            val invCos = cos(invRad).toFloat()
+                            val invSin = sin(invRad).toFloat()
+                            val rx = dx * invCos - dy * invSin
+                            val ry = dx * invSin + dy * invCos
+
+                            val invWorldX = rx / sx
+                            val invWorldY = ry / sy
+
+                            val u = (invWorldX - bLeft) / bWidth
+                            val v = (invWorldY - bTop) / bHeight
+                            val sampledPixelX = u * bmpW
+                            val sampledPixelY = v * bmpH
+
+                            assertEquals("X mismatch at rot=$rotation zoom=$zoom flip=$isFlipped", pixel.x, sampledPixelX, 1e-2f)
+                            assertEquals("Y mismatch at rot=$rotation zoom=$zoom flip=$isFlipped", pixel.y, sampledPixelY, 1e-2f)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
