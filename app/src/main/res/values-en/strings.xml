@@ -495,6 +495,7 @@
     <string name="shortcut_def_layer_duplicate">Duplicate Layer</string>
     <string name="shortcut_def_layer_merge_down">Merge Down</string>
     <string name="shortcut_def_layer_toggle_vis">Toggle Layer Visibility</string>
+    <string name="shortcut_def_disable_touch">Disable Canvas Touch</string>
 
     <!-- Layers -->
     <string name="layer_title">Layers</string>
@@ -810,6 +811,7 @@
     <string name="quick_action_duplicate_layer">Duplicate Layer</string>
     <string name="quick_action_merge_down">Merge Down</string>
     <string name="quick_action_clear_layer">Clear Layer</string>
+    <string name="quick_action_disable_touch">Disable Touch</string>
 
     <string name="settings_gesture_pen_hint">Note: Multi-touch gestures work regardless of stylus mode. Two-finger undo and three-finger redo remain available</string>
     <string name="settings_eyedropper_long_press_title">Long Press Eyedropper</string>
@@ -2194,6 +2196,8 @@
     <!-- Canvas View Lock & Krita Weighted Smoothing -->
     <string name="toast_view_locked">View locked</string>
     <string name="toast_view_unlocked">View unlocked</string>
+    <string name="toast_canvas_touch_disabled">Canvas touch disabled</string>
+    <string name="toast_canvas_touch_enabled">Canvas touch restored</string>
     <string name="canvas_view_lock">Lock View</string>
     <string name="canvas_view_unlock">Unlock View</string>
     <string name="settings_stroke_smoothing_advanced">Advanced</string>

@@ -956,6 +956,9 @@ class PaintViewModel : ViewModel() {
             com.reverie.paint.model.QuickAction.CLEAR_LAYER -> {
                 clearLayer(currentLayerIndex)
             }
+            com.reverie.paint.model.QuickAction.DISABLE_TOUCH -> {
+                isCanvasTouchDisabled = !isCanvasTouchDisabled
+            }
         }
     }
 
@@ -1384,6 +1387,9 @@ class PaintViewModel : ViewModel() {
 
     // Canvas View Lock (固定画布缩放与旋转，保留双指平移)
     var isViewTransformLocked by mutableStateOf(false)
+
+    // Canvas Touch Disabled (禁用画布触控：丢弃一切手指触控与手势，仅手写笔/鼠标可操作画布，单次会话有效)
+    var isCanvasTouchDisabled by mutableStateOf(false)
 
     // Stroke Stabilizer & Smoothing (抖动修正与平滑算法)
     var strokeStabilizer by mutableFloatStateOf(0.0f) // 基础平滑比例: 0.0 ~ 1.0

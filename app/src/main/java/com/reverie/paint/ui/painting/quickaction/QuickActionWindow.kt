@@ -561,6 +561,7 @@ private fun QuickActionButton(
         QuickAction.LOCK_VIEW -> vm.isViewTransformLocked
         QuickAction.TOGGLE_ERASER -> vm.currentToolId == "eraser"
         QuickAction.ALPHA_LOCK -> vm.isCurrentLayerAlphaLocked()
+        QuickAction.DISABLE_TOUCH -> vm.isCanvasTouchDisabled
         else -> false
     }
 
@@ -1549,6 +1550,10 @@ private fun getActionToastInfo(
             val layer = vm.layers.firstOrNull { it.index == vm.currentLayerIndex }
             if (layer?.alphaLocked == true) "已解除透明度锁定"
             else "已锁定透明度"
+        }
+        QuickAction.DISABLE_TOUCH -> {
+            if (!vm.isCanvasTouchDisabled) context.getString(R.string.toast_canvas_touch_disabled)
+            else context.getString(R.string.toast_canvas_touch_enabled)
         }
         else -> context.getString(action.titleRes)
     }

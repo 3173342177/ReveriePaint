@@ -63,4 +63,21 @@ class PaintViewModelShortcutsTest {
             assertEquals("无", map["undo"])
         }
     }
+
+    @Test
+    fun `disable touch shortcut and quick action are properly registered`() {
+        val touchDef = ALL_SHORTCUT_DEFINITIONS.firstOrNull { it.id == "disable_touch" }
+        assertNotNull("Disable touch shortcut definition should exist", touchDef)
+        assertEquals("无", touchDef?.defaultKey)
+        assertEquals(ShortcutCategory.PAINTING, touchDef?.category)
+
+        val quickAction = com.reverie.paint.model.QuickAction.fromId("disable_touch")
+        assertNotNull("QuickAction.DISABLE_TOUCH should exist", quickAction)
+        assertEquals(com.reverie.paint.model.QuickAction.DISABLE_TOUCH, quickAction)
+        // Ensure DISABLE_TOUCH is not in default actions list (as per user decision)
+        org.junit.Assert.assertFalse(
+            "DISABLE_TOUCH should not be in DEFAULT_ACTIONS",
+            com.reverie.paint.model.QuickAction.DEFAULT_ACTIONS.contains(com.reverie.paint.model.QuickAction.DISABLE_TOUCH),
+        )
+    }
 }

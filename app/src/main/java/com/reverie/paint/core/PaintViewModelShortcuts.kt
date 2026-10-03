@@ -58,6 +58,7 @@ val ALL_SHORTCUT_DEFINITIONS = listOf(
     ShortcutDefinition("toggle_eraser", ShortcutCategory.PAINTING, "当前工具与橡皮切换", "PageDown", R.string.shortcut_def_toggle_eraser),
     ShortcutDefinition("toggle_last_tool", ShortcutCategory.PAINTING, "当前工具与上次使用工具切换", "无", R.string.shortcut_def_toggle_last_tool),
     ShortcutDefinition("deselect", ShortcutCategory.PAINTING, "取消选区", "LeftCtrl + D", R.string.shortcut_def_deselect),
+    ShortcutDefinition("disable_touch", ShortcutCategory.PAINTING, "禁用画布触控", "无", R.string.shortcut_def_disable_touch),
 
     // 工具 (Tools)
     ShortcutDefinition("tool_select_rect", ShortcutCategory.TOOLS, "矩形选区", "M", R.string.shortcut_def_select_rect),
@@ -137,6 +138,14 @@ internal fun PaintViewModel.toggleViewTransformLocked() {
     showActionToast(
         if (isViewTransformLocked) R.string.toast_view_locked else R.string.toast_view_unlocked,
         if (isViewTransformLocked) R.drawable.ic_lock else R.drawable.ic_lock_open,
+    )
+}
+
+internal fun PaintViewModel.toggleCanvasTouchDisabled() {
+    isCanvasTouchDisabled = !isCanvasTouchDisabled
+    showActionToast(
+        if (isCanvasTouchDisabled) R.string.toast_canvas_touch_disabled else R.string.toast_canvas_touch_enabled,
+        R.drawable.ic_hand,
     )
 }
 
@@ -671,6 +680,7 @@ internal fun PaintViewModel.executeShortcutAction(id: String) {
             if (t != currentToolId) applyTool(t)
         }
         "tool_color" -> requestUiCommand("open_color")
+        "disable_touch" -> toggleCanvasTouchDisabled()
         // 打开滤镜页并预选对应分类 (color 含 HSV/曲线, blur 含高斯模糊,
         // enhance 含锐化); 具体滤镜项仍需用户点选
         "filter_hsv" -> requestUiCommand("open_filter:color")

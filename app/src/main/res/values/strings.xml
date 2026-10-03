@@ -495,6 +495,7 @@
     <string name="shortcut_def_layer_duplicate">复制图层</string>
     <string name="shortcut_def_layer_merge_down">向下合并</string>
     <string name="shortcut_def_layer_toggle_vis">显隐当前图层</string>
+    <string name="shortcut_def_disable_touch">禁用画布触控</string>
 
     <!-- Layers -->
     <string name="layer_title">图层</string>
@@ -810,6 +811,7 @@
     <string name="quick_action_duplicate_layer">复制图层</string>
     <string name="quick_action_merge_down">向下合并</string>
     <string name="quick_action_clear_layer">清空图层</string>
+    <string name="quick_action_disable_touch">禁用触控</string>
 
     <string name="settings_gesture_pen_hint">提示：多指触控手势不受笔模式影响，手写笔模式下依然可以直接使用双指撤销与三指重做</string>
     <string name="settings_eyedropper_long_press_title">长按画布吸色</string>
@@ -2194,6 +2196,8 @@
     <!-- Canvas View Lock & Krita Weighted Smoothing -->
     <string name="toast_view_locked">视图已锁定</string>
     <string name="toast_view_unlocked">视图已解锁</string>
+    <string name="toast_canvas_touch_disabled">已禁用画布触控</string>
+    <string name="toast_canvas_touch_enabled">已恢复画布触控</string>
     <string name="canvas_view_lock">锁定视图</string>
     <string name="canvas_view_unlock">解锁视图</string>
     <string name="settings_stroke_smoothing_advanced">高级</string>

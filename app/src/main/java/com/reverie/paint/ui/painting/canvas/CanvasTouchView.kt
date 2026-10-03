@@ -2385,13 +2385,34 @@ class CanvasTouchView(context: Context) : View(context) {
 
         for (i in 0 until pointerCount) {
             val toolType = event.getToolType(i)
-            if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
+            if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER || toolType == MotionEvent.TOOL_TYPE_MOUSE) {
                 stylusPointerIndex = i
             } else {
                 if (fingerCount < fingerIndices.size) {
                     fingerIndices[fingerCount++] = i
                 }
             }
+        }
+
+        // 软开关：若已开启“禁用画布触控”，拦截一切手指交互，专供手写笔与鼠标操作
+        if (v.isCanvasTouchDisabled) {
+            if (stylusPointerIndex < 0) {
+                // 纯手指接触：静默丢弃所有事件（无反馈、无弹窗、不作画、不手势）
+                if (strokeStarted) {
+                    cachedDriver?.feedbackManager?.setWritingHapticsEnabled(false)
+                    cachedDriver?.feedbackManager?.stopStrokeSound()
+                    v.touchCancel()
+                    strokeStarted = false
+                    safeEndSymmetryUndoMacro()
+                    resetMirrorBranches()
+                }
+                cancelPendingShapeGesture()
+                isTransformActive = false
+                isContinuousUndoing = false
+                return true
+            }
+            // 存在手写笔 Pointer 时，强制清除手指计数，避免手掌贴屏引发视口晃动或多指手势
+            fingerCount = 0
         }
 
         // 手写笔触控判定：存在手写笔 Pointer 且未处于双指画布手势导航中
