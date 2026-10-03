@@ -1,0 +1,221 @@
+name: Automation & Labeler
+
+on:
+  issues:
+    types: [opened, closed, reopened]
+  pull_request_target:
+    types: [opened, synchronize, closed, reopened, edited]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto Triage & Labeler
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const isPR = !!context.payload.pull_request;
+            const issueOrPr = isPR ? context.payload.pull_request : context.payload.issue;
+            const issueNumber = issueOrPr.number;
+            const action = context.payload.action;
+
+            // Helper: get current labels
+            const currentLabels = (issueOrPr.labels || []).map(l => l.name);
+
+            // ==========================================
+            // 1. Pull Request Handling
+            // ==========================================
+            if (isPR) {
+              const pr = context.payload.pull_request;
+              const labelsToAdd = new Set();
+              const labelsToRemove = new Set();
+
+              // (1) PR Size calculation
+              if (['opened', 'synchronize', 'reopened'].includes(action)) {
+                const totalDiff = (pr.additions || 0) + (pr.deletions || 0);
+                let sizeLabel = 'size/xs';
+                if (totalDiff >= 1000) sizeLabel = 'size/xxl';
+                else if (totalDiff >= 500) sizeLabel = 'size/xl';
+                else if (totalDiff >= 100) sizeLabel = 'size/l';
+                else if (totalDiff >= 30) sizeLabel = 'size/m';
+                else if (totalDiff >= 10) sizeLabel = 'size/s';
+
+                const allSizes = ['size/xs', 'size/s', 'size/m', 'size/l', 'size/xl', 'size/xxl'];
+                for (const s of allSizes) {
+                  if (s !== sizeLabel && currentLabels.includes(s)) {
+                    labelsToRemove.add(s);
+                  }
+                }
+                if (!currentLabels.includes(sizeLabel)) {
+                  labelsToAdd.add(sizeLabel);
+                }
+              }
+
+              // (2) Conventional commit title detection for type:*
+              if (['opened', 'edited'].includes(action)) {
+                const title = pr.title || '';
+                const typeMatch = title.match(/^([a-z]+)(\([a-zA-Z0-9_-]+\))?!?:/);
+                if (typeMatch) {
+                  const prefix = typeMatch[1];
+                  const typeMap = {
+                    feat: 'type: feature',
+                    fix: 'type: bug',
+                    perf: 'type: perf',
+                    refactor: 'type: refactor',
+                    docs: 'type: docs'
+                  };
+                  if (typeMap[prefix] && !currentLabels.includes(typeMap[prefix])) {
+                    labelsToAdd.add(typeMap[prefix]);
+                  }
+                }
+              }
+
+              // (3) Changed files inspection for scope:*
+              if (['opened', 'synchronize'].includes(action)) {
+                try {
+                  const filesResp = await github.rest.pulls.listFiles({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: issueNumber,
+                    per_page: 100
+                  });
+                  const filePaths = filesResp.data.map(f => f.filename);
+
+                  const checkMatch = (regex) => filePaths.some(p => regex.test(p));
+
+                  if (checkMatch(/^app\/src\/main\/cpp\//)) labelsToAdd.add('scope: core/jni');
+                  if (checkMatch(/ui\/painting\/brush\//)) labelsToAdd.add('scope: brush');
+                  if (checkMatch(/ui\/painting\/layers\//)) labelsToAdd.add('scope: layer');
+                  if (checkMatch(/ui\/painting\/canvas\//)) labelsToAdd.add('scope: canvas');
+                  if (checkMatch(/(Filter|Color)/i)) labelsToAdd.add('scope: filter');
+                  if (checkMatch(/(Selection|Transform)/i)) labelsToAdd.add('scope: selection');
+                  if (checkMatch(/(Animation|Playback)/i)) labelsToAdd.add('scope: animation');
+                  if (checkMatch(/ui\/painting\/panels\//)) labelsToAdd.add('scope: ui/ux');
+                  if (checkMatch(/\.(md|xml)$/) && !checkMatch(/\.(kt|cpp|h)$/)) labelsToAdd.add('type: docs');
+                } catch (e) {
+                  console.error('Error fetching PR files:', e);
+                }
+              }
+
+              // (4) PR Lifecycle Status
+              if (action === 'opened') {
+                if (!currentLabels.includes('status: in-progress') && !currentLabels.includes('status: resolved')) {
+                  labelsToAdd.add('status: in-progress');
+                }
+              } else if (action === 'closed') {
+                if (currentLabels.includes('status: in-progress')) {
+                  labelsToRemove.add('status: in-progress');
+                }
+                if (pr.merged && !currentLabels.includes('status: resolved')) {
+                  labelsToAdd.add('status: resolved');
+                }
+              } else if (action === 'reopened') {
+                if (currentLabels.includes('status: resolved')) {
+                  labelsToRemove.add('status: resolved');
+                }
+                labelsToAdd.add('status: in-progress');
+              }
+
+              // Apply labels
+              for (const l of labelsToRemove) {
+                if (currentLabels.includes(l)) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issueNumber,
+                      name: l
+                    });
+                  } catch (e) {
+                    console.log(`Could not remove label ${l}:`, e.message);
+                  }
+                }
+              }
+              const addList = Array.from(labelsToAdd).filter(l => !currentLabels.includes(l));
+              if (addList.length > 0) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  labels: addList
+                });
+              }
+              return;
+            }
+
+            // ==========================================
+            // 2. Issue Handling
+            // ==========================================
+            const issue = context.payload.issue;
+            const labelsToAdd = new Set();
+            const labelsToRemove = new Set();
+
+            if (action === 'opened') {
+              const text = ((issue.title || '') + ' ' + (issue.body || '')).toLowerCase();
+
+              const keywordRules = [
+                { regex: /(笔刷|画笔|brush|stroke|brushstudio|工坊|预设)/i, label: 'scope: brush' },
+                { regex: /(图层|layer|混合模式|blending)/i, label: 'scope: layer' },
+                { regex: /(手写笔|压感|stylus|pen|s-pen|m-pencil|焦点触控笔)/i, label: 'hardware: stylus' },
+                { regex: /(手势|画布|缩放|旋转|canvas|gesture|平移|pinch)/i, label: 'scope: canvas' },
+                { regex: /(滤镜|色彩调整|hsl|模糊|filter)/i, label: 'scope: filter' },
+                { regex: /(选区|套索|变换|变形|selection|transform)/i, label: 'scope: selection' },
+                { regex: /(动画|时间轴|洋葱皮|animation|timeline)/i, label: 'scope: animation' },
+                { regex: /(界面|布局|主题|图标|ui|ux|morandi)/i, label: 'scope: ui/ux' },
+                { regex: /(卡顿|掉帧|延迟|fps|perf|perfhud|stutter|lag)/i, label: 'type: perf' }
+              ];
+
+              for (const rule of keywordRules) {
+                if (rule.regex.test(text) && !currentLabels.includes(rule.label)) {
+                  labelsToAdd.add(rule.label);
+                }
+              }
+            } else if (action === 'closed') {
+              if (currentLabels.includes('status: in-progress')) {
+                labelsToRemove.add('status: in-progress');
+              }
+              const reason = issue.state_reason;
+              if (reason === 'completed' && !currentLabels.includes('status: resolved')) {
+                labelsToAdd.add('status: resolved');
+              } else if (reason === 'not_planned' && !currentLabels.includes('wontfix')) {
+                labelsToAdd.add('wontfix');
+              }
+            } else if (action === 'reopened') {
+              if (currentLabels.includes('status: resolved')) {
+                labelsToRemove.add('status: resolved');
+              }
+              if (currentLabels.includes('wontfix')) {
+                labelsToRemove.add('wontfix');
+              }
+            }
+
+            // Apply labels
+            for (const l of labelsToRemove) {
+              if (currentLabels.includes(l)) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber,
+                    name: l
+                  });
+                } catch (e) {
+                  console.log(`Could not remove label ${l}:`, e.message);
+                }
+              }
+            }
+            const addList = Array.from(labelsToAdd).filter(l => !currentLabels.includes(l));
+            if (addList.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: addList
+              });
+            }
