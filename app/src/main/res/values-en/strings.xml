@@ -469,7 +469,7 @@
     <string name="shortcut_def_pan_canvas">Pan Canvas</string>
     <string name="shortcut_def_zoom_in">Zoom In</string>
     <string name="shortcut_def_zoom_out">Zoom Out</string>
-    <string name="shortcut_def_flip_canvas">Flip Canvas</string>
+    <string name="shortcut_def_flip_canvas">View Flip Horizontal</string>
     <string name="shortcut_def_rotate_canvas">Rotate Canvas</string>
     <string name="shortcut_def_save_document">Save</string>
     <string name="shortcut_def_undo">Undo</string>
@@ -802,8 +802,14 @@
     <string name="quick_action_layout_grid_2">2 Columns</string>
     <string name="quick_action_layout_grid_3">3 Columns</string>
     <string name="quick_action_lock_view">Lock View</string>
-    <string name="quick_action_flip_h">Flip H</string>
-    <string name="quick_action_flip_v">Flip V</string>
+    <string name="quick_action_flip_h">View Flip H</string>
+    <string name="quick_action_flip_v">View Flip V</string>
+    <string name="toast_view_flip_h_on">View Flipped Horizontally</string>
+    <string name="toast_view_flip_h_off">View Flip H Off</string>
+    <string name="toast_view_flip_v_on">View Flipped Vertically</string>
+    <string name="toast_view_flip_v_off">View Flip V Off</string>
+    <string name="toast_canvas_flip_h_done">Canvas Flipped Horizontally</string>
+    <string name="toast_canvas_flip_v_done">Canvas Flipped Vertically</string>
     <string name="quick_action_reset_view">Center &amp; Reset</string>
     <string name="quick_action_undo">Undo</string>
     <string name="quick_action_redo">Redo</string>

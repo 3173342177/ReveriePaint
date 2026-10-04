@@ -469,7 +469,7 @@
     <string name="shortcut_def_pan_canvas">移动画布</string>
     <string name="shortcut_def_zoom_in">放大画布</string>
     <string name="shortcut_def_zoom_out">缩小画布</string>
-    <string name="shortcut_def_flip_canvas">翻转画布</string>
+    <string name="shortcut_def_flip_canvas">视图水平翻转</string>
     <string name="shortcut_def_rotate_canvas">旋转画布</string>
     <string name="shortcut_def_save_document">保存</string>
     <string name="shortcut_def_undo">撤销</string>
@@ -802,8 +802,14 @@
     <string name="quick_action_layout_grid_2">2 列网格</string>
     <string name="quick_action_layout_grid_3">3 列网格</string>
     <string name="quick_action_lock_view">固定视角</string>
-    <string name="quick_action_flip_h">水平翻转</string>
-    <string name="quick_action_flip_v">垂直翻转</string>
+    <string name="quick_action_flip_h">视图翻转·横</string>
+    <string name="quick_action_flip_v">视图翻转·纵</string>
+    <string name="toast_view_flip_h_on">视图水平翻转</string>
+    <string name="toast_view_flip_h_off">已取消视图水平翻转</string>
+    <string name="toast_view_flip_v_on">视图垂直翻转</string>
+    <string name="toast_view_flip_v_off">已取消视图垂直翻转</string>
+    <string name="toast_canvas_flip_h_done">已完全水平翻转画布</string>
+    <string name="toast_canvas_flip_v_done">已完全垂直翻转画布</string>
     <string name="quick_action_reset_view">居中回正</string>
     <string name="quick_action_undo">撤销</string>
     <string name="quick_action_redo">重做</string>

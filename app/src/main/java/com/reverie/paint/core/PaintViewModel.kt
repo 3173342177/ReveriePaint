@@ -927,10 +927,12 @@ class PaintViewModel : ViewModel() {
                 isViewTransformLocked = !isViewTransformLocked
             }
             com.reverie.paint.model.QuickAction.FLIP_H -> {
-                flipCanvasHorizontal()
+                // 快捷面板固定为"视图翻转": 这里要的是随时可切回的临时镜像,
+                // 完全翻转要逐层改像素且进撤销栈, 放快捷面板上容易误触。
+                toggleViewFlipHorizontal()
             }
             com.reverie.paint.model.QuickAction.FLIP_V -> {
-                flipCanvasVertical()
+                toggleViewFlipVertical()
             }
             com.reverie.paint.model.QuickAction.RESET_VIEW -> {
                 requestUiCommand("reset_view")
@@ -1423,6 +1425,13 @@ class PaintViewModel : ViewModel() {
 
     // Canvas View Lock (固定画布缩放与旋转，保留双指平移)
     var isViewTransformLocked by mutableStateOf(false)
+
+    // 视图翻转 (View Flip): 只镜像**显示**, 一像素都不改 —— 与"完全翻转"
+    // (flipCanvasHorizontal/Vertical, 逐层镜像像素) 是两回事。图层多时完全翻转
+    // 要重绘每一层, 临时查看/对照画一下用视图翻转, 零开销且随时可切回。
+    // 属于视图状态: 不进撤销栈、不影响导出、不录制进回放。
+    var viewFlipX by mutableStateOf(false)
+    var viewFlipY by mutableStateOf(false)
 
     // Canvas Touch Disabled (禁用画布触控：丢弃一切手指触控与手势，仅手写笔/鼠标可操作画布，单次会话有效)
     var isCanvasTouchDisabled by mutableStateOf(false)
