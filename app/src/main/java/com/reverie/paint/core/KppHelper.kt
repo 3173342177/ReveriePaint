@@ -1040,7 +1040,12 @@ object KppHelper {
                     "gih" -> "image_pipe_brush"
                     else -> "png_brush"
                 }
-                """<Brush scale="1" type="$tipType" useAutoSpacing="0" BrushVersion="2" filename="${params.maskingTipAsset}" spacing="${params.maskingSpacing}" angle="0.0" brushApplication="0"/>"""
+                val maskFade = params.maskingFade.coerceIn(0.0, 1.0)
+                val maskTipShape = if (params.maskingTipShape == 1) "rect" else "circle"
+                // 采样笔尖同样要挂 MaskGenerator: 蒙版淡出/柔和就落在这里的
+                // hfade/vfade。缺了它, 选了自定义蒙版笔尖时这两个滑块会"改了没变化"
+                // (fade 写不进预设, 重载后被打回原值)。
+                """<Brush scale="1" type="$tipType" useAutoSpacing="0" BrushVersion="2" filename="${params.maskingTipAsset}" spacing="${params.maskingSpacing}" angle="0.0" brushApplication="0"> <MaskGenerator diameter="${params.size * params.maskingSizeRatio}" hfade="$maskFade" vfade="$maskFade" id="default" spikes="2" type="$maskTipShape" ratio="1.0" antialiasEdges="1"/> </Brush>"""
             } else {
                 val maskTipShape = if (params.maskingTipShape == 1) "rect" else "circle"
                 val maskFade = params.maskingFade.coerceIn(0.0, 1.0)
