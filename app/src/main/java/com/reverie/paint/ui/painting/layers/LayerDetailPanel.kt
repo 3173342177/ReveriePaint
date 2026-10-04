@@ -148,7 +148,6 @@ internal fun LayerDetailPage(
     vm: PaintViewModel,
     index: Int,
     onBack: () -> Unit,
-    onOpenBlendModes: () -> Unit,
     onOpenFilters: () -> Unit,
     onOpenFilterAdjust: (Int, String) -> Unit = { _, _ -> onOpenFilters() },
     onRename: (String) -> Unit,
@@ -789,36 +788,12 @@ internal fun LayerDetailPage(
             }
         }
 
-        // Blend mode row button
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .noRippleClickable(onOpenBlendModes)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(
-                painterResource(R.drawable.ic_layerstack),
-                contentDescription = null,
-                tint = Morandi.icon,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                stringResource(R.string.layer_blend_mode),
-                color = Morandi.text,
-                fontSize = 13.sp,
-                modifier = Modifier.weight(1f),
-            )
-            val curBlendName = stringResource(blendModeResId(layer?.blendMode ?: "normal"))
-            Text(
-                curBlendName,
-                color = Morandi.subText,
-                fontSize = 13.sp,
-            )
-            Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = Morandi.subText, modifier = Modifier.size(16.dp))
-        }
+        // 混合模式行: 原地弹下拉, 不再整页跳转 (原先要点进一层再点返回)
+        BlendModeDropdownRow(
+            current = layer?.blendMode ?: "normal",
+            enabled = layer != null,
+            onSelect = { opId -> layer?.let { vm.setLayerBlendMode(it.index, opId) } },
+        )
 
         // 滤镜与颜色调整 (非滤镜图层时显示)
         if (layer?.isGroup != true && !isFilterLayer) {
@@ -1325,6 +1300,130 @@ private data class BlendModeCategory(
     val opIds: List<String>,
 )
 
+/**
+ * 混合模式下拉。
+ *
+ * 原先是整页跳转 (LayerView.BlendModes -> BlendModesPage)，选一个要先进一层再点
+ * 返回，27 个模式铺满一屏。现在停在详情页原地弹出，下拉里按原来的分类分组，
+ * 当前项高亮并自动滚到可见。
+ */
+@Composable
+private fun BlendModeDropdownRow(
+    current: String,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    val currentName = stringResource(blendModeResId(current))
+
+    Box {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .noRippleClickable { if (enabled) expanded = true }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_layerstack),
+                contentDescription = null,
+                tint = Morandi.icon,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                stringResource(R.string.layer_blend_mode),
+                color = Morandi.text,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(currentName, color = Morandi.subText, fontSize = 13.sp)
+            Icon(
+                painterResource(R.drawable.ic_chevron),
+                contentDescription = null,
+                tint = Morandi.subText,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+
+        // 打开时把当前模式滚到可见, 否则 27 个模式要滑很久
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        LaunchedEffect(expanded) {
+            if (!expanded) return@LaunchedEffect
+            var idx = 0
+            for ((ci, cat) in blendModeCategories.withIndex()) {
+                if (ci > 0) idx++
+                idx++
+                val hit = cat.opIds.indexOf(current)
+                if (hit != -1) {
+                    listState.scrollToItem(maxOf(0, idx + hit - 2))
+                    break
+                }
+                idx += cat.opIds.size
+            }
+        }
+
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Morandi.panel, RoundedCornerShape(10.dp)),
+        ) {
+            androidx.compose.foundation.lazy.LazyColumn(
+                state = listState,
+                modifier = Modifier.heightIn(max = 420.dp).width(220.dp),
+            ) {
+                blendModeCategories.forEachIndexed { catIdx, cat ->
+                    if (catIdx > 0) {
+                        item(key = "div_${cat.titleRes}") {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                                    .height(0.8.dp)
+                                    .background(Morandi.border.copy(alpha = 0.5f))
+                            )
+                        }
+                    }
+                    item(key = "head_${cat.titleRes}") {
+                        Text(
+                            text = stringResource(cat.titleRes),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Morandi.subText.copy(alpha = 0.65f),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
+                    items(cat.opIds, key = { it }) { opId ->
+                        val isSelected = opId == current
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 1.5.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) Morandi.accent.copy(alpha = 0.16f) else Color.Transparent)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    expanded = false
+                                    onSelect(opId)
+                                }
+                                .padding(horizontal = 8.dp, vertical = 7.dp),
+                        ) {
+                            Text(
+                                text = stringResource(blendModeResId(opId)),
+                                color = if (isSelected) Morandi.accent else Morandi.text,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 private val blendModeCategories = listOf(
     BlendModeCategory(
         R.string.blend_category_basic,
@@ -1353,183 +1452,6 @@ private val blendModeCategories = listOf(
 )
 
 @Composable
-internal fun BlendModesPage(
-    vm: PaintViewModel,
-    index: Int,
-    onBack: () -> Unit,
-) {
-    val current = vm.layers.firstOrNull { it.index == index }?.blendMode
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val listHeight = 320.dp
-    val modeIcons = mapOf(
-        "normal" to R.drawable.ic_blend_normal,
-        "multiply" to R.drawable.ic_blend_multiply,
-        "screen" to R.drawable.ic_blend_screen,
-        "overlay" to R.drawable.ic_blend_hardlight,
-        "darken" to R.drawable.ic_blend_darken,
-        "lighten" to R.drawable.ic_blend_lighten,
-        "dodge" to R.drawable.ic_blend_dodge,
-        "burn" to R.drawable.ic_blend_burn,
-        "linear_burn" to R.drawable.ic_blend_darken,
-        "linear_dodge" to R.drawable.ic_blend_add,
-        "difference" to R.drawable.ic_blend_difference,
-        "add" to R.drawable.ic_blend_add,
-        "subtract" to R.drawable.ic_blend_subtract,
-        "divide" to R.drawable.ic_blend_divide,
-        "hard_light" to R.drawable.ic_blend_hardlight,
-        "soft_light" to R.drawable.ic_blend_softlight,
-        "vivid_light" to R.drawable.ic_blend_dodge,
-        "pin_light" to R.drawable.ic_blend_burn,
-        "linear light" to R.drawable.ic_blend_softlight,
-        "exclusion" to R.drawable.ic_blend_difference,
-        "hue" to R.drawable.ic_blend_hue,
-        "saturation" to R.drawable.ic_blend_saturation,
-        "color" to R.drawable.ic_blend_color,
-        "value" to R.drawable.ic_blend_value,
-        "luminosity_sai" to R.drawable.ic_blend_dodge,
-        "glow" to R.drawable.ic_blend_add,
-    )
-    fun iconFor(opId: String) = modeIcons[opId] ?: R.drawable.ic_blend_normal
-
-    fun applyMode(opId: String) {
-        if (opId != vm.layers.firstOrNull { it.index == index }?.blendMode) {
-            vm.setLayerBlendMode(index, opId)
-        }
-    }
-
-    val haptic = LocalHapticFeedback.current
-
-    // 打开时把当前模式滚动到可见区域
-    LaunchedEffect(Unit) {
-        var targetIndex = 0
-        var found = false
-        for ((catIdx, cat) in blendModeCategories.withIndex()) {
-            if (catIdx > 0) targetIndex++ // 分隔线
-            targetIndex++ // 标题
-            val idx = cat.opIds.indexOf(current)
-            if (idx != -1) {
-                targetIndex += idx
-                found = true
-                break
-            }
-            targetIndex += cat.opIds.size
-        }
-        if (found && targetIndex > 2) {
-            listState.scrollToItem(maxOf(0, targetIndex - 2))
-        }
-    }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(7.dp))
-                        .noRippleClickable(onBack),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painterResource(R.drawable.ic_chevron),
-                    contentDescription = stringResource(R.string.common_back),
-                    tint = Morandi.icon,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            Text(stringResource(R.string.layer_blend_mode), color = Morandi.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Morandi.border))
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(listHeight)
-                .clip(RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            androidx.compose.foundation.lazy.LazyColumn(
-                state = listState,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                blendModeCategories.forEachIndexed { catIdx, cat ->
-                    if (catIdx > 0) {
-                        item(key = "div_${cat.titleRes}") {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 6.dp)
-                                    .height(0.8.dp)
-                                    .background(Morandi.border.copy(alpha = 0.5f))
-                            )
-                        }
-                    }
-                    item(key = "head_${cat.titleRes}") {
-                        Text(
-                            text = stringResource(cat.titleRes),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Morandi.subText.copy(alpha = 0.65f),
-                            letterSpacing = 0.5.sp,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
-                    }
-                    items(cat.opIds, key = { it }) { opId ->
-                        val name = stringResource(blendModeResId(opId))
-                        val isSelected = opId == current
-                        val rowSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 1.5.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) Morandi.accent.copy(alpha = 0.16f) else Color.Transparent)
-                                .pressScale(rowSource, pressedScale = 0.98f)
-                                .clickable(interactionSource = rowSource, indication = null) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    applyMode(opId)
-                                }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Icon(
-                                    painterResource(iconFor(opId)),
-                                    contentDescription = null,
-                                    tint = if (isSelected) Morandi.accent else Morandi.icon,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    name,
-                                    color = if (isSelected) Morandi.accent else Morandi.text,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                )
-                                Spacer(Modifier.weight(1f))
-                                if (isSelected) {
-                                    Icon(
-                                        painterResource(R.drawable.ic_check),
-                                        contentDescription = null,
-                                        tint = Morandi.accent,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Filters sub page (HuaShijie Pro style list matching user screenshot)

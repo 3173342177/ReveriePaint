@@ -540,6 +540,50 @@ import kotlinx.coroutines.withContext
 
     private var pendingKppReloadJob: Job? = null
 
+    /**
+     * 把内存里的动力学曲线序列化成 Krita sensor param 全文, 供 kpp 落盘。
+     *
+     * 曲线本身住在 `brushDynamicOptions` (DynamicOptionConfig.points), 而 Krita 把它放在
+     * `<Key>Sensor` param 的 XML 里, 由 `<Key>UseCurve` 开关。此前 updateBrushDynamicOption
+     * 只写内存 + 下发引擎, 不落盘, 于是切笔刷/重启后曲线丢失。
+     * 只有"已启用"或"曲线非线性"的选项才写, 避免把一堆恒等曲线塞进每个预设。
+     */
+    private fun PaintViewModel.buildDynamicOptionSensorXml(): Map<String, String> {
+        val out = HashMap<String, String>()
+        for ((key, cfg) in brushDynamicOptions) {
+            if (key.isBlank()) continue
+            val curve = cfg.toKritaCurveString()
+            val nonLinear = curve != "0.000,0.000;1.000,1.000;"
+            if (!cfg.enabled && !nonLinear) continue
+            val id = cfg.sensorId.ifBlank { "pressure" }
+            out[key] = "<!DOCTYPE params><params id=\"$id\"><curve>$curve</curve></params>"
+        }
+        return out
+    }
+
+    /**
+     * 把 kpp 里读回的 `<Key>Sensor` 曲线灌进 brushDynamicOptions。
+     *
+     * 曲线编辑此前只写内存 + 下发引擎, 落盘由 [buildDynamicOptionSensorXml] 负责;
+     * 读回这一段是它的对侧, 缺了的话切笔刷后 UI 会显示默认曲线而引擎用的是 kpp 里的,
+     * 两边对不上。预设里没有传感器 param 时保持现状 (线性), 不覆盖用户内存中的值。
+     */
+    private fun PaintViewModel.applySensorXmlToDynamicOptions(sensorXml: Map<String, String>) {
+        if (sensorXml.isEmpty()) return
+        for ((key, body) in sensorXml) {
+            val cfg = brushDynamicOptions[key] ?: continue
+            val id = Regex("""id="([^"]+)"""").find(body)?.groupValues?.getOrNull(1)
+            val curve = Regex("""<curve>([^<]*)</curve>""").find(body)?.groupValues?.getOrNull(1)
+            if (curve.isNullOrBlank()) continue
+            val points = com.reverie.paint.model.DynamicOptionConfig.parseKritaCurve(curve)
+            brushDynamicOptions[key] = cfg.copy(
+                enabled = true,
+                sensorId = id ?: cfg.sensorId,
+                points = points,
+            )
+        }
+    }
+
     internal fun PaintViewModel.saveBrushParam(
         dynamicsChanged: Boolean = false,
         smudgeChanged: Boolean = false,
@@ -555,6 +599,7 @@ import kotlinx.coroutines.withContext
         val sc = smudgeChanged || (existing?.smudgeCustomized == true)
         val spc = spacingChanged || (existing?.spacingCustomized == true)
         val p = BrushParams(
+            dynamicOptions = buildDynamicOptionSensorXml(),
             size = brushSize,
             opacity = brushOpacity,
             flow = brushFlow,
@@ -1408,6 +1453,7 @@ import kotlinx.coroutines.withContext
                 // SoftnessValue 缺省即 1.0(neutral/不改动笔尖羽化)；引擎侧兜底报告的是 0.5，
                 // 那是"半羽化"而不是中性值，所以这里不拿 d[10] 兜底，直接落到 neutral。
                 brushSoftness = parsed.softness ?: KppHelper.SOFTNESS_NEUTRAL
+                applySensorXmlToDynamicOptions(parsed.sensorXml)
                 brushRatio = parsed.ratio ?: d.getOrNull(11) ?: 1.0
                 brushSharpness = d.getOrNull(12) ?: 0.0
                 brushRotation = d.getOrNull(13) ?: 0.0

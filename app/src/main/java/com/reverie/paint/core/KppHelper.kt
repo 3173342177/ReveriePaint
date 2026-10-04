@@ -523,6 +523,10 @@ object KppHelper {
     const val SOFTNESS_MIN = 0.1
     const val SOFTNESS_NEUTRAL = 1.0
 
+    /** 需要读写曲线的动力学选项键 (与工作台 getBrushDynamicOption 的键同名) */
+    val DYNAMIC_OPTION_KEYS =
+        listOf("Size", "Opacity", "Flow", "Rotation", "Scatter", "Softness", "Spacing", "SmudgeRate")
+
     /** fade(实心率) 的"锐利"端值，也是未自定义笔刷的默认落点 */
     const val FADE_SOLID = 1.0
 
@@ -597,6 +601,11 @@ object KppHelper {
         val pressureSize: Double? = null,
         val pressureOpacity: Double? = null,
         val pressureFlow: Double? = null,
+        /**
+         * 动力学曲线原文: optionKey(如 Size/Opacity/Flow/Rotation) -> `<Key>Sensor` param 全文。
+         * 读回后灌回 brushDynamicOptions, UI 显示的曲线才与引擎实际生效的一致。
+         */
+        val sensorXml: Map<String, String> = emptyMap(),
     )
 
     /**
@@ -730,6 +739,18 @@ object KppHelper {
         }
         val pressureSize = if (hasPressureSize) 1.0 else 0.0
 
+        // 动力学曲线原文: Krita 把曲线放在 <Key>Sensor param 的 XML 里, 读回来灌进
+        // brushDynamicOptions, 否则 UI 显示的曲线与引擎实际生效的不是同一条。
+        val sensorXml = HashMap<String, String>()
+        for (key in DYNAMIC_OPTION_KEYS) {
+            val m = Regex(
+                """<param[^>]*name="${key}Sensor"[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?\s*</param>""",
+                RegexOption.DOT_MATCHES_ALL,
+            ).find(xml)
+            val body = m?.groupValues?.getOrNull(1)?.trim()
+            if (!body.isNullOrEmpty()) sensorXml[key] = body
+        }
+
         return KppParsedAttributes(
             fade = fade,
             softness = softness,
@@ -755,6 +776,7 @@ object KppHelper {
             sizeSensor = sizeSensor,
             opacitySensor = opacitySensor,
             flowSensor = flowSensor,
+            sensorXml = sensorXml,
             pressureSize = pressureSize,
             pressureOpacity = pressureOpacity,
             pressureFlow = pressureFlow,
@@ -1022,6 +1044,15 @@ object KppHelper {
             // No brush_definition at all, insert auto_brush
             val autoDef = """<param type="string" name="brush_definition"><![CDATA[<Brush scale="1" type="auto_brush" BrushVersion="2" spacing="${params.spacing}" angle="${params.angle}"> <MaskGenerator diameter="${params.size}" hfade="$fadeVal" vfade="$fadeVal" id="default" spikes="$spikesVal" type="$tipTypeAttr" ratio="${params.ratio}" antialiasEdges="$aaVal"/> </Brush> ]]></param>"""
             xml = xml.replace("</Preset>", " $autoDef\n</Preset>")
+        }
+
+        // 16.5 动力学曲线: Krita 把曲线存进 <Key>Sensor param 的 XML 里
+        // (<!DOCTYPE params><params id="pressure"><curve>...</curve></params>),
+        // 由 <Key>UseCurve 决定是否启用。原先这里什么都不写, 曲线编辑只活在内存里。
+        for ((key, sensorXml) in params.dynamicOptions) {
+            if (key.isBlank() || sensorXml.isBlank()) continue
+            xml = updateParam(xml, "${key}Sensor", sensorXml)
+            xml = updateParam(xml, "${key}UseCurve", "true")
         }
 
         // 17. Masking Brush (双重画笔/蒙版画笔)
