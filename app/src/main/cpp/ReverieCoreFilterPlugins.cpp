@@ -299,21 +299,17 @@ public:
 // ============================================================================
 void registerCoreFilters()
 {
-    static bool filtersDone = false;
-    if (!filtersDone) {
-        KisFilterRegistry *r = KisFilterRegistry::instance();
-        if (!r->get("blur")) {
-            r->add(new ReverieBlurFilter());
-        }
-        if (!r->get("gaussian blur")) {
-            r->add(new ReverieGaussianBlurFilter());
-        }
-        if (!r->get("unsharp")) {
-            r->add(new ReverieUnsharpFilter());
-        }
-        filtersDone = true;
+    KisFilterRegistry *r = KisFilterRegistry::instance();
+    if (!r->get("blur")) {
+        r->add(new ReverieBlurFilter());
     }
-    // reverie-f0..f34 内核滤镜 (调整层/滤镜蒙版用), 独立幂等守卫
+    if (!r->get("gaussian blur")) {
+        r->add(new ReverieGaussianBlurFilter());
+    }
+    if (!r->get("unsharp")) {
+        r->add(new ReverieUnsharpFilter());
+    }
+    // reverie-f0..f34 内核滤镜 (调整层/滤镜蒙版用)
     registerReverieRegistryFilters();
     // reverie-solid-color 纯色填充 generator (填充图层用)
     registerReverieGenerators();

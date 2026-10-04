@@ -20,13 +20,14 @@
 KisFilterConfigurationSP ReverieCore::reverieMakeConfig(int filterType, double p1, double p2, double p3, double p4,
                                            const QByteArray &lut)
 {
-    registerCoreFilters();
     KisFilterSP filter = KisFilterRegistry::instance()->get(QStringLiteral("reverie-f%1").arg(filterType));
     if (!filter) {
-        RPC_LOG("reverieMakeConfig: filter reverie-f%d not found", filterType);
         return nullptr;
     }
     KisFilterConfigurationSP config = filter->factoryConfiguration(KisGlobalResourcesInterface::instance());
+    if (!config) {
+        return nullptr;
+    }
     config->setProperty("reverieType", filterType);
     config->setProperty("p1", p1);
     config->setProperty("p2", p2);
@@ -164,8 +165,8 @@ bool ReverieCore::setAdjustmentLayerConfig(int index, int filterType,
 
     if (!recordUndo) {
         layer->setFilter(newCfg);
+        layer->setDirty();
         if (m_document) {
-            m_document->refreshGraphAsync();
             m_document->waitForDone();
         }
         markDirty();

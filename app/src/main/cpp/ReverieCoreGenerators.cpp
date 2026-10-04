@@ -79,13 +79,9 @@ public:
 
 void registerReverieGenerators()
 {
-    static bool generatorsDone = false;
-    if (!generatorsDone) {
-        KisGeneratorRegistry *r = KisGeneratorRegistry::instance();
-        if (!r->get(QStringLiteral("reverie-solid-color"))) {
-            r->add(KisGeneratorSP(new ReverieSolidColorGenerator()));
-        }
-        generatorsDone = true;
+    KisGeneratorRegistry *r = KisGeneratorRegistry::instance();
+    if (!r->get(QStringLiteral("reverie-solid-color"))) {
+        r->add(KisGeneratorSP(new ReverieSolidColorGenerator()));
     }
 }
 

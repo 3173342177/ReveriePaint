@@ -35,17 +35,21 @@ internal fun PaintViewModel.addAdjustmentLayer(
             )
         }
     }
+    var success = false
     runCore(after = {
-        notifyLayerChanged()
-        onCreated(currentLayerIndex)
+        if (success) {
+            notifyLayerChanged()
+            onCreated(currentLayerIndex)
+        }
     }) {
-        ReverieCoreBridge.createAdjustmentLayer(name, filterType, p1, p2, p3, p4, lut)
+        success = ReverieCoreBridge.createAdjustmentLayer(name, filterType, p1, p2, p3, p4, lut)
     }
 }
 
 /**
  * 面板滑条实时预览: 只把参数推入层配置触发 merger 重算, 不录事件、不入撤销栈。
  * 调整层模式不走像素预览三步 (与 merger 重算互踩)。
+ * 采用 runFilterPreview 机制, 拖动滑块时自动丢弃堆积的历史中间帧 (latest-state-wins)。
  */
 internal fun PaintViewModel.previewAdjustmentConfig(
     index: Int,
@@ -56,7 +60,7 @@ internal fun PaintViewModel.previewAdjustmentConfig(
     p4: Double,
     lut: ByteArray? = null,
 ) {
-    runCore {
+    runFilterPreview {
         ReverieCoreBridge.previewAdjustmentLayerConfig(index, filterId, p1, p2, p3, p4, lut)
     }
 }

@@ -24,6 +24,10 @@
 
 #include "reverie_jni_common.h"
 #include <kis_image_config.h>
+#include <filter/kis_filter_registry.h>
+#include <generator/kis_generator_registry.h>
+#include <KisResourceLoaderRegistry.h>
+#include "ReverieCoreInternal.h"
 
 // The single core instance (UI is single-window)
 static ReverieCore *g_core = nullptr;
@@ -63,6 +67,17 @@ static void ensureQtApp()
             config.setMemoryHardLimitPercent(75.0);
             config.setMaxSwapSize(8192);
         } catch (...) {}
+
+        // Krita's KisFilterRegistry, KisGeneratorRegistry, and KisResourceLoaderRegistry
+        // use qApp->findChild<RegistryType>() and if missing, create new RegistryType(qApp).
+        // If called from a secondary thread, Qt refuses to attach them as children of qApp
+        // ("Cannot create children for a parent that is in a different thread"), causing
+        // findChild to fail on every future call and creating brand new empty registries.
+        // We must initialize them on qApp's creation thread so they cleanly attach to qApp.
+        KisFilterRegistry::instance();
+        KisGeneratorRegistry::instance();
+        KisResourceLoaderRegistry::instance();
+        registerCoreFilters();
     }
 }
 

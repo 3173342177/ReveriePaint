@@ -162,16 +162,11 @@ private:
 
 void registerReverieRegistryFilters()
 {
-    static bool filtersDone = false;
-    if (filtersDone) {
-        return;
-    }
     KisFilterRegistry *registry = KisFilterRegistry::instance();
     for (int type = 0; type <= 34; ++type) {
         const QString id = QStringLiteral("reverie-f%1").arg(type);
         if (!registry->get(id)) {
-            registry->add(new ReverieKernelFilter(type));
+            registry->add(id, new ReverieKernelFilter(type));
         }
     }
-    filtersDone = true;
 }
