@@ -157,17 +157,34 @@ jobs:
             const labelsToRemove = new Set();
 
             if (action === 'opened') {
-              const text = ((issue.title || '') + ' ' + (issue.body || '')).toLowerCase();
+              // Extract user-authored content, ignoring template headers and hardware spec fields
+              let text = (issue.title || '') + ' ';
+              const body = issue.body || '';
+              const sections = body.split(/^###\s+/m);
+              for (const sec of sections) {
+                if (!sec.trim()) continue;
+                const lines = sec.split('\n');
+                const header = lines[0].trim().toLowerCase();
+                const content = lines.slice(1).join('\n').trim();
+                if (!content || content === '_No response_' || content === '无' || content === '纯触控' || content === 'Touch only') {
+                  continue;
+                }
+                const isMeta = /(app version|应用版本|device|设备|stylus|手写笔|checklist|确认|screenshot|media|截图|log|日志)/i.test(header);
+                if (!isMeta) {
+                  text += content + ' ';
+                }
+              }
 
               const keywordRules = [
-                { regex: /(笔刷|画笔|brush|stroke|brushstudio|工坊|预设)/i, label: 'scope: brush' },
-                { regex: /(图层|layer|混合模式|blending)/i, label: 'scope: layer' },
-                { regex: /(手写笔|压感|stylus|pen|s-pen|m-pencil|焦点触控笔)/i, label: 'hardware: stylus' },
-                { regex: /(手势|画布|缩放|旋转|canvas|gesture|平移|pinch)/i, label: 'scope: canvas' },
-                { regex: /(滤镜|色彩调整|hsl|模糊|filter)/i, label: 'scope: filter' },
-                { regex: /(选区|套索|变换|变形|selection|transform)/i, label: 'scope: selection' },
-                { regex: /(动画|时间轴|洋葱皮|animation|timeline)/i, label: 'scope: animation' },
-                { regex: /(界面|布局|主题|图标|ui|ux|morandi)/i, label: 'scope: ui/ux' },
+                { regex: /(笔刷|画笔|笔尖|brush|brushstudio|paintop)/i, label: 'scope: brush' },
+                { regex: /(图层|图层组|剪贴蒙版|alpha锁|混合模式|blending|layer)/i, label: 'scope: layer' },
+                { regex: /(手写笔|压感|笔触断裂|悬浮光标|防误触|笔身侧键|笔尖偏移|stylus|pen pressure|palm rejection|hover cursor)/i, label: 'hardware: stylus' },
+                { regex: /(画布|平移|缩放|旋转视角|双指手势|canvas|viewport|pinch)/i, label: 'scope: canvas' },
+                { regex: /(滤镜|色彩调整|色相饱和度|曲线调整|高斯模糊|filter|blur)/i, label: 'scope: filter' },
+                { regex: /(选区|套索|自由变换|蚂蚁线|斑马纹|selection|lasso|transform)/i, label: 'scope: selection' },
+                { regex: /(逐帧动画|时间轴|洋葱皮|animation|timeline)/i, label: 'scope: animation' },
+                { regex: /(主页|快捷栏|工具栏|悬浮窗|设置面板|弹窗|主题|morandi|toolbar)/i, label: 'scope: ui/ux' },
+                { regex: /(工程保存|保存失败|导出图片|导入图片|psd|kra|webdav)/i, label: 'scope: io/project' },
                 { regex: /(卡顿|掉帧|延迟|fps|perf|perfhud|stutter|lag)/i, label: 'type: perf' }
               ];
 

@@ -1,6 +1,5 @@
 name: 缺陷反馈 (Bug Report)
 description: 反馈 ReveriePaint 在使用中遇到的崩溃、异常行为或显示错误
-title: "fix: "
 labels: ["type: bug"]
 body:
   - type: markdown
