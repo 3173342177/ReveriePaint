@@ -520,6 +520,8 @@ class PaintViewModel : ViewModel() {
     var brushOpacity by mutableDoubleStateOf(1.0)
     var brushPresets by mutableStateOf<List<BrushPresetInfo>>(emptyList())
     var isBrushPresetsLoading by mutableStateOf(false)
+    var brushPresetsLoaded = false
+        internal set
     var brushPresetIndex by mutableIntStateOf(-1)
 
     // User-defined brush groups: preset name -> group name; and the list of
@@ -3556,6 +3558,7 @@ class PaintViewModel : ViewModel() {
         unregisterMemoryPressureCallbacks()
         renderThread = null
         renderHandler = null
+        brushPresetsLoaded = false
         super.onCleared()
     }
 
@@ -3644,7 +3647,10 @@ class PaintViewModel : ViewModel() {
         after: (() -> Unit)? = null,
         op: () -> Unit,
     ) {
-        val h = renderHandler ?: return
+        val h = renderHandler ?: run {
+            if (after != null) mainHandler.post { after() }
+            return
+        }
         pendingCoreOps.incrementAndGet()
         h.post {
             pendingCoreOps.decrementPositive()
