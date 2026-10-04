@@ -2059,7 +2059,7 @@ import kotlinx.coroutines.withContext
                         ?: (matchedTip?.let { tipFileNameMap[it.index] })
                         ?: ""
 
-                    val rawName = preset.name.trim().ifBlank { "$targetGroupName ${idx + 1}" }
+                    val rawName = abrPresetName(preset.name, targetGroupName, idx)
                     var candidateName = rawName.replace(Regex("""[\\/:*?"<>|]"""), "_")
                     var counter = 2
                     while (existingKppNames.contains(candidateName)) {
@@ -2311,6 +2311,23 @@ import kotlinx.coroutines.withContext
             android.util.Log.e("ReveriePaint", "importSingleBrushInternal failed", e)
             BrushImportResult(success = false)
         }
+    }
+
+    /**
+     * ABR 预设的落盘名。
+     *
+     * Photoshop 给很多 ABR 包的笔刷名就是纯数字 ("1"、"2"、"3"…)，Krita 自己的
+     * 资源名也是把包名拼在前面 (`brushes_by_mar_ka_d338ela_2`)。裸数字名有两个
+     * 实际问题: 用户在笔刷列表里完全认不出这是哪个包; 再导入第二个同命名的包
+     * 会走重名兜底变成 "1_2"、"2_2"，越导越乱。
+     *
+     * 所以纯数字名补包名前缀，自带描述的名字（"Round 10 Hardness 80%"）保持原样。
+     */
+    internal fun abrPresetName(rawName: String, packBaseName: String, index: Int): String {
+        val trimmed = rawName.trim()
+        if (trimmed.isBlank()) return "$packBaseName ${index + 1}"
+        val hasLetter = trimmed.any { it.isLetter() }
+        return if (hasLetter) trimmed else "${packBaseName}_$trimmed"
     }
 
     /** 导入外部笔刷文件 (.kpp, .bundle, .gbr, .png, .abr, .zip) */
