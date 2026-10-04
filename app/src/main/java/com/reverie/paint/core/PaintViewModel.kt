@@ -3564,8 +3564,12 @@ class PaintViewModel : ViewModel() {
 
     private var performanceHintSession: Any? = null
     private var renderThreadTid: Int = -1
+    private var adpfDisabled: Boolean = false
 
     internal fun initPerformanceHintSession() {
+        if (adpfDisabled || DeviceInfo.isHuaweiOrHonor) {
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && hasAppContext() && renderThreadTid > 0 && performanceHintSession == null) {
             try {
                 val phm = appContext.getSystemService(android.os.PerformanceHintManager::class.java)
@@ -3575,19 +3579,27 @@ class PaintViewModel : ViewModel() {
                     android.util.Log.i("PaintViewModel", "ADPF PerformanceHintSession created for tid $renderThreadTid (target=${targetNanos}ns)")
                 }
             } catch (t: Throwable) {
-                android.util.Log.w("PaintViewModel", "ADPF PerformanceHintSession init failed: ${t.message}")
+                adpfDisabled = true
+                android.util.Log.w("PaintViewModel", "ADPF PerformanceHintSession init failed, disabling ADPF: ${t.message}")
             }
         }
     }
 
     internal fun reportRenderWorkDuration(durationNanos: Long) {
+        if (adpfDisabled || DeviceInfo.isHuaweiOrHonor || durationNanos <= 0L) {
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (performanceHintSession == null) {
                 initPerformanceHintSession()
             }
             try {
                 (performanceHintSession as? android.os.PerformanceHintManager.Session)?.reportActualWorkDuration(durationNanos)
-            } catch (_: Throwable) {}
+            } catch (t: Throwable) {
+                adpfDisabled = true
+                closePerformanceHintSession()
+                android.util.Log.w("PaintViewModel", "ADPF reportActualWorkDuration failed, disabling ADPF: ${t.message}")
+            }
         }
     }
 
@@ -3628,7 +3640,9 @@ class PaintViewModel : ViewModel() {
                 android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY
             )
             try {
-                ReverieCoreBridge.bindCurrentThreadToPerformanceCores()
+                if (!DeviceInfo.isHuaweiOrHonor) {
+                    ReverieCoreBridge.bindCurrentThreadToPerformanceCores()
+                }
             } catch (t: Throwable) {
                 android.util.Log.w("PaintViewModel", "Failed to bind render thread affinity: ${t.message}")
             }
@@ -4042,8 +4056,10 @@ class PaintViewModel : ViewModel() {
         // (HWUI 不做局部纹理更新), 这是本项目最大的带宽开销
         if (traceOn) PerfTrace.renderFlip(w.toLong() * h * 4, w.toLong() * h)
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            rendered.prepareToDraw()
+        if (!DeviceInfo.isHuaweiOrHonor && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            try {
+                rendered.prepareToDraw()
+            } catch (_: Throwable) {}
         }
 
         // Direct hardware invalidate from render thread (zero Handler hop, zero frame delay).
