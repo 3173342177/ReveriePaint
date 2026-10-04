@@ -1387,6 +1387,7 @@ bool ReverieCore::loadRevp(const QString &path)
 
     // Reset pipeline & stroke batch state
     m_canvasClipboard = nullptr;
+    waitForDocumentTasks();
     m_document.clear();
     m_undoStore = nullptr;
     m_selection = KisSelectionSP();
@@ -1767,6 +1768,7 @@ bool ReverieCore::loadPsd(const QString &path)
 
     // Reset pipeline & stroke batch state
     m_canvasClipboard = nullptr;
+    waitForDocumentTasks();
     m_document.clear();
     m_undoStore = nullptr;
     m_selection = KisSelectionSP();
