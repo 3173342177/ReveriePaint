@@ -11,6 +11,7 @@
 #include "ReverieCoreUndoStore.h"
 #include <QXmlStreamReader>
 #include <QXmlStreamWriter>
+#include <QBitArray>
 #include <QDomDocument>
 #include <QDomElement>
 #include <QStack>
@@ -1935,6 +1936,30 @@ bool ReverieCore::loadPsd(const QString &path)
     return true;
 }
 
+// "继承透明度" (Inherit Alpha) 在 .kra 里不是 "inherit-alpha" 属性 —— 上游那个
+// 字符串只是图层属性图标的 id (KisLayerPropertiesIcons::inheritAlpha,
+// libs/image/kis_layer_properties_icons.cpp:26), 载入侧根本不读它。
+//
+// 真正落盘的是 channelflags: KisLayer::alphaChannelDisabled() 的语义就是
+// "channelFlags 里 alpha 位被清掉" (libs/image/kis_layer.cc:334), 而
+// kis_kra_loader.cpp:1031 读 channelflags 后 setChannelFlags(), 继承透明度
+// 就自然恢复了。编码与 KRA::flagsToString() 一致: 每通道一个字符, '1'=启用,
+// '0'=禁用。
+static QString kraChannelFlagsString(const KoColorSpace *cs, bool alphaDisabled)
+{
+    if (!cs || cs->channelCount() == 0) return QString();
+    // channelFlags(true, false) 恰好只有 alpha 位是 0, 用它定位 alpha,
+    // 这样不依赖 RGBA 的通道排列顺序
+    const QBitArray alphaOff = cs->channelFlags(true, false);
+    QString s;
+    s.reserve(int(cs->channelCount()));
+    for (int i = 0; i < int(cs->channelCount()); ++i) {
+        const bool isAlpha = (i < alphaOff.count()) && !alphaOff.testBit(i);
+        s += QChar((alphaDisabled && isAlpha) ? QLatin1Char('0') : QLatin1Char('1'));
+    }
+    return s;
+}
+
 static void writeKraNodesXml(QXmlStreamWriter &xml,
                              KisNodeSP parentNode,
                              const QString &docName,
@@ -1966,6 +1991,8 @@ static void writeKraNodesXml(QXmlStreamWriter &xml,
             xml.writeAttribute(QStringLiteral("visible"), visibleStr);
             xml.writeAttribute(QStringLiteral("locked"), lockedStr);
             xml.writeAttribute(QStringLiteral("inherit-alpha"), inheritAlphaStr);
+            xml.writeAttribute(QStringLiteral("channelflags"),
+                               kraChannelFlagsString(layer->colorSpace(), layer->alphaChannelDisabled()));
             xml.writeAttribute(QStringLiteral("colorspacename"), QStringLiteral("RGBA"));
             xml.writeAttribute(QStringLiteral("nodetype"), QStringLiteral("grouplayer"));
             xml.writeAttribute(QStringLiteral("uuid"), QUuid::createUuid().toString());
@@ -1993,6 +2020,9 @@ static void writeKraNodesXml(QXmlStreamWriter &xml,
             xml.writeAttribute(QStringLiteral("locked"), lockedStr);
             xml.writeAttribute(QStringLiteral("lockalpha"), alphaLockedStr);
             xml.writeAttribute(QStringLiteral("inherit-alpha"), inheritAlphaStr);
+            xml.writeAttribute(QStringLiteral("channelflags"),
+                               kraChannelFlagsString(pl->paintDevice() ? pl->paintDevice()->colorSpace() : nullptr,
+                                                     layer->alphaChannelDisabled()));
             xml.writeAttribute(QStringLiteral("filename"), layerFileName);
             xml.writeAttribute(QStringLiteral("colorspacename"), csName);
             xml.writeAttribute(QStringLiteral("nodetype"), QStringLiteral("paintlayer"));
@@ -2018,23 +2048,30 @@ static void writeKraNodesXml(QXmlStreamWriter &xml,
             // 逐层写 <tile>.icc。
             //
             // Krita 载入每个 paint layer 时都会无条件调 loadProfile()
-            // (kis_kra_load_visitor.cpp:194), 而它在 store 里找不到该文件时返回
+            // (kis_kra_load_visitor.cpp:194 -> :626), 文件缺失或无法解析就返回
             // nullptr, 于是报 "Could not load profile: <path>" —— 中文即
             // "无法加载色彩特性文件: Untitled/layers/layerN.icc"。
             //
             // 官方模板也是这么写的: 抽查 krita/data/templates 下 33 个 .kra,
             // 132 个图层数据文件里有 120 个带同名 .icc。
             //
-            // 数据来源可靠: Android 侧的 sRGB 是 lcms2 内部构造的, 但
-            // createFromLcmsProfile() 会经 lcmsProfileToByteArray() (cmsSaveProfileToMem)
-            // 把它序列化成完整合法的 ICC 字节, 所以 rawData() 非空。
+            // 注意不能照搬上游的 profile()->rawData(): Android 侧色彩空间全是
+            // KoSimpleColorSpace (KoSimpleColorSpaceFactory::createColorProfile()
+            // 返回 0), 而 KoColorProfile::rawData() 只有返回空数组的默认实现,
+            // 无子类覆写 (libs/pigment/KoColorProfile.h:208) —— 直接用它等于一个
+            // 字节都不写。故优先用色彩空间自带的档案, 拿不到就回落到内置的那份
+            // sRGB ICC (见 ReverieCoreIccData.cpp)。
             if (pl->paintDevice() && pl->paintDevice()->colorSpace()) {
                 const KoColorProfile *profile = pl->paintDevice()->colorSpace()->profile();
-                if (profile && !profile->rawData().isEmpty()) {
-                    if (store->open(tileLoc + ".icc")) {
-                        store->write(profile->rawData());
-                        store->close();
-                    }
+                QByteArray icc = profile ? profile->rawData() : QByteArray();
+                if (icc.isEmpty()) {
+                    icc = QByteArray::fromRawData(
+                        reinterpret_cast<const char *>(reverieDefaultSrgbIccData()),
+                        reverieDefaultSrgbIccSize());
+                }
+                if (!icc.isEmpty() && store->open(tileLoc + ".icc")) {
+                    store->write(icc);
+                    store->close();
                 }
             }
         } else {

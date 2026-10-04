@@ -1185,4 +1185,10 @@ void registerReverieGenerators();
 void currentInsertPosition(const QVector<ReverieCore::LayerEntry> &layers, int current,
                            KisNodeSP &above, KisNodeSP &parent, KisImageSP image);
 
+/** 导出 .kra 时逐层内嵌的 sRGB ICC 档案（定义于 ReverieCoreIccData.cpp）。
+ *  Android 侧色彩空间是 KoSimpleColorSpace，profile()->rawData() 恒为空，
+ *  拿不到可写的 ICC，只能用这份内置数据。 */
+const unsigned char *reverieDefaultSrgbIccData();
+int reverieDefaultSrgbIccSize();
+
 #endif // REVERIECORE_INTERNAL_H
