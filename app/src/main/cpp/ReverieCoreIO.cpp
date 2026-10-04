@@ -2015,9 +2015,28 @@ static void writeKraNodesXml(QXmlStreamWriter &xml,
                 store->write(reinterpret_cast<const char*>(pl->paintDevice()->defaultPixel().data()), pxSize);
                 store->close();
             }
-            // 不再逐层写 <tile>.icc: Krita 的 kra 加载器 (kis_kra_loader.cpp) 根本
-            // 不读这个条目, 色彩空间一律按 maindoc.xml 里的 colorspacename/profile
-            // 名字解析。它只会让每层多塞一份 ICC 原始数据, 显著撑大 .kra。
+            // 逐层写 <tile>.icc。
+            //
+            // Krita 载入每个 paint layer 时都会无条件调 loadProfile()
+            // (kis_kra_load_visitor.cpp:194), 而它在 store 里找不到该文件时返回
+            // nullptr, 于是报 "Could not load profile: <path>" —— 中文即
+            // "无法加载色彩特性文件: Untitled/layers/layerN.icc"。
+            //
+            // 官方模板也是这么写的: 抽查 krita/data/templates 下 33 个 .kra,
+            // 132 个图层数据文件里有 120 个带同名 .icc。
+            //
+            // 数据来源可靠: Android 侧的 sRGB 是 lcms2 内部构造的, 但
+            // createFromLcmsProfile() 会经 lcmsProfileToByteArray() (cmsSaveProfileToMem)
+            // 把它序列化成完整合法的 ICC 字节, 所以 rawData() 非空。
+            if (pl->paintDevice() && pl->paintDevice()->colorSpace()) {
+                const KoColorProfile *profile = pl->paintDevice()->colorSpace()->profile();
+                if (profile && !profile->rawData().isEmpty()) {
+                    if (store->open(tileLoc + ".icc")) {
+                        store->write(profile->rawData());
+                        store->close();
+                    }
+                }
+            }
         } else {
             const QString layerFileName = QString("layer%1").arg(layerCounter++);
             xml.writeStartElement(QStringLiteral("layer"));
