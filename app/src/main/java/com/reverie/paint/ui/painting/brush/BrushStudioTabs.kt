@@ -86,6 +86,7 @@ import java.nio.ByteOrder
 import kotlin.math.*
 @Composable
 
+
 internal fun TipTabContent(
     vm: PaintViewModel,
     preset: BrushPresetInfo?,
@@ -847,49 +848,6 @@ internal fun EngineTabContent(
         engines.forEachIndexed { idx, (id, nameRes) ->
             val sel = (vm.brushPaintOpId == id) || (id == "paintbrush" && vm.brushPaintOpId == "defaultpaintop")
             StudioRadioRow(name = stringResource(nameRes), selected = sel, textMain = textMain, textSub = textSub) { vm.updateBrushPaintOpId(id) }
-        }
-    }
-
-    StudioGroupCard(stringResource(R.string.brush_studio_engine_blend_modes)) {
-        val blendModeList = listOf(
-            "normal" to R.string.brush_studio_blend_normal,
-            "multiply" to R.string.brush_studio_blend_multiply,
-            "screen" to R.string.brush_studio_blend_screen,
-            "overlay" to R.string.brush_studio_blend_overlay,
-            "darken" to R.string.brush_studio_blend_darken,
-            "lighten" to R.string.brush_studio_blend_lighten,
-            "dodge" to R.string.brush_studio_blend_dodge,
-            "burn" to R.string.brush_studio_blend_burn,
-            "hard_light" to R.string.brush_studio_blend_hard_light,
-            "soft_light" to R.string.brush_studio_blend_soft_light,
-            "difference" to R.string.brush_studio_blend_difference,
-            "exclusion" to R.string.brush_studio_blend_exclusion,
-        )
-        blendModeList.chunked(3).forEach { row ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                row.forEach { (opId, nameRes) ->
-                    val sel = vm.brushCompositeOp == opId
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (sel) Morandi.accent.copy(alpha = 0.22f) else Morandi.panel.copy(alpha = 0.6f))
-                            .clickable { vm.updateBrushCompositeOp(opId) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            stringResource(nameRes),
-                            color = if (sel) Morandi.accent else textSub,
-                            fontSize = 11.sp,
-                            fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
-                        )
-                    }
-                }
-                if (row.size < 3) {
-                    Spacer(Modifier.weight((3 - row.size).toFloat()))
-                }
-            }
         }
     }
 

@@ -156,6 +156,10 @@ private sealed interface LayerView {
         val index: Int,
     ) : LayerView
 
+    data class BlendModes(
+        val index: Int,
+    ) : LayerView
+
     data class Filters(
         val indices: kotlin.collections.List<Int>,
     ) : LayerView {
@@ -313,6 +317,7 @@ fun LayerPanel(
                             vm = vm,
                             index = v.index,
                             onBack = { view = LayerView.List },
+                            onOpenBlendModes = { view = LayerView.BlendModes(v.index) },
                             onOpenFilters = { view = LayerView.Filters(v.index) },
                             onOpenFilterAdjust = { filterId, filterName ->
                                 if (onStartFilterSession != null) {
@@ -323,6 +328,14 @@ fun LayerPanel(
                                 }
                             },
                             onRename = { renameTarget = LayerRenameTarget(v.index, it) },
+                        )
+                    }
+
+                    is LayerView.BlendModes -> {
+                        BlendModesPage(
+                            vm = vm,
+                            index = v.index,
+                            onBack = { view = LayerView.Detail(v.index) },
                         )
                     }
 
