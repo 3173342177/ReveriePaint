@@ -284,16 +284,6 @@ import kotlinx.coroutines.withContext
         runCore(render = false) { ReverieCoreBridge.setBrushFollowDirection(v) }
     }
 
-    internal fun PaintViewModel.updateBrushStreamline(v: Double) {
-        brushStreamline = v
-        saveBrushParam()
-    }
-
-    internal fun PaintViewModel.updateBrushTaper(v: Double) {
-        brushTaper = v
-        saveBrushParam()
-    }
-
     internal fun PaintViewModel.updateBrushTextureEnabled(v: Boolean) {
         brushTextureEnabled = v
         saveBrushParam(reloadEngine = true, immediateReload = true)
@@ -431,12 +421,6 @@ import kotlinx.coroutines.withContext
         runCore(render = false) { ReverieCoreBridge.setBrushJitter(brushJitterAngle, brushJitterSize) }
     }
 
-    internal fun PaintViewModel.updateBrushJitterSize(v: Double) {
-        brushJitterSize = v
-        saveBrushParam(reloadEngine = true)
-        runCore(render = false) { ReverieCoreBridge.setBrushJitter(brushJitterAngle, brushJitterSize) }
-    }
-
     internal fun PaintViewModel.updateBrushMinSizeLimit(v: Double) {
         brushMinSizeLimit = v
         if (brushSize < v) updateBrushSize(v)
@@ -490,28 +474,13 @@ import kotlinx.coroutines.withContext
         saveBrushParam(reloadEngine = true, immediateReload = true)
     }
 
-    internal fun PaintViewModel.updateBrushMaskingTipShape(v: Int) {
-        brushMaskingTipShape = v
-        saveBrushParam(reloadEngine = true, immediateReload = true)
-    }
-
     internal fun PaintViewModel.updateBrushMaskingFade(v: Double) {
         brushMaskingFade = v
         saveBrushParam(reloadEngine = true)
     }
 
-    internal fun PaintViewModel.updateBrushMaskingSoftness(v: Double) {
-        brushMaskingSoftness = v
-        saveBrushParam(reloadEngine = true)
-    }
-
     internal fun PaintViewModel.updateBrushRotationSensor(v: String) {
         brushRotationSensor = v
-        saveBrushParam(reloadEngine = true, immediateReload = true)
-    }
-
-    internal fun PaintViewModel.updateBrushScatterSensor(v: String) {
-        brushScatterSensor = v
         saveBrushParam(reloadEngine = true, immediateReload = true)
     }
 
@@ -1638,20 +1607,6 @@ import kotlinx.coroutines.withContext
     internal fun PaintViewModel.updateBrushPanelCategory(cat: String) {
         brushPanelSelectedCategory = cat
         updateCurrentToolBrushState { it.copy(category = cat) }
-        persistBrushPanelState()
-    }
-
-    internal fun PaintViewModel.updateBrushCategoryScroll(index: Int, offset: Int) {
-        brushCategoryScrollIndex = index
-        brushCategoryScrollOffset = offset
-        updateCurrentToolBrushState { it.copy(categoryScrollIndex = index, categoryScrollOffset = offset) }
-        persistBrushPanelState()
-    }
-
-    internal fun PaintViewModel.updateBrushPresetScroll(index: Int, offset: Int) {
-        brushPresetScrollIndex = index
-        brushPresetScrollOffset = offset
-        updateCurrentToolBrushState { it.copy(presetScrollIndex = index, presetScrollOffset = offset) }
         persistBrushPanelState()
     }
 
