@@ -3400,6 +3400,7 @@ class PaintViewModel : ViewModel() {
         val strokeColor: Int = 0xFF000000.toInt(),
         val strokePosition: Int = 0,
         val strokeOpacity: Int = 100,
+        val fillColor: Int = 0xFFFFFFFF.toInt(),
     )
 
     // ---- async render plumbing ----
@@ -4101,6 +4102,7 @@ class PaintViewModel : ViewModel() {
             val strokeColor = strokeParams?.getOrNull(1) ?: 0xFF000000.toInt()
             val strokePosition = strokeParams?.getOrNull(2) ?: 0
             val strokeOpacity = strokeParams?.getOrNull(3) ?: 100
+            val fillColor = if (nodeType == 2) ReverieCoreBridge.getFillLayerColor(i) else 0xFFFFFFFF.toInt()
             list.add(
                 LayerUiState(
                     index = i,
@@ -4123,6 +4125,7 @@ class PaintViewModel : ViewModel() {
                     strokeColor = strokeColor,
                     strokePosition = strokePosition,
                     strokeOpacity = strokeOpacity,
+                    fillColor = fillColor,
                 ),
             )
         }

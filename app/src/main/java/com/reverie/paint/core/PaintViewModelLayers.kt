@@ -647,6 +647,16 @@ internal fun PaintViewModel.fillLayerForeground(i: Int) {
     }
 }
 
+/** 修改填充图层的颜色 (区别于 fillLayerForeground, 不污染画笔颜色且支持填充图层与预填色颜料层)。 */
+internal fun PaintViewModel.setFillLayerColor(index: Int, colorInt: Int) {
+    if (recorder.recording) {
+        recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_FILL_LAYER, index, colorInt.toString())
+    }
+    runCore(after = { notifyLayerChanged(pixelChanged = true) }) {
+        ReverieCoreBridge.setFillLayerColor(index, colorInt)
+    }
+}
+
 internal fun PaintViewModel.stampVisibleLayers() {
     clearLayerSelection()
     if (recorder.recording) {
