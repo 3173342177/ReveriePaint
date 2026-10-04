@@ -222,7 +222,6 @@ fun QuickActionWindow(
                         Modifier.background(Morandi.panel.copy(alpha = opacity))
                     }
                 )
-                .border(1.dp, Morandi.border.copy(alpha = 0.7f), windowShape)
                 .animateContentSize(Motion.enterSpring())
         ) {
         if (isCollapsed) {
