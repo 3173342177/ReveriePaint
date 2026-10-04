@@ -15,8 +15,19 @@ object KppHelper {
 
     /**
      * Reads the preset XML text from a .kpp file (which is a PNG with a zTXt preset chunk).
+     *
+     * [stripEmbeddedResources] removes the base64 payload carried by embedded
+     * `<resource>` elements (animated .gih tips, bundled .png textures) while keeping
+     * the element itself. Those payloads are what make a preset file huge: the
+     * "memileo Impasto" presets ship a ~24 MB animated tip and inflate to ~27 MB of
+     * XML, yet attribute extraction only ever reads `<param>` scalars and
+     * `<MaskGenerator>`. Stripping cuts that ~27 MB down to ~12 KB, so the dozens of
+     * regexes below scan three orders of magnitude less text.
+     *
+     * Write paths (dedupe / update / thumbnail rewrite) MUST keep the default `false`,
+     * otherwise the embedded tip would be dropped from the rewritten preset.
      */
-    fun readPresetXml(kppBytes: ByteArray): String? {
+    fun readPresetXml(kppBytes: ByteArray, stripEmbeddedResources: Boolean = false): String? {
         if (kppBytes.size < 8) return null
         for (i in 0 until 8) {
             if (kppBytes[i] != PNG_HEADER[i]) return null
@@ -60,7 +71,7 @@ object KppHelper {
                                 else break
                             }
                             inflater.end()
-                            return bos.toString(Charsets.UTF_8.name())
+                            return presetPayloadText(bos.toByteArray(), stripEmbeddedResources)
                         }
                     }
                 }
@@ -77,7 +88,7 @@ object KppHelper {
                     if (keyword == "preset") {
                         val textStart = nullPos + 1
                         val textLen = chunkDataEndI - textStart
-                        return String(kppBytes, textStart, textLen, Charsets.UTF_8)
+                        return presetPayloadText(kppBytes, textStart, textLen, stripEmbeddedResources)
                     }
                 }
             } else if (chunkType == "iTXt") {
@@ -112,9 +123,9 @@ object KppHelper {
                                     else break
                                 }
                                 inflater.end()
-                                return bos.toString(Charsets.UTF_8.name())
+                                return presetPayloadText(bos.toByteArray(), stripEmbeddedResources)
                             } else if (compFlag == 0) {
-                                return String(kppBytes, textStart, textLen, Charsets.UTF_8)
+                                return presetPayloadText(kppBytes, textStart, textLen, stripEmbeddedResources)
                             }
                         }
                     }
@@ -124,6 +135,78 @@ object KppHelper {
         }
         return null
     }
+
+    /** Materializes the preset chunk payload as UTF-8 text, optionally dropping embedded payloads. */
+    private fun presetPayloadText(raw: ByteArray, strip: Boolean): String =
+        String(if (strip) stripEmbeddedResourcePayloads(raw) else raw, Charsets.UTF_8)
+
+    /** Same as above for a payload region inside a larger buffer (uncompressed chunks). */
+    private fun presetPayloadText(src: ByteArray, start: Int, len: Int, strip: Boolean): String =
+        presetPayloadText(src.copyOfRange(start, start + len), strip)
+
+    private val CDATA_OPEN = "<![CDATA[".toByteArray(Charsets.US_ASCII)
+    private val CDATA_CLOSE = "]]>".toByteArray(Charsets.US_ASCII)
+    private val RESOURCE_OPEN = "<resource".toByteArray(Charsets.US_ASCII)
+    private val TAG_END = ">".toByteArray(Charsets.US_ASCII)
+
+    /** Parsed-attribute memo for [parseKppFile]: path -> (mtime, size, attributes). */
+    private const val PARSE_CACHE_MAX = 32
+    private val parseCache = LinkedHashMap<String, Triple<Long, Long, KppParsedAttributes>>(16, 0.75f, true)
+
+    private fun indexOfBytes(hay: ByteArray, from: Int, needle: ByteArray): Int {
+        if (needle.isEmpty() || from < 0) return -1
+        val last = hay.size - needle.size
+        if (last < 0) return -1
+        outer@ for (i in from..last) {
+            for (j in needle.indices) {
+                if (hay[i + j] != needle[j]) continue@outer
+            }
+            return i
+        }
+        return -1
+    }
+
+    /**
+     * Drops the base64 body of every `<resource ...><![CDATA[...]]></resource>` element while
+     * keeping the element and its attributes (including `filename=`, which callers read).
+     *
+     * Krita presets may embed the brush tip and textures directly in the .kpp; a single
+     * "memileo Impasto" preset carries a ~24 MB animated .gih, so the inflated preset XML
+     * reaches ~27 MB of which only ~12 KB is actual settings. Nothing in attribute
+     * extraction reads those bodies, and copying them into a String is what made selecting
+     * such a preset freeze the UI.
+     */
+    private fun stripEmbeddedResourcePayloads(src: ByteArray): ByteArray {
+        var searchFrom = indexOfBytes(src, 0, RESOURCE_OPEN)
+        if (searchFrom < 0) return src
+        val out = ByteArrayOutputStream(src.size)
+        var copiedUpTo = 0
+        while (searchFrom >= 0) {
+            val tagEnd = indexOfBytes(src, searchFrom, TAG_END)
+            if (tagEnd < 0) break
+            var payloadStart = tagEnd + 1
+            while (payloadStart < src.size && isXmlSpace(src[payloadStart])) payloadStart++
+            if (indexOfBytes(src, payloadStart, CDATA_OPEN) == payloadStart) {
+                val bodyStart = payloadStart + CDATA_OPEN.size
+                val bodyEnd = indexOfBytes(src, bodyStart, CDATA_CLOSE)
+                if (bodyEnd > bodyStart) {
+                    out.write(src, copiedUpTo, bodyStart - copiedUpTo)
+                    out.write(CDATA_OPEN)
+                    out.write(CDATA_CLOSE)
+                    copiedUpTo = bodyEnd + CDATA_CLOSE.size
+                    searchFrom = indexOfBytes(src, copiedUpTo, RESOURCE_OPEN)
+                    continue
+                }
+            }
+            searchFrom = indexOfBytes(src, tagEnd + 1, RESOURCE_OPEN)
+        }
+        if (copiedUpTo == 0) return src
+        out.write(src, copiedUpTo, src.size - copiedUpTo)
+        return out.toByteArray()
+    }
+
+    private fun isXmlSpace(b: Byte): Boolean =
+        b == 0x20.toByte() || b == 0x09.toByte() || b == 0x0A.toByte() || b == 0x0D.toByte()
 
     /**
      * Extracts tip asset filename (e.g. "mooncake.png", "brush.gbr") from .kpp bytes.
@@ -518,14 +601,40 @@ object KppHelper {
 
     /**
      * Parses native preset attributes directly from a .kpp file.
+     *
+     * Runs on the main thread on every brush selection, so the result is memoized per
+     * file (keyed by path + mtime + size, i.e. invalidated exactly when the preset is
+     * rewritten) and the embedded resource payloads are stripped before parsing.
      */
     fun parseKppFile(kppFile: File): KppParsedAttributes {
         if (!kppFile.exists()) return KppParsedAttributes()
-        return try {
-            val xml = readPresetXml(kppFile.readBytes()) ?: return KppParsedAttributes()
+        val key = kppFile.absolutePath
+        val mtime = kppFile.lastModified()
+        val size = kppFile.length()
+        synchronized(parseCache) {
+            val hit = parseCache[key]
+            if (hit != null && hit.first == mtime && hit.second == size) {
+                return hit.third
+            }
+        }
+        val parsed = try {
+            val xml = readPresetXml(kppFile.readBytes(), stripEmbeddedResources = true)
+                ?: return KppParsedAttributes().also { storeParsed(key, mtime, size, it) }
             parseKppAttributes(xml)
         } catch (_: Exception) {
             KppParsedAttributes()
+        }
+        storeParsed(key, mtime, size, parsed)
+        return parsed
+    }
+
+    private fun storeParsed(key: String, mtime: Long, size: Long, attrs: KppParsedAttributes) {
+        synchronized(parseCache) {
+            parseCache[key] = Triple(mtime, size, attrs)
+            while (parseCache.size > PARSE_CACHE_MAX) {
+                val oldest = parseCache.keys.firstOrNull() ?: break
+                parseCache.remove(oldest)
+            }
         }
     }
 
