@@ -792,9 +792,9 @@ object KppHelper {
 
         // 4. Update Spacing
         xml = updateParam(xml, "Spacing", params.spacing.toString())
-        if (xml.contains("SpacingValue")) {
-            xml = updateParam(xml, "SpacingValue", params.spacing.toString())
-        }
+        // 严禁写 SpacingValue: 那是 KisSpacingOption 的 extraScale 乘数 (Krita 原生恒为 1),
+        // 把它写成笔刷间距等于把间距再乘一次 (0.24 -> 有效 0.058), 笔画直接变点状。
+        // 与 ReverieCore::setBrushSpacing 的同一约束保持一致。
 
         // 5. Update Angle & Scatter
         xml = updateParam(xml, "paintopAngle", params.angle.toString())
