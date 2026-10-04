@@ -2132,16 +2132,27 @@ bool ReverieCore::saveKra(const QString &path)
         xml.writeAttribute(QStringLiteral("height"), QString::number(image->height()));
         xml.writeAttribute(QStringLiteral("mime"), QStringLiteral("application/x-kra"));
         xml.writeAttribute(QStringLiteral("colorspacename"), image->colorSpace() ? image->colorSpace()->id() : QStringLiteral("RGBA"));
-        // 刻意不写 `profile` 属性。
+        // IMAGE 级写 `profile` 属性，值 = 逐层内嵌 ICC 的名字（"sRGB built-in"）。
         //
-        // Krita 载入 .kra 时按**名字**查色彩空间:
+        // 桌面 Krita 载入 .kra 时按**名字**查色彩空间:
         //     cs = KoColorSpaceRegistry::colorSpace(model, depth, profileName)
-        // 桌面版 Krita 只认自己注册过的 profile(sRGB/Adobe RGB/CMYK 变体…),
-        // 而 Android 端的 rgb8 挂的是本地构造的 profile, 名字对不上 —— 结果它
-        // 造出 LcmsColorSpace 时 profile 为空, 在 LcmsColorSpace::init() 的
-        // `KIS_ASSERT(d->profile)` 上直接崩 (用户报 "Krita 内部错误")。
-        // 不写这个属性时 Krita 走 `profileProductName.isNull()` 分支, 按
-        // colorspacename 取该模型的默认 profile(sRGB), 正是我们想要的兼容行为。
+        // 不写 profile 属性时它走默认 profile —— RGBA/U8 的默认是
+        // "sRGB-elle-V2-srgbtrc.icc" (RgbU8ColorSpace.h:105)，而我们逐层内嵌的
+        // ICC 是 lcms 内置 sRGB (desc = "sRGB built-in")，两者名字对不上 →
+        // Krita 弹 "图层的色彩空间与图像的色彩空间不统一…操作可能较慢"。
+        //
+        // "sRGB built-in" 在桌面 Krita 启动时就有注册
+        // (LcmsEnginePlugin.cpp:166 直接 cmsCreate_sRGBProfile() 后 addProfile，
+        // :328 还把旧名 "sRGB built-in - (lcms internal)" 别名到它)，所以按名
+        // 解析能命中；loadProfile 从图层 ICC 字节造 profile 时也按名字查重
+        // (KoColorSpaceRegistry.cpp:1017) 返回同一个已注册实例 → 图像与图层
+        // 落在**同一个缓存色彩空间**上，警告消失、无转换开销。
+        //
+        // 就算某桌面版没注册这个名字也不会崩：profileForCsIdWithFallbackImpl
+        // (KoColorSpaceRegistry.cpp:414) 查不到时回落到工厂默认 profile，
+        // 退化成旧行为（弹提示）而已。
+        xml.writeAttribute(QStringLiteral("profile"),
+                           QString::fromLatin1(reverieDefaultSrgbIccName()));
         xml.writeAttribute(QStringLiteral("description"), QString());
         const double xResDpi = image->xRes() > 0 ? image->xRes() * 72.0 : 72.0;
         const double yResDpi = image->yRes() > 0 ? image->yRes() * 72.0 : 72.0;

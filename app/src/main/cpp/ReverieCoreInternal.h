@@ -1191,4 +1191,9 @@ void currentInsertPosition(const QVector<ReverieCore::LayerEntry> &layers, int c
 const unsigned char *reverieDefaultSrgbIccData();
 int reverieDefaultSrgbIccSize();
 
+/** 上面那份 ICC 的 profile 名（ICP desc = "sRGB built-in"）。
+ *  maindoc.xml 的 IMAGE profile 属性必须写同名值，桌面 Krita 才会让图像与
+ *  图层落在同一个色彩空间上（桌面启动时注册了同名 lcms 内置 sRGB）。 */
+const char *reverieDefaultSrgbIccName();
+
 #endif // REVERIECORE_INTERNAL_H

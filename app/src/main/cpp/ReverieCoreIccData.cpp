@@ -86,3 +86,11 @@ int reverieDefaultSrgbIccSize()
 {
     return int(sizeof(kSrgbSrgbtrcIcc));
 }
+
+const char *reverieDefaultSrgbIccName()
+{
+    // 这份 ICC 的 desc 字段内容（mluc/en-US），也是桌面 Krita 启动时
+    // (LcmsEnginePlugin.cpp:166) 注册 lcms 内置 sRGB 用的名字。maindoc.xml 的
+    // IMAGE profile 属性必须写它，图像和图层才会落在同一个缓存色彩空间上。
+    return "sRGB built-in";
+}
