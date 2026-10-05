@@ -42,15 +42,18 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.paint.R
 import com.reverie.paint.core.PaintViewModel
 import com.reverie.paint.core.animationApplyOnionSkin
+import com.reverie.paint.core.animationClearLayerMarker
 import com.reverie.paint.core.animationImportAudio
 import com.reverie.paint.core.animationImportImages
 import com.reverie.paint.core.animationImportVideo
 import com.reverie.paint.core.animationSetFramerate
+import com.reverie.paint.core.animationSetLayerMarker
 import com.reverie.paint.ui.components.ReChip
 import com.reverie.paint.ui.components.ReIconButton
 import com.reverie.paint.ui.components.ReSectionTitle
@@ -71,13 +74,14 @@ internal fun AnimationSettingsCard(
     vm: PaintViewModel,
     hazeState: HazeState?,
     onClose: () -> Unit,
+    maxHeight: Dp = Dp.Infinity,
 ) {
     val shape = RoundedCornerShape(18.dp)
     val alpha = vm.popupPanelOpacity
     val config = LocalConfiguration.current
     val isPortrait = config.screenWidthDp < config.screenHeightDp || config.screenWidthDp < 600
     val cardWidth = if (isPortrait) (config.screenWidthDp - 44).coerceIn(240, 320).dp else 320.dp
-    val maxCardHeight = (config.screenHeightDp - 90).coerceAtLeast(200).dp
+    val maxCardHeight = minOf((config.screenHeightDp - 90).coerceAtLeast(200).dp, maxHeight)
 
     Column(
         modifier = Modifier
@@ -133,6 +137,8 @@ internal fun TimelineSettings(
     ) {
         var showFpsInput by remember { mutableStateOf(false) }
         var pickingOnionColor by remember { mutableStateOf<OnionColorTarget?>(null) }
+
+        TimelineWorkflowSettings(vm)
 
         ReSectionTitle(text = stringResource(R.string.anim_settings_play), modifier = Modifier.padding(start = 12.dp))
 
@@ -346,6 +352,39 @@ internal fun TimelineSettings(
                     fontSize = 12.sp,
                 )
             }
+        }
+
+        ReSectionTitle(text = stringResource(R.string.anim_settings_layers), modifier = Modifier.padding(start = 12.dp))
+
+        // 前景 / 背景帧: 作用于**当前图层**, 选中态就是"已经是标记层"。
+        // 时间轴轨道头长按菜单里也有同样的入口, 但那个位置没人找得到, 所以这里必须有一份看得见的。
+        val curLayer = vm.currentLayerIndex
+        val isMarkerBg = curLayer >= 0 && vm.anim.backgroundLayerIndex == curLayer
+        val isMarkerFg = curLayer >= 0 && vm.anim.foregroundLayerIndex == curLayer
+        CompactSettingRow(label = stringResource(R.string.anim_marker_row)) {
+            ReChip(
+                text = stringResource(R.string.anim_marker_badge_background),
+                onTap = {
+                    if (isMarkerBg) {
+                        vm.animationClearLayerMarker(toFront = false)
+                    } else {
+                        vm.animationSetLayerMarker(curLayer, toFront = false)
+                    }
+                },
+                selected = isMarkerBg,
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            ReChip(
+                text = stringResource(R.string.anim_marker_badge_foreground),
+                onTap = {
+                    if (isMarkerFg) {
+                        vm.animationClearLayerMarker(toFront = true)
+                    } else {
+                        vm.animationSetLayerMarker(curLayer, toFront = true)
+                    }
+                },
+                selected = isMarkerFg,
+            )
         }
 
         ReSectionTitle(text = stringResource(R.string.anim_settings_import), modifier = Modifier.padding(start = 12.dp))
