@@ -189,6 +189,14 @@
     <string name="create_preset_phone_wallpaper_desc">主流全面屏手机高分辨率锁屏与桌面</string>
     <string name="create_preset_a4_print">A4 纸张印刷</string>
     <string name="create_preset_a4_print_desc">国际标准 A4 规格 (210×297 mm @ 300 DPI)</string>
+    <string name="create_preset_us_letter">美制 Letter</string>
+    <string name="create_preset_us_letter_desc">美制信纸 (8.5×11 英寸 @ 300 DPI)</string>
+    <string name="create_preset_us_legal">美制 Legal</string>
+    <string name="create_preset_us_legal_desc">美制法律用纸 (8.5×14 英寸 @ 300 DPI)</string>
+    <string name="create_preset_us_tabloid">美制 Tabloid</string>
+    <string name="create_preset_us_tabloid_desc">美制对开 (11×17 英寸 @ 300 DPI)</string>
+    <string name="create_preset_us_executive">美制 Executive</string>
+    <string name="create_preset_us_executive_desc">美制行政用纸 (7.25×10.5 英寸 @ 300 DPI)</string>
     <string name="create_preset_b5_comic">B5 漫画原稿</string>
     <string name="create_preset_b5_comic_desc">日系漫画单页与同人志标准黑白/彩色原稿</string>
     <string name="create_preset_webtoon">网络长图条漫</string>
@@ -205,6 +213,14 @@
     <string name="create_ratio_b5_landscape">B5 横版</string>
     <string name="create_ratio_a4_paper">A4 纸张</string>
     <string name="create_ratio_a4_landscape">A4 横版</string>
+    <string name="create_ratio_us_letter">美制 Letter</string>
+    <string name="create_ratio_us_letter_landscape">美制 Letter 横版</string>
+    <string name="create_ratio_us_legal">美制 Legal</string>
+    <string name="create_ratio_us_legal_landscape">美制 Legal 横版</string>
+    <string name="create_ratio_us_tabloid">美制 Tabloid</string>
+    <string name="create_ratio_us_tabloid_landscape">美制 Tabloid 横版</string>
+    <string name="create_ratio_us_executive">美制 Executive</string>
+    <string name="create_ratio_us_executive_landscape">美制 Executive 横版</string>
     <string name="create_ratio_square">1:1 正方形</string>
     <string name="create_ratio_widescreen">16:9 宽屏</string>
     <string name="create_ratio_portrait_9_16">9:16 竖屏</string>
@@ -263,6 +279,22 @@
     <string name="settings_auto_save_toast_sub">自动保存成功后在屏幕上方弹出非阻塞提示</string>
     <string name="settings_auto_save_info_title">自动保存机制说明</string>
     <string name="settings_auto_save_info_desc">自动保存将在后台静默执行，仅在画布产生修改时触发，且绝不会打断您当前的笔画绘制</string>
+    <string name="settings_auto_save_history">最近自动保存快照</string>
+    <string name="settings_auto_save_history_sub">查看并恢复最近持久保留的5个历史快照</string>
+    <string name="auto_save_history_title">最近自动保存历史</string>
+    <string name="auto_save_history_empty">暂无自动保存快照</string>
+    <string name="auto_save_history_empty_sub">作画过程中触发自动保存后将自动记录在此</string>
+    <string name="auto_save_restore_action">恢复此版本</string>
+    <string name="auto_save_delete_action">删除</string>
+    <string name="auto_save_clear_all">清空记录</string>
+    <string name="auto_save_restore_replace">覆盖载入画布</string>
+    <string name="auto_save_restore_as_copy">恢复为新副本</string>
+    <string name="auto_save_restore_confirm_title">恢复历史快照</string>
+    <string name="auto_save_restore_confirm_msg">当前画布存在未保存的修改，恢复快照将替换当前未保存内容，是否继续？</string>
+    <string name="crash_recovery_title">检测到异常退出</string>
+    <string name="crash_recovery_desc">检测到应用上次未正常关闭，系统已为您自动找到崩溃前的备份草稿，是否立即恢复？</string>
+    <string name="crash_recovery_confirm">立即恢复</string>
+    <string name="crash_recovery_dismiss">稍后在画廊查看</string>
     <string name="settings_history_performance">历史记录与性能</string>
     <string name="settings_max_undo_steps">最大撤销步数</string>
     <string name="settings_max_undo_steps_sub">保留的历史操作记录上限，步数越多支持更长撤销链</string>
@@ -282,7 +314,7 @@
     <string name="settings_licenses_sub">查看使用的开源库与许可证</string>
     <string name="settings_export_log">导出日志</string>
     <string name="settings_export_log_sub">导出应用运行日志以供调试</string>
-    <string name="settings_export_log_toast">运行日志已准备完毕</string>
+    <string name="settings_export_log_toast">日志已复制到剪贴板</string>
     <string name="settings_intro_title">软件介绍</string>
     <string name="settings_version_summary">v%s · 支持 Mirror 酱高速通道</string>
     <string name="settings_auto_save">自动保存</string>
@@ -437,7 +469,7 @@
     <string name="shortcut_def_pan_canvas">移动画布</string>
     <string name="shortcut_def_zoom_in">放大画布</string>
     <string name="shortcut_def_zoom_out">缩小画布</string>
-    <string name="shortcut_def_flip_canvas">翻转画布</string>
+    <string name="shortcut_def_flip_canvas">视图水平翻转</string>
     <string name="shortcut_def_rotate_canvas">旋转画布</string>
     <string name="shortcut_def_save_document">保存</string>
     <string name="shortcut_def_undo">撤销</string>
@@ -463,6 +495,7 @@
     <string name="shortcut_def_layer_duplicate">复制图层</string>
     <string name="shortcut_def_layer_merge_down">向下合并</string>
     <string name="shortcut_def_layer_toggle_vis">显隐当前图层</string>
+    <string name="shortcut_def_disable_touch">禁用画布触控</string>
 
     <!-- Layers -->
     <string name="layer_title">图层</string>
@@ -494,6 +527,13 @@
     <string name="anim_onion_skin">洋葱皮</string>
     <string name="anim_shift_trace">透光台对位</string>
     <string name="anim_new_keyframe">新帧</string>
+    <string name="anim_drawing_workflow">作画方式</string>
+    <string name="anim_manual_keyframes">手动建帧</string>
+    <string name="anim_auto_keyframes_hint">在没有关键帧的位置落笔时，自动新建空白帧</string>
+    <string name="anim_manual_keyframes_hint">拖动帧块右边缘可延长显示，期间继续绘制会修改整段画面；要画下一张，请先点“新建空白帧”</string>
+    <string name="anim_new_blank_keyframe">新建空白帧</string>
+    <string name="anim_previous_frame_reference">旧帧参考</string>
+    <string name="anim_previous_frame_reference_hint">淡化显示上一关键帧，方便画下一张；透明度和着色可在下方洋葱皮设置中调整，不会出现在动画导出中</string>
     <string name="anim_duplicate_frame">复制</string>
     <string name="anim_delete_frame">删帧</string>
     <string name="anim_multi_select">多选</string>
@@ -567,6 +607,23 @@
     <string name="anim_import_video">视频</string>
     <string name="anim_import_audio">音频</string>
     <string name="anim_importing">导入中…</string>
+
+    <!-- 前景 / 背景帧 -->
+    <string name="anim_marker_set_background">设为动画背景</string>
+    <string name="anim_marker_set_foreground">设为动画前景</string>
+    <string name="anim_marker_clear_background">取消动画背景</string>
+    <string name="anim_marker_clear_foreground">取消动画前景</string>
+    <string name="anim_marker_badge_background">背景</string>
+    <string name="anim_marker_badge_foreground">前景</string>
+    <string name="anim_marker_toast_background">已设为动画背景（常驻所有帧之下）</string>
+    <string name="anim_marker_toast_foreground">已设为动画前景（常驻所有帧之上）</string>
+    <string name="anim_marker_toast_cleared">已取消标记</string>
+    <string name="anim_marker_toast_locked">图层已锁定，无法设为背景或前景</string>
+    <string name="anim_marker_toast_multi_frame">该图层已有多帧，无法作为常驻的背景或前景</string>
+    <string name="anim_marker_toast_move_failed">图层移动失败，未能设为背景或前景</string>
+    <string name="anim_marker_row">前景 / 背景帧</string>
+    <string name="anim_settings_layers">图层</string>
+    <string name="anim_marker_toast_gone">图层已不存在</string>
 
     <!-- Export -->
     <string name="export_title">导出作品</string>
@@ -693,7 +750,12 @@
     <string name="settings_layer_height_spacious">宽松</string>
     <string name="settings_panel_pinning_title">面板固定与自由平移</string>
     <string name="settings_panel_pinning_desc">允许固定图层与画笔面板并在画布上拖动平移</string>
+    <string name="settings_brush_size_scales_with_canvas_title">笔刷上限跟随画布</string>
+    <string name="settings_brush_size_scales_with_canvas_desc">笔刷最大尺寸自动设定为画布长边的 1/2</string>
     <string name="settings_canvas_rotation">画布可旋转</string>
+    <string name="settings_canvas_rotation_snap">旋转吸附到正投射角</string>
+    <string name="settings_canvas_rotation_snap_off">已关闭</string>
+    <string name="settings_canvas_rotation_snap_format">±%d°</string>
     <string name="settings_magnification_interpolation">放大插值</string>
     <string name="settings_pixel_grid">放大显示网格线</string>
     <string name="settings_undo_toast">撤销操作提醒</string>
@@ -705,10 +767,86 @@
     <string name="settings_quick_pinch_fit_desc">双指快速向内收拢捏合时自动平滑居中并满屏复位</string>
     <string name="settings_pen_mode_single_finger_pan_title">笔模式下允许单指移动画布</string>
     <string name="settings_pen_mode_single_finger_pan_desc">开启后笔模式下可用单指拖拽平移画布，关闭后单指触控将被忽略以严格防误触</string>
+    <string name="settings_back_key_title">返回键行为</string>
+    <string name="settings_back_key_desc">画布上没有打开的面板或对话框时，按系统返回键执行的操作</string>
+    <string name="settings_back_key_none">无行为</string>
+    <string name="settings_back_key_open_settings">弹出菜单</string>
+    <string name="settings_back_key_exit">返回</string>
+    <string name="settings_allow_edge_back_title">允许边缘侧滑返回</string>
+    <string name="settings_allow_edge_back_desc">开启后支持屏幕左右边缘侧滑返回；关闭或返回键无行为时全屏排除手势以防误触</string>
+    <string name="settings_anim_speed_title">界面动效速度</string>
+    <string name="settings_anim_speed_desc">控制面板展开收起与弹窗动画时长，极速档位压缩在 0.1s 内以保障绘画心流</string>
+    <string name="settings_anim_speed_normal">标准</string>
+    <string name="settings_anim_speed_fast">极速 (0.1s)</string>
+    <string name="settings_anim_speed_off">关闭</string>
+
+    <!-- Quick Action Strings -->
+    <string name="tool_quick_action">快捷操作</string>
+
+    <!-- Quick Brush Strings -->
+    <string name="tool_quick_brush">快捷笔刷</string>
+    <string name="quick_brush_window_title">快捷笔刷</string>
+    <string name="quick_brush_empty">暂无常用笔刷</string>
+    <string name="quick_brush_empty_add">添加常用画笔</string>
+    <string name="quick_brush_manage_title">管理常用笔刷</string>
+    <string name="quick_brush_manage_desc">在悬浮胶囊中快速切换您最爱的笔刷</string>
+    <string name="quick_brush_favorites_list">已选常用笔刷</string>
+    <string name="quick_brush_library_list">笔刷库（点击星标添加）</string>
+    <string name="quick_brush_orientation">胶囊排列方向</string>
+    <string name="quick_brush_orientation_horizontal">横向单排</string>
+    <string name="quick_brush_orientation_vertical">纵向单列</string>
+    <string name="quick_brush_max_length">面板最大长度（显示数量）</string>
+    <string name="quick_brush_max_length_desc">笔刷数量超过此上限时，面板将启用滚动浏览</string>
+    <string name="quick_brush_add_tip">可在「画笔面板」中点击星标或长按画笔，将其加入常用画笔</string>
+    <string name="quick_brush_open_brush_panel">前往画笔面板</string>
+    <string name="quick_brush_count_format">%1$d 个</string>
+    <string name="quick_action_window_title">快捷操作</string>
+    <string name="quick_action_edit">自定义快捷操作</string>
+    <string name="quick_action_edit_desc">自定义操作顺序、增删常用项及排布样式</string>
+    <string name="quick_action_active_list">已启用操作</string>
+    <string name="quick_action_available_list">可添加操作</string>
+    <string name="quick_action_preview">效果预览</string>
+    <string name="quick_action_show_labels">显示按钮文字标签</string>
+    <string name="quick_action_layout_title">排布模式</string>
+    <string name="quick_action_tab_actions">操作排序与管理</string>
+    <string name="quick_action_tab_style">排布与预览</string>
+    <string name="quick_action_all_added">所有操作已全部添加</string>
+    <string name="quick_action_add_all">添加全部</string>
+    <string name="quick_action_done">完成</string>
+    <string name="quick_action_reset_default">恢复默认</string>
+    <string name="quick_action_layout_row">横向单排</string>
+    <string name="quick_action_layout_column">纵向单排</string>
+    <string name="quick_action_layout_grid_2">2 列网格</string>
+    <string name="quick_action_layout_grid_3">3 列网格</string>
+    <string name="quick_action_lock_view">固定视角</string>
+    <string name="quick_action_flip_h">视图翻转·横</string>
+    <string name="quick_action_flip_v">视图翻转·纵</string>
+    <string name="toast_view_flip_h_on">视图水平翻转</string>
+    <string name="toast_view_flip_h_off">已取消视图水平翻转</string>
+    <string name="toast_view_flip_v_on">视图垂直翻转</string>
+    <string name="toast_view_flip_v_off">已取消视图垂直翻转</string>
+    <string name="toast_canvas_flip_h_done">已完全水平翻转画布</string>
+    <string name="toast_canvas_flip_v_done">已完全垂直翻转画布</string>
+    <string name="quick_action_reset_view">居中回正</string>
+    <string name="quick_action_undo">撤销</string>
+    <string name="quick_action_redo">重做</string>
+    <string name="quick_action_toggle_eraser">画笔/橡皮</string>
+    <string name="quick_action_last_tool">上个工具</string>
+    <string name="quick_action_pick_color">快速吸色</string>
+    <string name="quick_action_swap_color">交换颜色</string>
+    <string name="quick_action_brush_size_inc">放大笔刷</string>
+    <string name="quick_action_brush_size_dec">缩小笔刷</string>
+    <string name="quick_action_alpha_lock">Alpha锁</string>
+    <string name="quick_action_new_layer">新建图层</string>
+    <string name="quick_action_duplicate_layer">复制图层</string>
+    <string name="quick_action_merge_down">向下合并</string>
+    <string name="quick_action_clear_layer">清空图层</string>
+    <string name="quick_action_disable_touch">禁用触控</string>
+
     <string name="settings_gesture_pen_hint">提示：多指触控手势不受笔模式影响，手写笔模式下依然可以直接使用双指撤销与三指重做</string>
     <string name="settings_eyedropper_long_press_title">长按画布吸色</string>
-    <string name="settings_eyedropper_long_press_stylus_desc">笔模式已开启：手写笔长按画布取色</string>
-    <string name="settings_eyedropper_long_press_finger_desc">长按画布取色，开启笔模式后由手写笔长按取色</string>
+    <string name="settings_eyedropper_long_press_stylus_desc">笔模式已开启：支持手指或手写笔长按画布取色</string>
+    <string name="settings_eyedropper_long_press_finger_desc">长按画布取色，笔模式下支持手指与手写笔取色</string>
     <string name="settings_eyedropper_sensitivity">拾色灵敏度</string>
     <string name="settings_eyedropper_level_summary">%1$d 段 · %2$s (%3$s)</string>
     <string name="settings_eyedropper_level_suffix">%d段</string>
@@ -851,6 +989,7 @@
     <string name="layer_op_alpha_lock">锁定透明度</string>
     <string name="layer_op_rasterize">栅格化为普通图层</string>
     <string name="layer_rename_dialog_title">重命名图层</string>
+    <string name="layer_rename_dialog_hint">输入图层名称</string>
     <string name="layer_add_paint_layer">添加颜料图层</string>
     <string name="layer_add_group">添加图层组</string>
     <string name="layer_more_types">更多图层类型</string>
@@ -938,6 +1077,8 @@
     <string name="canvas_toast_group_not_drawable">图层组不可直接绘制，请选择组内图层</string>
     <string name="canvas_toast_filter_not_drawable">滤镜图层不可直接绘制，请在普通图层绘制或栅格化</string>
     <string name="canvas_toast_layer_locked">图层已锁定，无法编辑</string>
+    <string name="canvas_toast_layer_hidden">图层已隐藏，无法编辑</string>
+    <string name="canvas_toast_group_empty">图层组为空，无法进行变换</string>
     <string name="quick_shape_title">速创形状: %s</string>
     <string name="quick_shape_to_ellipse">转为椭圆</string>
     <string name="quick_shape_to_circle">转为正圆</string>
@@ -980,6 +1121,8 @@
     <string name="brush_cat_import">导入</string>
     <string name="brush_library_title">笔刷库</string>
     <string name="brush_presets_count">%d 预设</string>
+    <string name="brush_presets_loading">正在载入笔刷库...</string>
+    <string name="brush_presets_reload">重新载入</string>
     <string name="brush_switch_to_list">切换为列表视图</string>
     <string name="brush_switch_to_grid">切换为网格视图</string>
     <string name="brush_empty_fav_title">暂无常用笔刷</string>
@@ -1034,6 +1177,7 @@
 
     <!-- Brush Studio Tabs -->
     <string name="brush_studio_tab_tip">笔尖形状</string>
+    <string name="brush_studio_tab_masking">蒙版画笔</string>
     <string name="brush_studio_tab_stroke">笔画动态</string>
     <string name="brush_studio_tab_color">色彩涂抹</string>
     <string name="brush_studio_tab_geometry">几何罗盘</string>
@@ -1199,6 +1343,60 @@
     <string name="brush_studio_prop_builtin_tag">(Krita 内置 · 固定只读)</string>
     <string name="brush_studio_prop_shared_tag">(分享导入 · 只读锁定)</string>
 
+    <!-- Brush Studio Masking, Sensors & Thumbnail -->
+    <string name="brush_studio_masking_title">双重蒙版画笔 (Masking Brush)</string>
+    <string name="brush_studio_masking_enable">启用蒙版画笔</string>
+    <string name="brush_studio_masking_tip">掩膜笔尖贴图</string>
+    <string name="brush_studio_masking_tip_default">默认圆形笔尖</string>
+    <string name="brush_studio_masking_tip_choose">更换掩膜笔尖</string>
+    <string name="brush_studio_masking_mode">掩膜混合模式 (Composite Mode)</string>
+    <string name="brush_studio_masking_ratio">尺寸比例 (Size Ratio)</string>
+    <string name="brush_studio_masking_spacing">间距 (Spacing)</string>
+    <string name="brush_studio_masking_fade">实心率 (Solid Core)</string>
+    <string name="brush_studio_masking_softness">柔和度 (Softness)</string>
+    <string name="brush_studio_scratchpad_set_icon">设为预设图标</string>
+    <string name="brush_studio_toast_thumbnail_updated">预设图标已更新</string>
+    <string name="brush_studio_sensor_title">驱动传感器 (Sensor)</string>
+    <string name="brush_studio_sensor_pressure">压力 (Pressure)</string>
+    <string name="brush_studio_sensor_speed">速度 (Speed)</string>
+    <string name="brush_studio_sensor_drawingangle">运笔方向 (Drawing Angle)</string>
+    <string name="brush_studio_sensor_fuzzy">随机抖动 (Fuzzy)</string>
+    <string name="brush_studio_sensor_fade">衰减 (Fade)</string>
+    <string name="brush_studio_rotation_sensor">旋转驱动传感器</string>
+    <string name="brush_studio_scatter_sensor">散布驱动传感器</string>
+    <string name="brush_studio_size_sensor">大小驱动传感器</string>
+    <string name="brush_studio_opacity_sensor">不透明度驱动传感器</string>
+    <string name="brush_studio_flow_sensor">流量驱动传感器</string>
+    <string name="brush_studio_press_curve_preview">曲线响应预览</string>
+    <string name="brush_curve_preset_linear">线性 (Linear)</string>
+    <string name="brush_curve_preset_soft">柔和 (Ease-in)</string>
+    <string name="brush_curve_preset_hard">硬朗 (Ease-out)</string>
+    <string name="brush_curve_preset_scurve">S形曲线 (S-Curve)</string>
+    <string name="brush_curve_preset_peak">拱形峰值 (Peak)</string>
+    <string name="brush_curve_preset_steps">阶梯脉冲 (Steps)</string>
+    <string name="brush_sensor_pressure">压力 (Pressure)</string>
+    <string name="brush_sensor_speed">速度 (Speed)</string>
+    <string name="brush_sensor_drawingangle">运笔方向 (Drawing Angle)</string>
+    <string name="brush_sensor_tilt_elevation">俯仰倾角 (Tilt Elevation)</string>
+    <string name="brush_sensor_tilt_direction">倾斜方位 (Tilt Direction)</string>
+    <string name="brush_sensor_tilt_x">水平倾角 (Tilt X)</string>
+    <string name="brush_sensor_tilt_y">垂直倾角 (Tilt Y)</string>
+    <string name="brush_sensor_rotation">笔身旋转 (Rotation)</string>
+    <string name="brush_sensor_tangential_pressure">滚轮切向 (Tangential)</string>
+    <string name="brush_sensor_fade">行程渐隐 (Fade)</string>
+    <string name="brush_sensor_distance">行程距离 (Distance)</string>
+    <string name="brush_sensor_time">停留时间 (Time)</string>
+    <string name="brush_sensor_fuzzy">随机噪点 (Fuzzy)</string>
+    <string name="brush_dynamics_expand_title">动态响应曲线</string>
+    <string name="brush_dynamics_invert_h">水平反转</string>
+    <string name="brush_dynamics_invert_v">垂直反转</string>
+    <string name="brush_dynamics_reset">重置曲线</string>
+    <string name="brush_dynamics_point_x">输入 X</string>
+    <string name="brush_dynamics_point_y">输出 Y</string>
+    <string name="brush_dynamics_add_point_hint">点击网格添加点，拖拽点微调曲率</string>
+    <string name="brush_dynamics_live_cursor">实时动态响应</string>
+    <string name="brush_dynamics_strength">动态影响强度</string>
+
     <!-- Color Components & Sliders -->
     <string name="color_num_dialog_range">有效范围: %1$s ~ %2$s%3$s</string>
     <string name="color_hex_paste">从剪贴板粘贴</string>
@@ -1266,7 +1464,9 @@
     <string name="guide_symmetry_quadrant">四象限</string>
     <string name="guide_symmetry_radial">放射状</string>
     <string name="guide_symmetry_center">对称轴中心</string>
+    <string name="guide_symmetry_rotation">旋转角度</string>
     <string name="guide_symmetry_reset_center">重置居中</string>
+    <string name="guide_perspective_ray_density">参考线密度</string>
     <string name="guide_grid_size">网格尺寸</string>
     <string name="guide_line_opacity">参考线不透明度</string>
 
@@ -1999,10 +2199,18 @@
     <string name="sync_error_not_configured">请先填写有效的服务器地址与用户名</string>
     <string name="sync_info_title">说明</string>
     <string name="sync_info_text">同步采用无账号设计, 工程保存在你自有的服务器。密码经系统密钥库加密后仅存于本机, 不会上传</string>
-    <string name="sync_category_backup">备份</string>
-    <string name="sync_backup_now">立即备份到云端</string>
-    <string name="sync_backup_running">正在上传 %1$d/%2$d</string>
-    <string name="sync_backup_result">上传 %1$d 个, 跳过 %2$d 个, 清理 %3$d 个, 云端较新 %4$d 个, 冲突 %5$d 个, 失败 %6$d 个</string>
+    <string name="sync_category_backup">同步与备份</string>
+    <string name="sync_now">立即同步</string>
+    <string name="sync_running">正在同步</string>
+    <string name="sync_running_progress">正在同步 %1$d/%2$d</string>
+    <string name="sync_result_none">已是最新</string>
+    <string name="sync_result_uploaded">上传 %1$d</string>
+    <string name="sync_result_downloaded">下载 %1$d</string>
+    <string name="sync_result_updated">覆盖 %1$d</string>
+    <string name="sync_result_deleted">清理 %1$d</string>
+    <string name="sync_result_remote_newer">云端较新 %1$d</string>
+    <string name="sync_result_conflicts">冲突 %1$d</string>
+    <string name="sync_result_failed">失败 %1$d</string>
     <string name="sync_backup_info_title">备份说明</string>
     <string name="sync_backup_info_text">备份画作 (含自动保存草稿) 与你自己添加的笔刷, 内置笔刷不上传。本地已删除的文件会从云端一并清理; 别的设备改过而本地没改的文件不会被覆盖, 两边都改过时保留本地并把云端那份另存为副本</string>
     <string name="sync_auto_backup">保存后自动备份</string>
@@ -2025,19 +2233,20 @@
     <string name="sync_trust_self_signed_summary">仅用于你自己的服务器, 开启后将跳过 HTTPS 证书校验</string>
     <string name="sync_periodic_backup">定时自动备份</string>
     <string name="sync_periodic_backup_summary">应用打开期间每 30 分钟自动备份一次</string>
-    <string name="sync_category_restore">恢复</string>
-    <string name="sync_restore_artworks">恢复画作</string>
-    <string name="sync_restore_brushes">恢复笔刷</string>
-    <string name="sync_artworks">画作</string>
-    <string name="sync_brushes">笔刷</string>
-    <string name="sync_restore_hint">只补齐本地缺少的画作与笔刷, 不会覆盖或删除本地文件</string>
-    <string name="sync_restore_running">正在恢复 %1$d/%2$d</string>
-    <string name="sync_restore_result">恢复 %1$d 个, 覆盖 %2$d 个, 跳过 %3$d 个, 冲突 %4$d 个, 失败 %5$d 个</string>
     <string name="sync_conflict_suffix"> (云端)</string>
 
     <string name="settings_three_finger_edit_title">三指下滑打开编辑菜单</string>
-    <string name="settings_three_finger_edit_desc">三指一起向下滑动可剪切、复制或粘贴；轻点仍可重做</string>
-    <string name="canvas_edit_title">剪切与复制</string>
+    <string name="settings_three_finger_edit_desc">三指一起向下滑动打开自定义菜单；轻点仍可重做</string>
+    <string name="canvas_edit_title">快捷菜单</string>
+    <string name="canvas_edit_customize">自定义三指菜单</string>
+    <string name="canvas_edit_customize_hint">添加常用操作，用上下箭头调整顺序，至少保留一项</string>
+    <string name="canvas_edit_selected_tab">已选 (%1$d)</string>
+    <string name="canvas_edit_available_tab">添加 (%1$d)</string>
+    <string name="canvas_edit_move_up">上移%1$s</string>
+    <string name="canvas_edit_move_down">下移%1$s</string>
+    <string name="canvas_edit_remove">移除%1$s</string>
+    <string name="canvas_edit_add">添加%1$s</string>
+    <string name="canvas_edit_save">保存</string>
     <string name="canvas_edit_no_pixels">当前图层没有可复制的像素，或不是普通像素图层</string>
     <string name="canvas_edit_cut">剪切</string>
     <string name="canvas_edit_loading">正在读取可用操作…</string>
@@ -2050,5 +2259,37 @@
     <string name="canvas_edit_cut_done">已剪切，可撤销</string>
     <string name="canvas_edit_copied">已复制</string>
     <string name="canvas_edit_failed">操作未完成，请检查当前图层与选区</string>
+    <string name="toast_project_save_failed">保存失败，修改尚未保存，请重试</string>
+
+    <!-- Canvas View Lock & Krita Weighted Smoothing -->
+    <string name="toast_view_locked">视图已锁定</string>
+    <string name="toast_view_unlocked">视图已解锁</string>
+    <string name="toast_canvas_touch_disabled">已禁用画布触控</string>
+    <string name="toast_canvas_touch_enabled">已恢复画布触控</string>
+    <string name="canvas_view_lock">锁定视图</string>
+    <string name="canvas_view_unlock">解锁视图</string>
+    <string name="settings_stroke_smoothing_advanced">高级</string>
+    <string name="settings_smoothing_mode">平滑算法</string>
+    <string name="settings_smoothing_mode_off">关闭</string>
+    <string name="settings_smoothing_mode_basic">基础平滑</string>
+    <string name="settings_smoothing_mode_weighted">加权平滑 (Krita)</string>
+    <string name="settings_smoothing_distance">平滑距离</string>
+    <string name="settings_smoothing_distance_min">最小距离</string>
+    <string name="settings_smoothing_distance_max">最大距离</string>
+    <string name="settings_smoothing_lock_distance">锁定最小与最大距离</string>
+    <string name="settings_smoothing_scalable">随画布缩放自适应</string>
+    <string name="settings_smoothing_scalable_desc">平滑距离随画布缩放比例换算像素</string>
+    <string name="settings_smoothing_pressure">平滑压感</string>
+    <string name="settings_smoothing_pressure_desc">对落笔压感进行高斯平滑滤波</string>
+    <string name="settings_smoothing_tail_aggressiveness">笔尾敏锐度</string>
+    <string name="settings_smoothing_tail_aggressiveness_desc">笔尖离屏时加速收束，消除拖尾迟滞</string>
+    <string name="liquify_push_left">向左推移</string>
+    <string name="liquify_push_right">向右推移</string>
+    <string name="liquify_hardness">硬度</string>
+    <string name="project_copying_progress">正在复制作品（%1$d/%2$d）</string>
+    <string name="project_copy_result">已复制 %1$d 项，失败 %2$d 项</string>
+    <string name="canvas_edit_previous_page">上一页操作</string>
+    <string name="canvas_edit_next_page">下一页操作</string>
+    <string name="canvas_edit_page">%1$d / %2$d</string>
 </resources>
 
