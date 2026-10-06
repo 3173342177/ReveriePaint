@@ -92,7 +92,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 修改 `app/src/main/cpp/` 源码时, 需本地配置交叉编译环境:
 
 - Qt for Android 6.6.3 (`android_arm64_v8a`) 以及对应宿主 `QT_HOST_PATH`
-- Krita 交叉编译源码产物与头文件
+- Krita 交叉编译源码产物与头文件 (源码请使用配套的 [LanRhyme/krita (reverie-android 分支)](https://github.com/LanRhyme/krita/tree/reverie-android)，若基于官方 Krita 需打入项目内置的 `patches/krita/*.patch` 补丁集)
 - KF6 6.6.0 arm64 交叉编译库
 
 ```bash
