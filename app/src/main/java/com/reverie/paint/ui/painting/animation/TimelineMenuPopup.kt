@@ -51,9 +51,11 @@ import androidx.compose.ui.window.PopupProperties
 import com.reverie.paint.R
 import com.reverie.paint.core.PaintViewModel
 import com.reverie.paint.core.animationAddBlankKeyframeAt
+import com.reverie.paint.core.animationClearLayerMarker
 import com.reverie.paint.core.animationCopyCurrentFrameTo
 import com.reverie.paint.core.animationFramesToLayers
 import com.reverie.paint.core.animationGenerateInbetween
+import com.reverie.paint.core.animationSetLayerMarker
 import com.reverie.paint.core.animationRemoveKeyframe
 import com.reverie.paint.core.animationSeek
 import com.reverie.paint.core.animationSetKeyframeTag
@@ -395,6 +397,15 @@ internal fun TrackMenuPopup(
     val strClearLayer = androidx.compose.ui.res.stringResource(R.string.clear)
     val strDeleteLayer = androidx.compose.ui.res.stringResource(R.string.layer_op_delete_layer)
     val strCannotDelete = androidx.compose.ui.res.stringResource(R.string.timeline_cannot_delete_only_layer)
+    val strSetBg = androidx.compose.ui.res.stringResource(R.string.anim_marker_set_background)
+    val strSetFg = androidx.compose.ui.res.stringResource(R.string.anim_marker_set_foreground)
+    val strClearBg = androidx.compose.ui.res.stringResource(R.string.anim_marker_clear_background)
+    val strClearFg = androidx.compose.ui.res.stringResource(R.string.anim_marker_clear_foreground)
+
+    // 背景/前景层在时间轴上不画帧格, 所以菜单里要能一键取消;
+    // 已经是标记层时项名切换成"取消…", 避免点两次才反应过来。
+    val isBackground = vm.anim.backgroundLayerIndex == menu.layerIndex
+    val isForeground = vm.anim.foregroundLayerIndex == menu.layerIndex
 
     // 组折叠(时间轴): 只有组能折; 折叠状态按组名记
     val isGroupLayer = vm.layers.firstOrNull { it.index == menu.layerIndex }?.isGroup == true
@@ -418,6 +429,20 @@ internal fun TrackMenuPopup(
 
     val items = listOfNotNull(
         groupCollapseItem,
+        (if (isBackground) strClearBg else strSetBg) to {
+            if (isBackground) {
+                vm.animationClearLayerMarker(toFront = false)
+            } else {
+                vm.animationSetLayerMarker(menu.layerIndex, toFront = false)
+            }
+        },
+        (if (isForeground) strClearFg else strSetFg) to {
+            if (isForeground) {
+                vm.animationClearLayerMarker(toFront = true)
+            } else {
+                vm.animationSetLayerMarker(menu.layerIndex, toFront = true)
+            }
+        },
         androidx.compose.ui.res.stringResource(R.string.f2l_menu) to {
             // 帧转图层取的是**这一条轨道**的画面, 源就是菜单点中的这条轨道。
             // 帧号: 多选态下用用户选中的那些(空集才回落成"整条轨道的全部关键帧"),
