@@ -643,6 +643,18 @@ void ReverieCore::gradientFill(int x1, int y1, int x2, int y2, int type, int rep
 // children into a temp device and then apply the group's own opacity/blend,
 // so group nesting (and group opacity) stays correct and a soloed child is
 // never drawn twice (once via its ancestor's projection, once directly).
+namespace {
+// 组是否处于穿透混合模式 (Pass-through)。
+// 穿透组不产生自己的合成表面: 子层直接按各自混合模式混入父级上下文,
+// 组自身的混合模式与不透明度被忽略。Krita 原生 merger 走 kis_projection_leaf
+// 的 checkPassThrough(); 本工程的同步合成路径必须显式复刻这一语义。
+static inline bool nodeIsPassThroughGroup(KisNodeWSP node)
+{
+    const KisGroupLayer *grp = dynamic_cast<const KisGroupLayer *>(node.data());
+    return grp && grp->passThroughMode();
+}
+} // namespace
+
 void ReverieCore::compositeSoloRange(KisPaintDeviceSP out, int startIdx, int endIdx, const QRect &full)
 {
     int i = startIdx;
@@ -653,6 +665,12 @@ void ReverieCore::compositeSoloRange(KisPaintDeviceSP out, int startIdx, int end
             int j = i + 1;
             while (j < endIdx && m_layers[j].depth > e.depth) {
                 ++j;
+            }
+            // 穿透组: 子层直接合成到 out, 不套用组自身的混合模式/不透明度
+            if (nodeIsPassThroughGroup(KisNodeWSP(e.node))) {
+                compositeSoloRange(out, i + 1, j, full);
+                i = j;
+                continue;
             }
             KisPaintDeviceSP tmp(new KisPaintDevice(m_document->colorSpace()));
             tmp->fill(full, KoColor(Qt::transparent, m_document->colorSpace()));
@@ -994,18 +1012,25 @@ void ReverieCore::compositeLayersRange(KisPaintDeviceSP out, int startIdx, int e
         // 分支 A: 无剪切蒙版层, 走快速既有路径
         if (clipEnd == eEnd) {
             if (e.isGroup) {
-                ScratchDeviceGuard tmpGuard(this, r);
-                KisPaintDeviceSP tmp = tmpGuard.device();
-                compositeLayersRange(tmp, i + 1, eEnd, r, excludeIdx);
-                KisPainter painter(out);
-                painter.setOpacityF(qreal(e.node->opacity()) / 255.0);
-                painter.setCompositeOpId(e.node->compositeOpId());
-                KisLayer *layer = dynamic_cast<KisLayer *>(e.node);
-                if (layer && !layer->channelFlags().isEmpty()) {
-                    painter.setChannelFlags(layer->channelFlags());
+                // 穿透混合模式: 子层各自按自身混合模式直接合成到父级上下文,
+                // 组自身的混合模式/不透明度被忽略 (与 Krita 原生 merger 语义一致)。
+                // 此处不能走 tmp 中转, 否则组会退化成隔离组。
+                if (nodeIsPassThroughGroup(KisNodeWSP(e.node))) {
+                    compositeLayersRange(out, i + 1, eEnd, r, excludeIdx);
+                } else {
+                    ScratchDeviceGuard tmpGuard(this, r);
+                    KisPaintDeviceSP tmp = tmpGuard.device();
+                    compositeLayersRange(tmp, i + 1, eEnd, r, excludeIdx);
+                    KisPainter painter(out);
+                    painter.setOpacityF(qreal(e.node->opacity()) / 255.0);
+                    painter.setCompositeOpId(e.node->compositeOpId());
+                    KisLayer *layer = dynamic_cast<KisLayer *>(e.node);
+                    if (layer && !layer->channelFlags().isEmpty()) {
+                        painter.setChannelFlags(layer->channelFlags());
+                    }
+                    painter.bitBlt(r.topLeft(), tmp, r);
+                    painter.end();
                 }
-                painter.bitBlt(r.topLeft(), tmp, r);
-                painter.end();
             } else if (e.nodeType == NodeTypeAdjustment) {
                 applyAdjustment(out, e);
             } else if (e.isStrokeLayer || e.nodeType == NodeTypeStroke) {
@@ -1022,7 +1047,11 @@ void ReverieCore::compositeLayersRange(KisPaintDeviceSP out, int startIdx, int e
         KisPaintDeviceSP clipScratch = clipGuard.device();
 
         // 1. 渲染 Base Layer 内容到 clipScratch (以 100% 不透明度与 Normal 混合, 自身混合模式/不透明度在最终合入 out 时应用)
-        if (e.isGroup) {
+        // 穿透组作为剪切基底: 其子层直接合成到 clipScratch, 仍由第 3 步按组的属性合入 out,
+        // 保证"被剪切的层"能正确透过基底内容显示
+        if (e.isGroup && nodeIsPassThroughGroup(KisNodeWSP(e.node))) {
+            compositeLayersRange(clipScratch, i + 1, eEnd, r, excludeIdx);
+        } else if (e.isGroup) {
             compositeLayersRange(clipScratch, i + 1, eEnd, r, excludeIdx);
         } else if (e.nodeType == NodeTypeAdjustment) {
             applyAdjustment(clipScratch, e);
@@ -1050,21 +1079,27 @@ void ReverieCore::compositeLayersRange(KisPaintDeviceSP out, int startIdx, int e
             if (c.isGroup) {
                 int gEnd = cIdx + 1;
                 while (gEnd < clipEnd && m_layers[gEnd].depth > c.depth) ++gEnd;
-                ScratchDeviceGuard tmpGuard(this, r);
-                KisPaintDeviceSP tmp = tmpGuard.device();
-                compositeLayersRange(tmp, cIdx + 1, gEnd, r, excludeIdx);
+                // 穿透组作为被剪切层: 子层直接合成到 clipScratch, 跳过组的属性包裹,
+                // 否则组会退化成隔离组, 剪切成片丢失
+                if (nodeIsPassThroughGroup(KisNodeWSP(c.node))) {
+                    compositeLayersRange(clipScratch, cIdx + 1, gEnd, r, excludeIdx);
+                } else {
+                    ScratchDeviceGuard tmpGuard(this, r);
+                    KisPaintDeviceSP tmp = tmpGuard.device();
+                    compositeLayersRange(tmp, cIdx + 1, gEnd, r, excludeIdx);
 
-                KisPainter cPainter(clipScratch);
-                cPainter.setOpacityF(qreal(c.node->opacity()) / 255.0);
-                cPainter.setCompositeOpId(c.node->compositeOpId());
-                QBitArray cFlags = clipScratch->colorSpace()->channelFlags(true, false);
-                KisLayer *cLayer = dynamic_cast<KisLayer *>(c.node);
-                if (cLayer && !cLayer->channelFlags().isEmpty()) {
-                    cFlags &= cLayer->channelFlags();
+                    KisPainter cPainter(clipScratch);
+                    cPainter.setOpacityF(qreal(c.node->opacity()) / 255.0);
+                    cPainter.setCompositeOpId(c.node->compositeOpId());
+                    QBitArray cFlags = clipScratch->colorSpace()->channelFlags(true, false);
+                    KisLayer *cLayer = dynamic_cast<KisLayer *>(c.node);
+                    if (cLayer && !cLayer->channelFlags().isEmpty()) {
+                        cFlags &= cLayer->channelFlags();
+                    }
+                    cPainter.setChannelFlags(cFlags);
+                    cPainter.bitBlt(r.topLeft(), tmp, r);
+                    cPainter.end();
                 }
-                cPainter.setChannelFlags(cFlags);
-                cPainter.bitBlt(r.topLeft(), tmp, r);
-                cPainter.end();
                 cIdx = gEnd;
             } else if (c.nodeType == NodeTypeAdjustment) {
                 applyAdjustment(clipScratch, c);
