@@ -445,7 +445,7 @@ void ReverieCore::syncLayersFromImage()
                 entry.node = node.data();
                 entry.visible = m->visible();
                 entry.name = m->name();
-                entry.depth = depth;
+                entry.depth = depth + 1;
                 entry.isGroup = false;
                 entry.locked = m->userLocked();
                 entry.alphaLocked = false;

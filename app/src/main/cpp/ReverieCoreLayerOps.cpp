@@ -185,6 +185,20 @@ bool ReverieCore::mergeDown(int index)
     if (e.isGroup || e.locked || e.nodeType == NodeTypeAdjustment) {
         return false;
     }
+    // 蒙版防护: 若在透明度蒙版图层上执行向下合并，语义即为应用蒙版至其宿主图层
+    if (e.nodeType == NodeTypeTransparencyMask) {
+        return applyMask(index);
+    }
+    // 若待合并的父图层拥有依附的蒙版，先将蒙版应用至父图层，再执行合并
+    if (e.node && e.node->nextSibling() && e.node->nextSibling()->property("reverie_is_transparency_mask").toBool()) {
+        const int maskIdx = indexOfNode(e.node->nextSibling().data());
+        if (maskIdx >= 0) {
+            applyMask(maskIdx);
+            // 应用蒙版后重新获取当前图层索引与条目
+            index = indexOfNode(e.node);
+            if (index <= 0 || index >= m_layers.size()) return false;
+        }
+    }
     // Target: nearest paint layer below (groups cannot be bitBlt targets)
     int ti = index - 1;
     while (ti > 0 && m_layers[ti].isGroup) {
@@ -491,14 +505,37 @@ bool ReverieCore::moveLayersRelative(const QVector<int> &fromIndices, int target
         nodesToMove.append(node);
     }
 
+    // 确保若移动父图层，其附属的所有蒙版紧随其后成对移动
+    QVector<KisNodeSP> finalNodesToMove;
+    for (KisNodeSP node : nodesToMove) {
+        const bool isMask = node->property("reverie_is_transparency_mask").toBool() || dynamic_cast<KisMask *>(node.data());
+        if (!isMask) {
+            finalNodesToMove.append(node);
+            KisNodeSP sib = node->nextSibling();
+            while (sib && (sib->property("reverie_is_transparency_mask").toBool() || dynamic_cast<KisMask *>(sib.data()))) {
+                if (!finalNodesToMove.contains(sib)) {
+                    finalNodesToMove.append(sib);
+                }
+                sib = sib->nextSibling();
+            }
+        } else if (!finalNodesToMove.contains(node)) {
+            finalNodesToMove.append(node);
+        }
+    }
+    nodesToMove = finalNodesToMove;
+
     if (nodesToMove.isEmpty()) return false;
 
     beginUndoMacro(QStringLiteral("Move Layers"));
 
     KisNodeSP currentAbove;
     if (placeAbove) {
-        // Visually ABOVE target: in composition stack, place directly above target
-        currentAbove = target;
+        // Visually ABOVE target: 若 target 拥有紧随的透明度蒙版，越过蒙版插入在蒙版上方
+        KisNodeSP actualTarget = target;
+        if (actualTarget->nextSibling() && actualTarget->nextSibling()->property("reverie_is_transparency_mask").toBool() && !nodesToMove.contains(actualTarget->nextSibling())) {
+            actualTarget = actualTarget->nextSibling();
+        }
+        currentAbove = actualTarget;
     } else {
         // Visually BELOW target: in composition stack, place directly below target
         // (i.e. directly above target's previous sibling)
@@ -600,17 +637,20 @@ bool ReverieCore::addMaskToLayer(int layerIndex, int maskType)
 
     KisMaskSP mask;
     if (maskType == MaskTypeFilter) {
-        KisFilterMaskSP fmask = new KisFilterMask(image, maskName);
+        const QString fName = QString("滤镜蒙版 %1").arg(m_layers[layerIndex].name);
+        KisFilterMaskSP fmask = new KisFilterMask(image, fName);
         if (KisLayer *layer = dynamic_cast<KisLayer *>(target)) {
             fmask->initSelection(layer);
         }
         mask = fmask;
     } else if (maskType == MaskTypeTransform) {
-        KisTransformMaskSP txmask = new KisTransformMask(image, maskName);
+        const QString tName = QString("变换蒙版 %1").arg(m_layers[layerIndex].name);
+        KisTransformMaskSP txmask = new KisTransformMask(image, tName);
         mask = txmask;
     } else if (maskType == MaskTypeSelection) {
+        const QString sName = QString("局部选区 %1").arg(m_layers[layerIndex].name);
         KisSelectionMaskSP smask = new KisSelectionMask(image);
-        smask->setName(maskName);
+        smask->setName(sName);
         if (m_selection) {
             smask->initSelection(m_selection, dynamic_cast<KisLayer *>(target));
         }

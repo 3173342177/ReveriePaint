@@ -4522,6 +4522,10 @@ class CanvasTouchView(context: Context) : View(context) {
             v.showActionToast(context.getString(R.string.canvas_toast_filter_not_drawable), R.drawable.ic_image_adjust)
             return
         }
+        if ((activeLayer?.nodeType == com.reverie.paint.model.LayerNodeType.SELECTION_MASK) && isDrawingTool) {
+            v.showActionToast(context.getString(R.string.canvas_toast_selection_mask_not_drawable), R.drawable.ic_select)
+            return
+        }
         if (activeLayer?.locked == true && (isDrawingTool || tool == Tool.LIQUIFY)) {
             v.showActionToast(context.getString(R.string.canvas_toast_layer_locked), R.drawable.ic_lock)
             return

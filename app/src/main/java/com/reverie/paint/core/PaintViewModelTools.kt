@@ -142,6 +142,10 @@ internal fun PaintViewModel.touchStart(
         showActionToast(R.string.canvas_toast_filter_not_drawable, com.reverie.paint.R.drawable.ic_image_adjust)
         return false
     }
+    if (curLayer?.nodeType == com.reverie.paint.model.LayerNodeType.SELECTION_MASK) {
+        showActionToast(R.string.canvas_toast_selection_mask_not_drawable, com.reverie.paint.R.drawable.ic_select)
+        return false
+    }
     if (curLayer?.isGroup == true) {
         showActionToast(R.string.canvas_toast_group_not_drawable, com.reverie.paint.R.drawable.ic_folder)
         return false

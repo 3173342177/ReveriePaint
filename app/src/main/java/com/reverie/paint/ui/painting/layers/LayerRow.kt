@@ -299,14 +299,15 @@ internal fun LayerRow(
 
                             lastChange.consume()
                             val initDx = lastChange.position.x - startX
-                            if (initDx > 0 && startOffset >= -selectThresholdPx) {
+                            val isRightSwipe = initDx > 0 && startOffset >= -selectThresholdPx && !isMask
+                            if (isRightSwipe) {
                                 scope.launch { revealAnim.snapTo(initDx.coerceIn(0f, selectMaxPx.toFloat())) }
                                 if (initDx > selectThresholdPx && !selectTriggered) {
                                     selectTriggered = true
                                     haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                                     onSelect()
                                 }
-                            } else {
+                            } else if (!isRightSwipe && initDx < 0) {
                                 scope.launch { revealAnim.snapTo((startOffset + initDx).coerceIn(-drawerPx.toFloat(), 0f)) }
                             }
 
@@ -323,14 +324,14 @@ internal fun LayerRow(
                                 velocityX = ((currentX - prevX) / dt * 1000f).coerceIn(-5000f, 5000f)
                                 prevX = currentX
                                 prevTimeNs = nowNs
-                                if (dx > 0 && startOffset >= -selectThresholdPx) {
+                                if (dx > 0 && startOffset >= -selectThresholdPx && !isMask) {
                                     scope.launch { revealAnim.snapTo(dx.coerceIn(0f, selectMaxPx.toFloat())) }
                                     if (dx > selectThresholdPx && !selectTriggered) {
                                         selectTriggered = true
                                         haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                                         onSelect()
                                     }
-                                } else {
+                                } else if (dx < 0 || !isMask) {
                                     scope.launch { revealAnim.snapTo((startOffset + dx).coerceIn(-drawerPx.toFloat(), 0f)) }
                                 }
                             }
@@ -799,11 +800,19 @@ internal fun LayerRowContent(
                     layer.nodeType == 2 -> stringResource(R.string.layer_tag_fill_prefix)
                     layer.nodeType == 3 -> stringResource(R.string.layer_tag_filter_prefix)
                     isStroke -> stringResource(R.string.layer_tag_stroke_prefix)
+                    layer.nodeType == com.reverie.paint.model.LayerNodeType.SELECTION_MASK -> stringResource(R.string.layer_tag_selection_mask_prefix)
+                    layer.nodeType == com.reverie.paint.model.LayerNodeType.FILTER_MASK -> stringResource(R.string.layer_tag_filter_mask_prefix)
+                    layer.nodeType == com.reverie.paint.model.LayerNodeType.TRANSFORM_MASK -> stringResource(R.string.layer_tag_transform_mask_prefix)
                     isMask -> stringResource(R.string.layer_tag_mask_prefix)
                     else -> ""
                 }
+                val desc = if (isMask) {
+                    "$tag${(layer.opacity * 100).roundToInt()}%"
+                } else {
+                    "$tag${(layer.opacity * 100).roundToInt()}% · $blendName"
+                }
                 Text(
-                    text = "$tag${(layer.opacity * 100).roundToInt()}% · $blendName",
+                    text = desc,
                     color = Morandi.subText,
                     fontSize = 10.sp,
                     maxLines = 1,

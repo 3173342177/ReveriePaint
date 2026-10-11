@@ -580,8 +580,9 @@ KisPaintDeviceSP ReverieCore::currentPaintDevice()
     }
     const int idx = qBound(0, m_currentLayer, m_layers.size() - 1);
     LayerEntry &entry = m_layers[idx];
-    // Background, locked and adjustment layers are never paintable
-    if (entry.isGroup || entry.background || entry.locked || entry.nodeType == NodeTypeAdjustment) {
+    // Background, locked and adjustment layers or non-paintable masks are never paintable
+    if (entry.isGroup || entry.background || entry.locked || entry.nodeType == NodeTypeAdjustment ||
+        entry.nodeType == NodeTypeSelectionMask || entry.nodeType == NodeTypeTransformMask) {
         return KisPaintDeviceSP();
     }
     return layerPaintDeviceFor(entry);

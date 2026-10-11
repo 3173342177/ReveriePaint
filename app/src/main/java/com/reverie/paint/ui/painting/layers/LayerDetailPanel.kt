@@ -801,39 +801,41 @@ internal fun LayerDetailPage(
             }
         }
 
-        // Blend mode row button
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .noRippleClickable(onOpenBlendModes)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(
-                painterResource(R.drawable.ic_layerstack),
-                contentDescription = null,
-                tint = Morandi.icon,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                stringResource(R.string.layer_blend_mode),
-                color = Morandi.text,
-                fontSize = 13.sp,
-                modifier = Modifier.weight(1f),
-            )
-            val curBlendName = stringResource(blendModeResId(layer?.blendMode ?: "normal"))
-            Text(
-                curBlendName,
-                color = Morandi.subText,
-                fontSize = 13.sp,
-            )
-            Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = Morandi.subText, modifier = Modifier.size(16.dp))
+        // Blend mode row button (蒙版图层隐藏)
+        if (!isMaskLayer) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .noRippleClickable(onOpenBlendModes)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_layerstack),
+                    contentDescription = null,
+                    tint = Morandi.icon,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    stringResource(R.string.layer_blend_mode),
+                    color = Morandi.text,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                val curBlendName = stringResource(blendModeResId(layer?.blendMode ?: "normal"))
+                Text(
+                    curBlendName,
+                    color = Morandi.subText,
+                    fontSize = 13.sp,
+                )
+                Icon(painterResource(R.drawable.ic_chevron), contentDescription = null, tint = Morandi.subText, modifier = Modifier.size(16.dp))
+            }
         }
 
-        // 滤镜与颜色调整 (非滤镜图层时显示)
-        if (layer?.isGroup != true && !isFilterLayer) {
+        // 滤镜与颜色调整 (非滤镜图层且非蒙版图层时显示)
+        if (layer?.isGroup != true && !isFilterLayer && !isMaskLayer) {
             Row(
                 modifier =
                     Modifier
@@ -859,13 +861,15 @@ internal fun LayerDetailPage(
             }
         }
 
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp)
-                .height(1.dp)
-                .background(Morandi.border.copy(alpha = 0.5f)),
-        )
+        if (!isMaskLayer) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp)
+                    .height(1.dp)
+                    .background(Morandi.border.copy(alpha = 0.5f)),
+            )
+        }
 
         // Opacity slider
         var localOpacity by remember(index) { mutableFloatStateOf((layer?.opacity ?: 1.0).toFloat()) }
@@ -877,7 +881,8 @@ internal fun LayerDetailPage(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(stringResource(R.string.layer_opacity), color = Morandi.text, fontSize = 13.sp)
+            val opacityTitle = if (isMaskLayer) stringResource(R.string.layer_mask_opacity) else stringResource(R.string.layer_opacity)
+            Text(opacityTitle, color = Morandi.text, fontSize = 13.sp)
             Spacer(Modifier.weight(1f))
             Text("${(localOpacity * 100).roundToInt()}%", color = Morandi.subText, fontSize = 13.sp)
         }
@@ -910,33 +915,35 @@ internal fun LayerDetailPage(
                 .background(Morandi.border),
         )
 
-        // Krita 8-color label picker
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            val currentLabel = layer?.colorLabel ?: 0
-            for (label in 0..8) {
-                val color = layerLabelColor(label)
-                val isSelected = currentLabel == label
-                Box(
-                    modifier =
-                        Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(if (label == 0) Morandi.panelHi else color)
-                            .then(
-                                if (isSelected) {
-                                    Modifier.border(2.dp, Morandi.accent, CircleShape)
-                                } else Modifier
-                            ).clickable { vm.setLayerColorLabel(index, label) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (label == 0) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(Morandi.subText.copy(alpha = 0.5f)))
-                    } else if (isSelected) {
-                        Box(Modifier.size(6.dp).clip(CircleShape).background(Color.White))
+        // Krita 8-color label picker (蒙版图层隐藏)
+        if (!isMaskLayer) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                val currentLabel = layer?.colorLabel ?: 0
+                for (label in 0..8) {
+                    val color = layerLabelColor(label)
+                    val isSelected = currentLabel == label
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(if (label == 0) Morandi.panelHi else color)
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(2.dp, Morandi.accent, CircleShape)
+                                    } else Modifier
+                                ).clickable { vm.setLayerColorLabel(index, label) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (label == 0) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(Morandi.subText.copy(alpha = 0.5f)))
+                        } else if (isSelected) {
+                            Box(Modifier.size(6.dp).clip(CircleShape).background(Color.White))
+                        }
                     }
                 }
             }
@@ -1212,6 +1219,21 @@ internal fun LayerDetailPage(
                     android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_applied), android.widget.Toast.LENGTH_SHORT).show()
                     onBack()
                 }
+                OpItem(R.drawable.ic_trash, stringResource(R.string.layer_op_clear_mask)) {
+                    vm.clearLayer(index)
+                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_cleared), android.widget.Toast.LENGTH_SHORT).show()
+                }
+                val isSelectionMask = layer?.nodeType == com.reverie.paint.model.LayerNodeType.SELECTION_MASK
+                if (isSelectionMask) {
+                    OpItem(R.drawable.ic_select, stringResource(R.string.layer_op_activate_selection_mask)) {
+                        triggerSelectFromLayer()
+                        android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_selection_activated), android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    OpItem(R.drawable.ic_select, stringResource(R.string.layer_op_select_from_layer)) {
+                        triggerSelectFromLayer()
+                    }
+                }
                 OpItem(R.drawable.ic_trash, stringResource(R.string.layer_op_remove_mask)) {
                     vm.removeMask(index)
                     android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_removed), android.widget.Toast.LENGTH_SHORT).show()
@@ -1226,11 +1248,6 @@ internal fun LayerDetailPage(
             Column {
                 OpItem(R.drawable.ic_copy, stringResource(R.string.layer_op_duplicate)) { vm.copyLayer(index) }
                 OpItem(R.drawable.ic_rename, stringResource(R.string.layer_op_rename)) { onRename(name) }
-                OpItem(R.drawable.ic_crop, stringResource(R.string.layer_op_add_mask), enabled = !isBg && !isFilterLayer) {
-                    vm.addMaskToLayer(index, com.reverie.paint.model.LayerMaskType.TRANSPARENCY)
-                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_created), android.widget.Toast.LENGTH_SHORT).show()
-                    onBack()
-                }
                 OpItem(R.drawable.ic_trash, stringResource(R.string.layer_op_delete_layer), enabled = !isBg) {
                     vm.removeLayer(index)
                     onBack()

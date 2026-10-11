@@ -940,8 +940,8 @@ void ReverieCore::compositeLayersRange(KisPaintDeviceSP out, int startIdx, int e
             continue;
         }
 
-        // 独立透明度蒙版图层: 不作为普通图层直接输出到画布 (由挂载它的父图层负责调制应用)
-        if (e.nodeType == NodeTypeTransparencyMask) {
+        // 独立蒙版图层 (透明度蒙版、局部选区蒙版、变换蒙版、滤镜蒙版): 不作为普通图层直接输出到画布
+        if (e.nodeType >= NodeTypeTransparencyMask && e.nodeType <= NodeTypeSelectionMask) {
             ++i;
             continue;
         }
