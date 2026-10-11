@@ -269,7 +269,8 @@ internal fun LayerRow(
                             null
                         }
 
-                        if (earlyExit == null && !isDrawerOpen) {
+                        val isMask = com.reverie.paint.model.LayerNodeType.isMask(layer.nodeType)
+                        if (earlyExit == null && !isDrawerOpen && !isMask) {
                             // Phase 2: EXACTLY 300ms elapsed without movement exceeding slop -> TRIGGER DRAG!
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             scope.launch { rowInteraction.emit(androidx.compose.foundation.interaction.PressInteraction.Cancel(press)) }

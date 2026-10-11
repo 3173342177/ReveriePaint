@@ -800,10 +800,22 @@ internal fun PaintViewModel.moveLayersToGroup(
     group: Int,
 ) {
     if (fromIndices.isEmpty()) return
-    val selectedIds = layers.filter { it.index in fromIndices }.map { it.id }.toSet()
-    val selectedNames = layers.filter { it.index in fromIndices }.map { it.name }.toSet()
+    val effectiveIndices = mutableListOf<Int>()
+    val fromSet = fromIndices.toSet()
+    for (idx in fromIndices) {
+        effectiveIndices.add(idx)
+        val maskIdx = idx - 1
+        if (maskIdx > 0 && maskIdx !in fromSet && maskIdx in layers.indices) {
+            val maskCandidate = layers[maskIdx]
+            if (com.reverie.paint.model.LayerNodeType.isMask(maskCandidate.nodeType)) {
+                effectiveIndices.add(maskIdx)
+            }
+        }
+    }
+    val selectedIds = layers.filter { it.index in effectiveIndices }.map { it.id }.toSet()
+    val selectedNames = layers.filter { it.index in effectiveIndices }.map { it.name }.toSet()
     if (recorder.recording) {
-        for (from in fromIndices) {
+        for (from in effectiveIndices) {
             recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_MOVE_TO_GROUP, from, group.toString())
         }
     }
@@ -811,7 +823,7 @@ internal fun PaintViewModel.moveLayersToGroup(
         notifyLayerChanged()
         selectedLayerIndices = layers.filter { it.id in selectedIds || it.name in selectedNames }.map { it.index }.toSet()
     }) {
-        ReverieCoreBridge.moveLayersToGroup(fromIndices.toIntArray(), group)
+        ReverieCoreBridge.moveLayersToGroup(effectiveIndices.toIntArray(), group)
     }
 }
 
@@ -821,10 +833,23 @@ internal fun PaintViewModel.moveLayersRelative(
     placeAbove: Boolean,
 ) {
     if (fromIndices.isEmpty()) return
-    val selectedIds = layers.filter { it.index in fromIndices }.map { it.id }.toSet()
-    val selectedNames = layers.filter { it.index in fromIndices }.map { it.name }.toSet()
+    // 强制绑定: 若移动父图层，自动附带其直接附属的透明度蒙版图层一同移动
+    val effectiveIndices = mutableListOf<Int>()
+    val fromSet = fromIndices.toSet()
+    for (idx in fromIndices) {
+        effectiveIndices.add(idx)
+        val maskIdx = idx - 1
+        if (maskIdx > 0 && maskIdx !in fromSet && maskIdx in layers.indices) {
+            val maskCandidate = layers[maskIdx]
+            if (com.reverie.paint.model.LayerNodeType.isMask(maskCandidate.nodeType)) {
+                effectiveIndices.add(maskIdx)
+            }
+        }
+    }
+    val selectedIds = layers.filter { it.index in effectiveIndices }.map { it.id }.toSet()
+    val selectedNames = layers.filter { it.index in effectiveIndices }.map { it.name }.toSet()
     if (recorder.recording) {
-        for (from in fromIndices) {
+        for (from in effectiveIndices) {
             recorder.layerOp(
                 com.reverie.paint.model.RecordingEvents.L_MOVE_RELATIVE,
                 from,
@@ -836,7 +861,7 @@ internal fun PaintViewModel.moveLayersRelative(
         notifyLayerChanged()
         selectedLayerIndices = layers.filter { it.id in selectedIds || it.name in selectedNames }.map { it.index }.toSet()
     }) {
-        ReverieCoreBridge.moveLayersRelative(fromIndices.toIntArray(), target, placeAbove)
+        ReverieCoreBridge.moveLayersRelative(effectiveIndices.toIntArray(), target, placeAbove)
     }
 }
 
