@@ -29,6 +29,7 @@ internal fun BoxScope.PaintingQuickWindows(
     vm: PaintViewModel,
     hazeState: HazeState,
     onOpenFullLayerPanel: () -> Unit,
+    onOpenLayerDetails: (Long) -> Unit,
 ) {
     // ---- Reference Window: 打开(false->true 边沿)时居中 ----
     // 面板可自由拖动且无边界钳制, 若保留上次位置, 用户可能把它拖出屏幕后
@@ -131,6 +132,7 @@ internal fun BoxScope.PaintingQuickWindows(
                 vm.persistQuickLayerState()
             },
             onOpenFullLayerPanel = onOpenFullLayerPanel,
+            onOpenLayerDetails = onOpenLayerDetails,
             hazeState = hazeState,
             opacity = vm.popupPanelOpacity,
         )
