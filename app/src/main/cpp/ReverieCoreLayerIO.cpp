@@ -44,6 +44,10 @@ void writeCommonAttrs(QXmlStreamWriter &w, const ReverieCore::LayerEntry &e)
     w.writeAttribute("opacity", QString::number(node ? node->opacity() : 255));
     if (KisLayer *l = dynamic_cast<KisLayer *>(node)) {
         w.writeAttribute("compositeop", l->compositeOpId());
+        // 穿透混合模式 (仅组有语义): 不序列化则保存重开后退回隔离组
+        if (KisGroupLayer *g = dynamic_cast<KisGroupLayer *>(node)) {
+            w.writeAttribute("pass_through", g->passThroughMode() ? "1" : "0");
+        }
     }
     w.writeAttribute("locked", e.locked ? "1" : "0");
     w.writeAttribute("alpha_locked", e.alphaLocked ? "1" : "0");
@@ -221,6 +225,10 @@ bool ReverieCore::loadLayersXmlTree(const QByteArray &xmlData, KisImageSP image,
             }
             const QString op = a.value("compositeop").toString();
             if (!op.isEmpty()) l->setCompositeOpId(op);
+            // 穿透混合模式恢复 (仅组有语义, writeCommonAttrs 写入)
+            if (KisGroupLayer *g = dynamic_cast<KisGroupLayer *>(node.data())) {
+                g->setPassThroughMode(a.value("pass_through") == QLatin1String("1"));
+            }
             // alpha_locked 仅颜料层子类支持
             if (KisPaintLayer *pl = dynamic_cast<KisPaintLayer *>(l)) {
                 pl->setAlphaLocked(a.value("alpha_locked") == QLatin1String("1"));
