@@ -800,6 +800,8 @@ internal fun LayerListView(
         val maxListH = (cfg.screenHeightDp * 3 / 4 - 56).dp
         val targetListH = (rowHeight * vm.layers.size.toFloat()).coerceAtMost(maxListH)
         val listH by animateDpAsState(targetListH, tween(200), label = "listH")
+        // 双指捏合合并 Toast 文案在组合期解析 (Lint: LocalContextGetResourceValueCall)
+        val pinchMergedMsg = stringResource(R.string.layer_toast_pinch_merged)
         Box(
             modifier =
                 Modifier
@@ -872,7 +874,7 @@ internal fun LayerListView(
                                                     p2.consume()
                                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                     vm.mergeDown(upperLayer.index)
-                                                    vm.showActionToast(context.getString(R.string.layer_toast_pinch_merged), com.reverie.paint.R.drawable.ic_merge_down)
+                                                    vm.showActionToast(pinchMergedMsg, com.reverie.paint.R.drawable.ic_merge_down)
                                                 }
                                             }
                                         }

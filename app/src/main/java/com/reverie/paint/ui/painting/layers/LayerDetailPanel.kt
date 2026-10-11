@@ -1208,26 +1208,32 @@ internal fun LayerDetailPage(
             }
         } else if (isMaskLayer) {
             // Mask operations list
+            // Toast 文案在组合期解析 (Lint: LocalContextGetResourceValueCall, 回调内禁用 context.getString)
+            val invertedMsg = stringResource(R.string.layer_mask_toast_inverted)
+            val appliedMsg = stringResource(R.string.layer_mask_toast_applied)
+            val clearedMsg = stringResource(R.string.layer_mask_toast_cleared)
+            val selectionActivatedMsg = stringResource(R.string.layer_mask_toast_selection_activated)
+            val removedMsg = stringResource(R.string.layer_mask_toast_removed)
             Column {
                 OpItem(R.drawable.ic_rename, stringResource(R.string.layer_op_rename)) { onRename(name) }
                 OpItem(R.drawable.ic_image_adjust, stringResource(R.string.layer_op_invert_mask)) {
                     vm.invertMask(index)
-                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_inverted), android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, invertedMsg, android.widget.Toast.LENGTH_SHORT).show()
                 }
                 OpItem(R.drawable.ic_fill, stringResource(R.string.layer_op_apply_mask)) {
                     vm.applyMask(index)
-                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_applied), android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, appliedMsg, android.widget.Toast.LENGTH_SHORT).show()
                     onBack()
                 }
                 OpItem(R.drawable.ic_trash, stringResource(R.string.layer_op_clear_mask)) {
                     vm.clearLayer(index)
-                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_cleared), android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, clearedMsg, android.widget.Toast.LENGTH_SHORT).show()
                 }
                 val isSelectionMask = layer?.nodeType == com.reverie.paint.model.LayerNodeType.SELECTION_MASK
                 if (isSelectionMask) {
                     OpItem(R.drawable.ic_select, stringResource(R.string.layer_op_activate_selection_mask)) {
                         triggerSelectFromLayer()
-                        android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_selection_activated), android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(context, selectionActivatedMsg, android.widget.Toast.LENGTH_SHORT).show()
                     }
                 } else {
                     OpItem(R.drawable.ic_select, stringResource(R.string.layer_op_select_from_layer)) {
@@ -1236,7 +1242,7 @@ internal fun LayerDetailPage(
                 }
                 OpItem(R.drawable.ic_trash, stringResource(R.string.layer_op_remove_mask)) {
                     vm.removeMask(index)
-                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_removed), android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, removedMsg, android.widget.Toast.LENGTH_SHORT).show()
                     onBack()
                 }
                 OpToggle(R.drawable.ic_lock, stringResource(R.string.layer_op_lock_layer), layer?.locked == true) {
