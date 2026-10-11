@@ -1202,8 +1202,8 @@ internal fun LayerDetailPage(
                 OpToggle(R.drawable.ic_alpha_inherit, stringResource(R.string.layer_op_alpha_inherit), layer?.alphaInherited == true, enabled = !isBg) {
                     vm.setLayerAlphaInherited(index, !(layer?.alphaInherited == true))
                 }
-                OpToggle(R.drawable.ic_sliders, stringResource(R.string.layer_op_pass_through), vm.groupPassThrough(index)) {
-                    vm.setGroupPassThrough(index, !vm.groupPassThrough(index))
+                OpToggle(R.drawable.ic_sliders, stringResource(R.string.layer_op_pass_through), layer?.passThrough == true) {
+                    vm.setGroupPassThrough(index, layer?.passThrough != true)
                 }
             }
         } else if (isMaskLayer) {

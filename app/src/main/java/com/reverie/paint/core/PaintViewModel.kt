@@ -3938,6 +3938,10 @@ class PaintViewModel : ViewModel() {
         val strokePosition: Int = 0,
         val strokeOpacity: Int = 100,
         val fillColor: Int = 0xFFFFFFFF.toInt(),
+        // 穿透混合模式 (仅组有效)。必须进镜像 state: 详情面板的开关若在
+        // 组合期直接 JNI 读, 设置后镜像 equals 不变 -> 面板重组被跳过 ->
+        // 开关显示永远不刷新 (点锁定等"真正改变镜像"的操作才会顺带刷新)
+        val passThrough: Boolean = false,
     )
 
     // ---- async render plumbing ----
@@ -4897,6 +4901,7 @@ class PaintViewModel : ViewModel() {
                     strokePosition = strokePosition,
                     strokeOpacity = strokeOpacity,
                     fillColor = fillColor,
+                    passThrough = ReverieCoreBridge.layerIsGroup(i) && ReverieCoreBridge.groupPassThrough(i),
                 ),
             )
         }

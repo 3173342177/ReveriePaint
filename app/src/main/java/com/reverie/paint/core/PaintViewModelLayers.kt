@@ -973,8 +973,6 @@ internal fun PaintViewModel.setGroupPassThrough(
     }
 }
 
-internal fun PaintViewModel.groupPassThrough(i: Int) = ReverieCoreBridge.groupPassThrough(i)
-
 internal fun PaintViewModel.mergeDown(i: Int) {
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_MERGE_DOWN, i)
