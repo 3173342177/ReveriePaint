@@ -854,6 +854,9 @@ class PaintViewModel : ViewModel() {
 
     // Reference Tool Window State (常态固定显示参考窗口)
     var referenceWindowOpen by mutableStateOf(false)
+    // 置中只发生在 referenceWindowOpen 的 false->true 边沿: 面板保持打开时
+    // 进入工程/重新组合不重置位置。VM 级字段跨工程保留。
+    var referenceWindowWasOpen = false
     var referenceImages by mutableStateOf<List<Bitmap>>(emptyList())
     var referenceAlbumSelectedUris by mutableStateOf<List<android.net.Uri>>(emptyList())
     var referenceIsGrayscale by mutableStateOf(false)
@@ -3386,8 +3389,7 @@ class PaintViewModel : ViewModel() {
             }
 
             // Window placement remains a device preference; images and view state belong to the document.
-            referenceWindowX = prefs.getFloat("ref_window_x", 80f)
-            referenceWindowY = prefs.getFloat("ref_window_y", 140f)
+            // 面板 x/y 不再读取: 打开时由 PaintingQuickWindows 按屏幕居中 (防止旧位置在屏外)
             referenceWindowWidth = prefs.getFloat("ref_window_w", 260f)
             referenceWindowHeight = prefs.getFloat("ref_window_h", 300f)
             referenceAllowRotation = prefs.getBoolean("ref_allow_rotation", true)

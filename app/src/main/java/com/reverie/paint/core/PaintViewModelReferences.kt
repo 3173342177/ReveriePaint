@@ -28,6 +28,10 @@ internal fun PaintViewModel.projectReferenceBitmap(uri: Uri): Bitmap? =
 
 private fun PaintViewModel.applyReferenceState(state: ReferenceViewState) {
     referenceWindowOpen = state.open
+    // 工程状态恢复 (进入工程 / 重置) 不是用户交互: 同步 wasOpen 抑制 UI 层的
+    // false->true 置中边沿, 面板保持打开进入工程时位置原样保留。
+    // 边沿只允许来自用户交互 (工具栏 toggle / 导入图片自动打开)。
+    referenceWindowWasOpen = state.open
     referenceIsGrayscale = state.grayscale
     referenceIsFlipped = state.flipped
     referenceActiveTab = state.tab
@@ -63,7 +67,8 @@ internal fun PaintViewModel.resetProjectReferences(loading: Boolean = false) {
 internal fun PaintViewModel.persistProjectReferenceState() {
     if (!hasAppContext()) return
     appContext.getSharedPreferences("paint_prefs", 0).edit {
-        putFloat("ref_window_x", referenceWindowX); putFloat("ref_window_y", referenceWindowY)
+        // 位置 (x/y) 不持久化: 面板每次打开都在 UI 层重新居中, 防止上次
+        // 会话拖出屏幕的位置把面板"丢"在屏外
         putFloat("ref_window_w", referenceWindowWidth); putFloat("ref_window_h", referenceWindowHeight)
         putBoolean("ref_allow_rotation", referenceAllowRotation)
     }
