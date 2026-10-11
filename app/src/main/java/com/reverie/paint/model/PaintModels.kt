@@ -126,6 +126,31 @@ object LassoSubMode {
     const val HYBRID = 2
 }
 
+/** 蒙版类型定义 (对齐 ReverieCore::MaskType) */
+object LayerMaskType {
+    const val TRANSPARENCY = 0
+    const val FILTER = 1
+    const val TRANSFORM = 2
+    const val SELECTION = 3
+}
+
+/** 图层节点类型定义 (对齐 ReverieCore::NodeType) */
+object LayerNodeType {
+    const val PAINT = 0
+    const val GROUP = 1
+    const val FILL = 2
+    const val ADJUSTMENT = 3
+    const val VECTOR = 4
+    const val CLONE = 5
+    const val STROKE = 6
+    const val TRANSPARENCY_MASK = 10
+    const val FILTER_MASK = 11
+    const val TRANSFORM_MASK = 12
+    const val SELECTION_MASK = 13
+
+    fun isMask(nodeType: Int): Boolean = nodeType in 10..13
+}
+
 /** Brush preset: name + default size + softness-ish hint */
 data class BrushPreset(
     val name: String,

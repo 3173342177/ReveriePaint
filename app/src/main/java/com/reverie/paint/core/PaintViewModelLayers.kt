@@ -896,6 +896,24 @@ internal fun PaintViewModel.removeMask(layerIndex: Int) {
     }
 }
 
+internal fun PaintViewModel.invertMask(layerIndex: Int) {
+    if (recorder.recording) {
+        recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_INVERT_MASK, layerIndex)
+    }
+    runCore(after = ::notifyLayerChanged) {
+        ReverieCoreBridge.invertMask(layerIndex)
+    }
+}
+
+internal fun PaintViewModel.applyMask(layerIndex: Int) {
+    if (recorder.recording) {
+        recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_APPLY_MASK, layerIndex)
+    }
+    runCore(after = ::notifyLayerChanged) {
+        ReverieCoreBridge.applyMask(layerIndex)
+    }
+}
+
 internal fun PaintViewModel.rasterizeLayer(i: Int) {
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_RASTERIZE, i)

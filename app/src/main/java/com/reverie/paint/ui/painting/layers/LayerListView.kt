@@ -189,9 +189,12 @@ internal fun LayerListView(
                 for (j in siblings.reversed()) {
                     val c = vm.layers[j]
                     out.add(c)
-                    if (c.isGroup && c.name !in collapsedGroupNames) {
+                    val isCollapsedGroup = c.isGroup && c.name in collapsedGroupNames
+                    if (!isCollapsedGroup) {
                         val e = (j + 1 until hi).firstOrNull { vm.layers[it].depth <= c.depth } ?: hi
-                        collectBlock(j + 1, e, c.depth, out)
+                        if (e > j + 1) {
+                            collectBlock(j + 1, e, c.depth, out)
+                        }
                     }
                 }
             }
@@ -584,6 +587,26 @@ internal fun LayerListView(
                         expanded = showNewLayerMenu,
                         onDismissRequest = { showNewLayerMenu = false },
                     ) {
+                        ReDropdownMenuItem(
+                            text = stringResource(R.string.layer_op_add_mask),
+                            icon = R.drawable.ic_crop,
+                            onClick = {
+                                showNewLayerMenu = false
+                                val now = System.currentTimeMillis()
+                                if (now - lastLayerOpTime > 350L) {
+                                    lastLayerOpTime = now
+                                    val curIdx = vm.currentLayerIndex
+                                    if (curIdx > 0 && curIdx < vm.layers.size) {
+                                        val curLayer = vm.layers[curIdx]
+                                        val isBg = curLayer.isBackground
+                                        val isFilter = curLayer.nodeType == 3
+                                        if (!isBg && !isFilter) {
+                                            vm.addMaskToLayer(curIdx, com.reverie.paint.model.LayerMaskType.TRANSPARENCY)
+                                        }
+                                    }
+                                }
+                            },
+                        )
                         ReDropdownMenuItem(
                             text = stringResource(R.string.layer_type_fill),
                             icon = R.drawable.ic_fill,

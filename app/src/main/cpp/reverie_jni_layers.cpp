@@ -396,6 +396,18 @@ Java_com_reverie_paint_core_ReverieCoreBridge_removeMask(JNIEnv *, jobject, jint
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_invertMask(JNIEnv *, jobject, jint layerIndex)
+{
+    return core()->invertMask(layerIndex);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_applyMask(JNIEnv *, jobject, jint layerIndex)
+{
+    return core()->applyMask(layerIndex);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
 Java_com_reverie_paint_core_ReverieCoreBridge_rasterizeLayer(JNIEnv *, jobject, jint index)
 {
     return core()->rasterizeLayer(index);

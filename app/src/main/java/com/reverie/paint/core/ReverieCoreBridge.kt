@@ -1171,6 +1171,10 @@ object ReverieCoreBridge {
     ): Boolean
 
     external fun removeMask(layerIndex: Int): Boolean
+ 
+    external fun invertMask(layerIndex: Int): Boolean
+
+    external fun applyMask(layerIndex: Int): Boolean
 
     external fun rasterizeLayer(index: Int): Boolean
 

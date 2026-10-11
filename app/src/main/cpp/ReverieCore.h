@@ -226,6 +226,8 @@ public:
     bool rasterizeLayerStroke(int index);
     bool addMaskToLayer(int layerIndex, int maskType);
     bool removeMask(int layerIndex);
+    bool invertMask(int layerIndex);
+    bool applyMask(int layerIndex);
     bool rasterizeLayer(int index);
     bool flattenGroup(int index);
     bool setGroupPassThrough(int index, bool passThrough);

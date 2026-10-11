@@ -67,4 +67,19 @@ inline void bilinear(const uint8_t *a, const uint8_t *b, const uint8_t *c,
     for (int ch=0;ch<3;++ch)
         out[ch]=out[3] ? uint8_t(std::clamp(std::lround(colors[ch]/alpha),0l,255l)) : 0;
 }
+
+// Modulate straight layer BGRA pixels by mask BGRA pixels.
+// Mask factor is qGray(R,G,B) * A / 255. Both devices are Straight BGRA.
+inline void applyMaskModulation(uint8_t *layerBgra, const uint8_t *maskBgra, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        const uint8_t ma = maskBgra[i * 4 + 3];
+        // Empty mask pixels evaluate to 0 (full mask occlusion)
+        const uint8_t gray = ma ? uint8_t((maskBgra[i * 4] * 11 + maskBgra[i * 4 + 1] * 59 + maskBgra[i * 4 + 2] * 30 + 50) / 100) : 0;
+        const uint8_t mFactor = uint8_t((unsigned(gray) * unsigned(ma) + 127) / 255);
+        if (mFactor == 255) continue;
+        uint8_t &la = layerBgra[i * 4 + 3];
+        if (la == 0) continue;
+        la = uint8_t((unsigned(la) * unsigned(mFactor) + 127) / 255);
+    }
+}
 } // namespace PixelAlpha

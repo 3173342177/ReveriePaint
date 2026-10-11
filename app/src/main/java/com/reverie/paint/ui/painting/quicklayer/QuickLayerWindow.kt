@@ -159,9 +159,17 @@ fun QuickLayerWindow(
             for (j in siblings.reversed()) {
                 val c = vm.layers[j]
                 out.add(c)
-                if (c.isGroup && c.name !in vm.collapsedGroupNames) {
+                if (c.isGroup) {
+                    if (c.name !in vm.collapsedGroupNames) {
+                        val e = (j + 1 until hi).firstOrNull { vm.layers[it].depth <= c.depth } ?: hi
+                        collectBlock(j + 1, e, c.depth, out)
+                    }
+                } else {
+                    // 非组图层 (如拥有透明度蒙版/滤镜蒙版的图层): 若存在子级项，直接递归收集
                     val e = (j + 1 until hi).firstOrNull { vm.layers[it].depth <= c.depth } ?: hi
-                    collectBlock(j + 1, e, c.depth, out)
+                    if (e > j + 1) {
+                        collectBlock(j + 1, e, c.depth, out)
+                    }
                 }
             }
         }
@@ -589,6 +597,72 @@ fun QuickLayerWindow(
                                                         tint = if (isSelected) (if (layer.colorLabel > 0) labelColor else Morandi.accent) else Morandi.icon,
                                                         modifier = Modifier.size(16.dp),
                                                     )
+                                                    Text(
+                                                        text = layerDisplayName(layer.name),
+                                                        fontSize = 11.sp,
+                                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                                        color = Morandi.text,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.weight(1f),
+                                                    )
+                                                }
+                                            }
+
+                                            // ---- 蒙版 (透明度蒙版 / 滤镜蒙版等) ----
+                                            com.reverie.paint.model.LayerNodeType.isMask(layer.nodeType) -> {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.ic_crop),
+                                                        contentDescription = stringResource(R.string.layer_tag_mask_prefix),
+                                                        tint = if (layer.colorLabel > 0) labelColor else Morandi.accent,
+                                                        modifier = Modifier.size(12.dp),
+                                                    )
+
+                                                    // 蒙版缩略图
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(32.dp, 26.dp)
+                                                            .clip(RoundedCornerShape(4.dp))
+                                                            .border(
+                                                                0.5.dp,
+                                                                thumbBorderColor,
+                                                                RoundedCornerShape(4.dp),
+                                                            ),
+                                                        contentAlignment = Alignment.Center,
+                                                    ) {
+                                                        LightCheckerboard(Modifier.fillMaxSize())
+                                                        val thumb = vm.thumbFor(layer.index, layer.name)
+                                                        if (thumb != null && !thumb.isRecycled) {
+                                                            Image(
+                                                                bitmap = thumb.asImageBitmap(),
+                                                                contentDescription = layer.name,
+                                                                modifier = Modifier.fillMaxSize(),
+                                                            )
+                                                        } else {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .background(Morandi.accent.copy(alpha = 0.15f)),
+                                                                contentAlignment = Alignment.Center,
+                                                            ) {
+                                                                Icon(
+                                                                    painterResource(R.drawable.ic_crop),
+                                                                    contentDescription = null,
+                                                                    tint = Morandi.accent,
+                                                                    modifier = Modifier.size(16.dp),
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // 蒙版名称
                                                     Text(
                                                         text = layerDisplayName(layer.name),
                                                         fontSize = 11.sp,

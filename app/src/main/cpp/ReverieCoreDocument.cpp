@@ -413,6 +413,9 @@ void ReverieCore::syncLayersFromImage()
                     entry.nodeType = NodeTypeClone;
                 } else if (entry.isStrokeLayer) {
                     entry.nodeType = NodeTypeStroke;
+                } else if (node->property("reverie_is_transparency_mask").toBool()) {
+                    entry.nodeType = NodeTypeTransparencyMask;
+                    entry.depth = depth + 1;
                 } else {
                     KisPSDLayerStyleSP style = l->layerStyle();
                     if (style && style->stroke() && style->stroke()->effectEnabled()) {

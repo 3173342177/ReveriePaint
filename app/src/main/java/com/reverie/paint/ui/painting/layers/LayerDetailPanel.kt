@@ -310,6 +310,7 @@ internal fun LayerDetailPage(
         val isFillLayer = (layer?.nodeType == 2)
         val isFilterLayer = (layer?.nodeType == 3)
         val isStrokeLayer = (layer?.isStrokeLayer == true) || (layer?.nodeType == 6)
+        val isMaskLayer = com.reverie.paint.model.LayerNodeType.isMask(layer?.nodeType ?: 0)
 
         if (isFillLayer) {
             var showPatterns by remember { mutableStateOf(false) }
@@ -1198,11 +1199,38 @@ internal fun LayerDetailPage(
                     vm.setGroupPassThrough(index, !vm.groupPassThrough(index))
                 }
             }
+        } else if (isMaskLayer) {
+            // Mask operations list
+            Column {
+                OpItem(R.drawable.ic_rename, stringResource(R.string.layer_op_rename)) { onRename(name) }
+                OpItem(R.drawable.ic_image_adjust, stringResource(R.string.layer_op_invert_mask)) {
+                    vm.invertMask(index)
+                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_inverted), android.widget.Toast.LENGTH_SHORT).show()
+                }
+                OpItem(R.drawable.ic_fill, stringResource(R.string.layer_op_apply_mask)) {
+                    vm.applyMask(index)
+                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_applied), android.widget.Toast.LENGTH_SHORT).show()
+                    onBack()
+                }
+                OpItem(R.drawable.ic_trash, stringResource(R.string.layer_op_remove_mask)) {
+                    vm.removeMask(index)
+                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_removed), android.widget.Toast.LENGTH_SHORT).show()
+                    onBack()
+                }
+                OpToggle(R.drawable.ic_lock, stringResource(R.string.layer_op_lock_layer), layer?.locked == true) {
+                    vm.setLayerLocked(index, !(layer?.locked == true))
+                }
+            }
         } else {
             // Vertical operation list
             Column {
                 OpItem(R.drawable.ic_copy, stringResource(R.string.layer_op_duplicate)) { vm.copyLayer(index) }
                 OpItem(R.drawable.ic_rename, stringResource(R.string.layer_op_rename)) { onRename(name) }
+                OpItem(R.drawable.ic_crop, stringResource(R.string.layer_op_add_mask), enabled = !isBg && !isFilterLayer) {
+                    vm.addMaskToLayer(index, com.reverie.paint.model.LayerMaskType.TRANSPARENCY)
+                    android.widget.Toast.makeText(context, context.getString(R.string.layer_mask_toast_created), android.widget.Toast.LENGTH_SHORT).show()
+                    onBack()
+                }
                 OpItem(R.drawable.ic_trash, stringResource(R.string.layer_op_delete_layer), enabled = !isBg) {
                     vm.removeLayer(index)
                     onBack()

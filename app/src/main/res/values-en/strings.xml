@@ -1043,6 +1043,15 @@
     <string name="layer_tag_fill_prefix">Fill · </string>
     <string name="layer_tag_filter_prefix">Filter · </string>
     <string name="layer_tag_stroke_prefix">Stroke · </string>
+    <string name="layer_tag_mask_prefix">Mask · </string>
+    <string name="layer_op_add_mask">Add Transparency Mask</string>
+    <string name="layer_op_remove_mask">Delete Mask</string>
+    <string name="layer_op_invert_mask">Invert Mask</string>
+    <string name="layer_op_apply_mask">Apply Mask to Layer</string>
+    <string name="layer_mask_toast_created">Transparency mask added</string>
+    <string name="layer_mask_toast_inverted">Mask inverted</string>
+    <string name="layer_mask_toast_applied">Mask applied</string>
+    <string name="layer_mask_toast_removed">Mask deleted</string>
     <string name="layer_stroke_properties">Stroke Properties</string>
     <string name="layer_stroke_size">Stroke Size</string>
     <string name="layer_stroke_color">Stroke Color</string>

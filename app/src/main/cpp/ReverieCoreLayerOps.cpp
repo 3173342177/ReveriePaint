@@ -8,6 +8,7 @@
  * ReverieCoreInternal.h, public API in ReverieCore.h)
  * ============================================================ */
 #include "ReverieCoreInternal.h"
+#include "PixelAlpha.h"
 
 void ReverieCore::flipLayerHorizontal(int index)
 {
@@ -569,16 +570,36 @@ bool ReverieCore::addMaskToLayer(int layerIndex, int maskType)
     KisNode *target = m_layers[layerIndex].node;
     if (!target) return false;
 
-    KisMaskSP mask;
     const QString maskName = QString("蒙版 %1").arg(m_layers[layerIndex].name);
 
     if (maskType == MaskTypeTransparency) {
-        KisTransparencyMaskSP tmask = new KisTransparencyMask(image, maskName);
-        if (KisLayer *layer = dynamic_cast<KisLayer *>(target)) {
-            tmask->initSelection(layer);
+        // 基于 KisPaintLayer 的透明度蒙版 (Layer-as-Mask 架构)
+        // 使用标准 RGBA8 空间，作为 target 的同级上方图层插入 (parent = target->parent(), above = target)
+        // 获得完整的 live stroke、KisPainter 笔刷特性与撤销重做支持
+        KisPaintLayerSP tmask = new KisPaintLayer(image, maskName, 255, image->colorSpace());
+        if (!tmask) return false;
+        tmask->setProperty("reverie_is_transparency_mask", true);
+        // 初始化全白 (Alpha 255, White): 默认全透光无遮罩
+        tmask->paintDevice()->fill(QRect(0, 0, image->width(), image->height()), KoColor(Qt::white, image->colorSpace()));
+        tmask->paintDevice()->setDirty();
+
+        KisNodeSP parentNode = target->parent();
+        if (!parentNode) {
+            parentNode = KisNodeSP(image->rootLayer());
         }
-        mask = tmask;
-    } else if (maskType == MaskTypeFilter) {
+        pushUndoCommand(new KisImageLayerAddCommand(image, tmask, parentNode, KisNodeSP(target)));
+        recompositeProjection();
+        syncLayersFromImage();
+        const int maskIdx = indexOfNode(tmask.data());
+        if (maskIdx >= 0) {
+            m_currentLayer = maskIdx;
+        }
+        markDirty();
+        return true;
+    }
+
+    KisMaskSP mask;
+    if (maskType == MaskTypeFilter) {
         KisFilterMaskSP fmask = new KisFilterMask(image, maskName);
         if (KisLayer *layer = dynamic_cast<KisLayer *>(target)) {
             fmask->initSelection(layer);
@@ -600,6 +621,10 @@ bool ReverieCore::addMaskToLayer(int layerIndex, int maskType)
         pushUndoCommand(new KisImageLayerAddCommand(image, mask, KisNodeSP(target), KisNodeSP()));
         recompositeProjection();
         syncLayersFromImage();
+        const int maskIdx = indexOfNode(mask.data());
+        if (maskIdx >= 0) {
+            m_currentLayer = maskIdx;
+        }
         markDirty();
         return true;
     }
@@ -614,18 +639,218 @@ bool ReverieCore::removeMask(int layerIndex)
     KisNode *target = m_layers[layerIndex].node;
     if (!target) return false;
 
+    // Case 1: The selected entry is directly the mask node (KisMask 或 KisPaintLayer 蒙版)
+    const bool isPaintMask = target->property("reverie_is_transparency_mask").toBool();
+    if (dynamic_cast<KisMask *>(target) || isPaintMask) {
+        // 删除蒙版后切回宿主图层 (即 m_layers 中其前一个图层)
+        const int pIdx = qMax(0, layerIndex - 1);
+        pushUndoCommand(new KisImageLayerRemoveCommand(image, KisNodeSP(target)));
+        recompositeProjection();
+        syncLayersFromImage();
+        if (pIdx < m_layers.size()) {
+            m_currentLayer = pIdx;
+        } else if (m_currentLayer >= m_layers.size()) {
+            m_currentLayer = qMax(0, m_layers.size() - 1);
+        }
+        markDirty();
+        return true;
+    }
+
+    // Case 2: The selected entry is a host layer: 查找紧邻上方的 KisPaintLayer 蒙版或子 KisMask
+    if (layerIndex + 1 < m_layers.size() &&
+        m_layers[layerIndex + 1].nodeType == NodeTypeTransparencyMask &&
+        m_layers[layerIndex + 1].node) {
+        KisNodeSP maskNode(m_layers[layerIndex + 1].node);
+        pushUndoCommand(new KisImageLayerRemoveCommand(image, maskNode));
+        recompositeProjection();
+        syncLayersFromImage();
+        const int curIdx = indexOfNode(target);
+        if (curIdx >= 0) {
+            m_currentLayer = curIdx;
+        }
+        markDirty();
+        return true;
+    }
+
     KisNodeSP child = target->firstChild();
     while (child) {
-        if (dynamic_cast<KisMask *>(child.data())) {
+        if (dynamic_cast<KisMask *>(child.data()) || child->property("reverie_is_transparency_mask").toBool()) {
             pushUndoCommand(new KisImageLayerRemoveCommand(image, child));
             recompositeProjection();
             syncLayersFromImage();
+            const int pIdx = indexOfNode(target);
+            if (pIdx >= 0) {
+                m_currentLayer = pIdx;
+            }
             markDirty();
             return true;
         }
         child = child->nextSibling();
     }
     return false;
+}
+
+bool ReverieCore::invertMask(int layerIndex)
+{
+    if (layerIndex <= 0 || layerIndex >= m_layers.size()) return false;
+    KisImageSP image = m_document;
+    if (!image) return false;
+    KisNode *target = m_layers[layerIndex].node;
+    if (!target) return false;
+
+    KisPaintDeviceSP dev;
+    if (target->property("reverie_is_transparency_mask").toBool()) {
+        if (KisPaintLayer *pl = dynamic_cast<KisPaintLayer *>(target)) {
+            dev = pl->paintDevice();
+        }
+    } else if (KisMask *mask = dynamic_cast<KisMask *>(target)) {
+        dev = mask->paintDevice();
+    } else if (layerIndex + 1 < m_layers.size() &&
+               m_layers[layerIndex + 1].nodeType == NodeTypeTransparencyMask &&
+               m_layers[layerIndex + 1].node) {
+        if (KisPaintLayer *pl = dynamic_cast<KisPaintLayer *>(m_layers[layerIndex + 1].node)) {
+            dev = pl->paintDevice();
+        }
+    } else {
+        // Check if target has a child mask
+        KisNodeSP child = target->firstChild();
+        while (child) {
+            if (child->property("reverie_is_transparency_mask").toBool()) {
+                if (KisPaintLayer *pl = dynamic_cast<KisPaintLayer *>(child.data())) {
+                    dev = pl->paintDevice();
+                    break;
+                }
+            } else if (KisMask *m = dynamic_cast<KisMask *>(child.data())) {
+                dev = m->paintDevice();
+                break;
+            }
+            child = child->nextSibling();
+        }
+    }
+    if (!dev) return false;
+
+    const int iw = image->width();
+    const int ih = image->height();
+    KisTransaction txn(kundo2_i18n("Invert Mask"), dev);
+
+    const int pixelSize = dev->pixelSize();
+    if (pixelSize == 4) {
+        // RGBA8 / BGRA8 空间
+        QVector<quint8> bytes(size_t(iw) * ih * 4);
+        dev->readBytes(bytes.data(), 0, 0, iw, ih);
+        for (int i = 0; i < iw * ih; ++i) {
+            bytes[i * 4] = quint8(255 - bytes[i * 4]);
+            bytes[i * 4 + 1] = quint8(255 - bytes[i * 4 + 1]);
+            bytes[i * 4 + 2] = quint8(255 - bytes[i * 4 + 2]);
+            // Alpha 维持 255
+            bytes[i * 4 + 3] = 255;
+        }
+        dev->writeBytes(bytes.constData(), 0, 0, iw, ih);
+    } else {
+        // 1-channel mask space
+        QVector<quint8> bytes(size_t(iw) * ih);
+        dev->readBytes(bytes.data(), 0, 0, iw, ih);
+        for (int i = 0; i < iw * ih; ++i) {
+            bytes[i] = quint8(255 - bytes[i]);
+        }
+        dev->writeBytes(bytes.constData(), 0, 0, iw, ih);
+    }
+    txn.commit(image->undoAdapter());
+    m_redoCount = 0;
+
+    recompositeProjection();
+    markDirty();
+    return true;
+}
+
+bool ReverieCore::applyMask(int layerIndex)
+{
+    if (layerIndex <= 0 || layerIndex >= m_layers.size()) return false;
+    KisImageSP image = m_document;
+    if (!image) return false;
+    KisNode *target = m_layers[layerIndex].node;
+    if (!target) return false;
+
+    KisNodeSP maskNode;
+    KisLayerSP parentLayer;
+
+    if (target->property("reverie_is_transparency_mask").toBool() || dynamic_cast<KisMask *>(target)) {
+        maskNode = target;
+        // 如果 target 是同级上方蒙版，宿主是其下方图层 (layerIndex - 1)
+        if (target->property("reverie_is_transparency_mask").toBool() && layerIndex > 0) {
+            parentLayer = dynamic_cast<KisLayer *>(m_layers[layerIndex - 1].node);
+        }
+        if (!parentLayer) {
+            parentLayer = dynamic_cast<KisLayer *>(target->parent().data());
+        }
+    } else if (KisLayer *pl = dynamic_cast<KisLayer *>(target)) {
+        parentLayer = pl;
+        if (layerIndex + 1 < m_layers.size() &&
+            m_layers[layerIndex + 1].nodeType == NodeTypeTransparencyMask &&
+            m_layers[layerIndex + 1].node) {
+            maskNode = m_layers[layerIndex + 1].node;
+        } else {
+            KisNodeSP child = target->firstChild();
+            while (child) {
+                if (child->property("reverie_is_transparency_mask").toBool() || dynamic_cast<KisMask *>(child.data())) {
+                    maskNode = child;
+                    break;
+                }
+                child = child->nextSibling();
+            }
+        }
+    }
+
+    if (!maskNode || !parentLayer) return false;
+    KisPaintLayer *paintLayer = dynamic_cast<KisPaintLayer *>(parentLayer.data());
+    if (!paintLayer) return false;
+
+    KisPaintDeviceSP layerDev = paintLayer->paintDevice();
+    KisPaintDeviceSP maskDev;
+    if (KisPaintLayer *mpl = dynamic_cast<KisPaintLayer *>(maskNode.data())) {
+        maskDev = mpl->paintDevice();
+    } else if (KisMask *m = dynamic_cast<KisMask *>(maskNode.data())) {
+        maskDev = m->paintDevice();
+    }
+    if (!layerDev || !maskDev) return false;
+
+    const int iw = image->width();
+    const int ih = image->height();
+
+    beginUndoMacro(QStringLiteral("应用蒙版"));
+
+    KisTransaction txn(kundo2_i18n("Apply Mask"), layerDev);
+    QVector<quint8> layerBytes(size_t(iw) * ih * 4);
+    layerDev->readBytes(layerBytes.data(), 0, 0, iw, ih);
+
+    if (maskDev->pixelSize() == 4) {
+        QVector<quint8> maskBytes(size_t(iw) * ih * 4);
+        maskDev->readBytes(maskBytes.data(), 0, 0, iw, ih);
+        PixelAlpha::applyMaskModulation(layerBytes.data(), maskBytes.constData(), size_t(iw) * ih);
+    } else {
+        QVector<quint8> maskBytes(size_t(iw) * ih);
+        maskDev->readBytes(maskBytes.data(), 0, 0, iw, ih);
+        for (int i = 0; i < iw * ih; ++i) {
+            quint8 mVal = maskBytes[i];
+            if (mVal == 255) continue;
+            int alphaIdx = i * 4 + 3;
+            quint8 a = layerBytes[alphaIdx];
+            if (a == 0) continue;
+            layerBytes[alphaIdx] = quint8((int(a) * int(mVal)) / 255);
+        }
+    }
+    layerDev->writeBytes(layerBytes.constData(), 0, 0, iw, ih);
+    txn.commit(image->undoAdapter());
+
+    pushUndoCommand(new KisImageLayerRemoveCommand(image, maskNode));
+    endUndoMacro();
+
+    recompositeProjection();
+    syncLayersFromImage();
+    const int newIdx = indexOfNode(parentLayer.data());
+    if (newIdx >= 0) m_currentLayer = newIdx;
+    markDirty();
+    return true;
 }
 
 bool ReverieCore::rasterizeLayer(int index)

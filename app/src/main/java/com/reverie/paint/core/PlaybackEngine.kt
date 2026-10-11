@@ -52,6 +52,8 @@ import com.reverie.paint.model.RecordingEvents.L_PASS_THROUGH
 import com.reverie.paint.model.RecordingEvents.L_RASTERIZE
 import com.reverie.paint.model.RecordingEvents.L_REMOVE
 import com.reverie.paint.model.RecordingEvents.L_REMOVE_MASK
+import com.reverie.paint.model.RecordingEvents.L_INVERT_MASK
+import com.reverie.paint.model.RecordingEvents.L_APPLY_MASK
 import com.reverie.paint.model.RecordingEvents.L_RENAME
 import com.reverie.paint.model.RecordingEvents.L_SET_BG
 import com.reverie.paint.model.RecordingEvents.L_SET_CURRENT
@@ -755,6 +757,14 @@ private fun PaintViewModel.dispatchLayerOpLocked(
 
         L_REMOVE_MASK -> {
             ReverieCoreBridge.removeMask(i)
+        }
+
+        L_INVERT_MASK -> {
+            ReverieCoreBridge.invertMask(i)
+        }
+
+        L_APPLY_MASK -> {
+            ReverieCoreBridge.applyMask(i)
         }
 
         L_ADD_LAYER_TYPE -> {

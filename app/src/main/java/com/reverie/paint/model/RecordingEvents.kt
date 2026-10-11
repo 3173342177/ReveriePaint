@@ -101,6 +101,8 @@ object RecordingEvents {
     const val L_CANVAS_FLIP_V = 37
     const val L_FILL_LAYER = 38 // index=层号; 用当前前景色填充整层 (选区感知)
     const val L_ALPHA_INHERITED = 39 // index=层号; arg="1"开启/"0"关闭
+    const val L_INVERT_MASK = 40 // index=蒙版层号
+    const val L_APPLY_MASK = 41 // index=蒙版层号或父层号
 
 
     // ---- Tool op codes (TOOL_OP; payload layout is op-specific) ----

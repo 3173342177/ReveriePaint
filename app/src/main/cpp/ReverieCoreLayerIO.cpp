@@ -134,6 +134,9 @@ void ReverieCore::writeLayersXml(QString *out)
                 writeFilterAttrs(w, fm->filter());
             }
         }
+        if (e.nodeType >= NodeTypeTransparencyMask && e.nodeType <= NodeTypeSelectionMask) {
+            w.writeAttribute("filename", QString("layer_%1.png").arg(i, 3, 10, QChar('0')));
+        }
         openDepth = e.depth;
     }
     while (openDepth >= 0) {
@@ -338,9 +341,30 @@ bool ReverieCore::loadLayersXmlTree(const QByteArray &xmlData, KisImageSP image,
                 }
                 node = pl;
             } else if (name == QLatin1String("transparencymask")) {
-                node = new KisTransparencyMask(image, nodeName);
+                KisTransparencyMaskSP tm = new KisTransparencyMask(image, nodeName);
+                if (KisLayer *parentLayer = dynamic_cast<KisLayer *>(parents.last().data())) {
+                    tm->initSelection(parentLayer);
+                }
+                const QString fn = r.attributes().value("filename").toString();
+                QByteArray png;
+                if (!fn.isEmpty() && store->open(fn)) {
+                    png = readStoreEntryBytes(store);
+                    store->close();
+                }
+                if (!png.isEmpty()) {
+                    PendingLayerPixels job;
+                    job.dev = tm->paintDevice();
+                    job.pngBytes = png;
+                    job.hasPng = true;
+                    job.hasData = true;
+                    loader.stage(job);
+                }
+                node = tm;
             } else if (name == QLatin1String("filtermask")) {
                 KisFilterMaskSP fm = new KisFilterMask(image, nodeName);
+                if (KisLayer *parentLayer = dynamic_cast<KisLayer *>(parents.last().data())) {
+                    fm->initSelection(parentLayer);
+                }
                 const QXmlStreamAttributes a = r.attributes();
                 auto attrDbl = [&a](const char *key) {
                     bool ok = false;

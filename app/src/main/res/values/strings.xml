@@ -1043,6 +1043,15 @@
     <string name="layer_tag_fill_prefix">填充 · </string>
     <string name="layer_tag_filter_prefix">滤镜 · </string>
     <string name="layer_tag_stroke_prefix">描边 · </string>
+    <string name="layer_tag_mask_prefix">蒙版 · </string>
+    <string name="layer_op_add_mask">添加透明度蒙版</string>
+    <string name="layer_op_remove_mask">删除蒙版</string>
+    <string name="layer_op_invert_mask">反向蒙版</string>
+    <string name="layer_op_apply_mask">应用蒙版至图层</string>
+    <string name="layer_mask_toast_created">已添加透明度蒙版</string>
+    <string name="layer_mask_toast_inverted">已反向蒙版</string>
+    <string name="layer_mask_toast_applied">已应用蒙版</string>
+    <string name="layer_mask_toast_removed">已删除蒙版</string>
     <string name="layer_stroke_properties">描边属性</string>
     <string name="layer_stroke_size">描边粗细</string>
     <string name="layer_stroke_color">描边颜色</string>
