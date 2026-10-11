@@ -1023,6 +1023,7 @@ import kotlinx.coroutines.withContext
                 )
             )
         }
+        schedulePersistToolBrushStates()
     }
 
     /** 预设参数加载完成后, 用当前工具对该预设的记忆覆盖 size/opacity/flow。

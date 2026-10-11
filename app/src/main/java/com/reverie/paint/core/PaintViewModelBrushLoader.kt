@@ -71,7 +71,7 @@ private fun PaintViewModel.copyBundledBrushAssets(): Pair<File, File> {
     val dir = java.io.File(appContext.filesDir, "paintoppresets")
     val brushDir = java.io.File(appContext.filesDir, "brushes")
     val prefs = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
-    val needsFactoryRestore = !prefs.getBoolean("brush_kpp_factory_restored_v5", false)
+    val needsFactoryRestore = !prefs.getBoolean("brush_kpp_factory_restored_v6", false)
     val lastInstalledVersion = prefs.getInt("brush_assets_installed_version", -1)
     val isVersionMatched = lastInstalledVersion == com.reverie.paint.BuildConfig.VERSION_CODE
 
@@ -96,7 +96,7 @@ private fun PaintViewModel.copyBundledBrushAssets(): Pair<File, File> {
             }
         }
         if (needsFactoryRestore) {
-            prefs.edit().putBoolean("brush_kpp_factory_restored_v5", true).apply()
+            prefs.edit().putBoolean("brush_kpp_factory_restored_v6", true).apply()
         }
     } catch (e: Exception) {
         android.util.Log.e("ReveriePaint", "preset copy failed", e)

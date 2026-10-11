@@ -66,6 +66,9 @@ void writeCommonAttrs(QXmlStreamWriter &w, const ReverieCore::LayerEntry &e)
         w.writeAttribute("stroke_pos", QString::number(e.strokePosition));
         w.writeAttribute("stroke_opacity", QString::number(e.strokeOpacity));
     }
+    if (e.nodeType == ReverieCore::NodeTypeTransparencyMask || (node && node->property("reverie_is_transparency_mask").toBool())) {
+        w.writeAttribute("is_transparency_mask", "1");
+    }
 }
 
 // reverie 注册表滤镜配置 → XML 属性 (filter/p1..p4/lut_b64)
@@ -133,9 +136,6 @@ void ReverieCore::writeLayersXml(QString *out)
             if (KisFilterMask *fm = dynamic_cast<KisFilterMask *>(e.node)) {
                 writeFilterAttrs(w, fm->filter());
             }
-        }
-        if (e.nodeType >= NodeTypeTransparencyMask && e.nodeType <= NodeTypeSelectionMask) {
-            w.writeAttribute("filename", QString("layer_%1.png").arg(i, 3, 10, QChar('0')));
         }
         openDepth = e.depth;
     }
@@ -246,6 +246,9 @@ bool ReverieCore::loadLayersXmlTree(const QByteArray &xmlData, KisImageSP image,
             node->setProperty("reverie_stroke_pos", attrInt("stroke_pos", 0));
             node->setProperty("reverie_stroke_opacity", attrInt("stroke_opacity", 100));
         }
+        if (a.value("is_transparency_mask") == QLatin1String("1")) {
+            node->setProperty("reverie_is_transparency_mask", true);
+        }
     };
 
     while (!r.atEnd()) {
@@ -341,25 +344,26 @@ bool ReverieCore::loadLayersXmlTree(const QByteArray &xmlData, KisImageSP image,
                 }
                 node = pl;
             } else if (name == QLatin1String("transparencymask")) {
-                KisTransparencyMaskSP tm = new KisTransparencyMask(image, nodeName);
-                if (KisLayer *parentLayer = dynamic_cast<KisLayer *>(parents.last().data())) {
-                    tm->initSelection(parentLayer);
-                }
                 const QString fn = r.attributes().value("filename").toString();
                 QByteArray png;
                 if (!fn.isEmpty() && store->open(fn)) {
                     png = readStoreEntryBytes(store);
                     store->close();
                 }
+                // 在现代架构中，透明度蒙版作为 KisPaintLayer 挂载在图层树中
+                KisPaintLayerSP tmask = new KisPaintLayer(image, nodeName.isEmpty() ? QStringLiteral("蒙版") : nodeName, 255, cs);
+                tmask->setProperty("reverie_is_transparency_mask", true);
                 if (!png.isEmpty()) {
                     PendingLayerPixels job;
-                    job.dev = tm->paintDevice();
+                    job.dev = tmask->original();
                     job.pngBytes = png;
                     job.hasPng = true;
                     job.hasData = true;
                     loader.stage(job);
+                } else {
+                    tmask->paintDevice()->fill(QRect(0, 0, image->width(), image->height()), KoColor(Qt::white, cs));
                 }
-                node = tm;
+                node = tmask;
             } else if (name == QLatin1String("filtermask")) {
                 KisFilterMaskSP fm = new KisFilterMask(image, nodeName);
                 if (KisLayer *parentLayer = dynamic_cast<KisLayer *>(parents.last().data())) {

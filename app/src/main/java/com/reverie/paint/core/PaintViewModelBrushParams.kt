@@ -449,8 +449,17 @@ import kotlinx.coroutines.launch
             if (curve.isNullOrBlank()) continue
             val points = com.reverie.paint.model.DynamicOptionConfig.parseKritaCurve(curve)
             val existing = newMap[key]
+            val isLinear = points.size == 2 &&
+                    points[0].x == 0f && points[0].y == 0f &&
+                    points[1].x == 1f && points[1].y == 1f
+            // Opacity 在出厂预设中常带线性 curve 节点但压感实际未启用；若曲线为默认线性且非 Size，避免无脑设 enabled = true
+            val isEnabled = if (key.equals("Opacity", ignoreCase = true) && isLinear && (id == null || id == "pressure")) {
+                existing?.enabled ?: false
+            } else {
+                true
+            }
             newMap[key] = (existing ?: com.reverie.paint.model.DynamicOptionConfig(optionKey = key)).copy(
-                enabled = true,
+                enabled = isEnabled,
                 sensorId = id ?: existing?.sensorId ?: "pressure",
                 points = points,
             )
@@ -559,10 +568,7 @@ import kotlinx.coroutines.launch
                     if (brushPresetIndex != targetIdx) return@launch
                     runCore(render = false) {
                         if (brushPresetIndex != targetIdx) return@runCore
-                        // A spacing/size edit may arrive during the debounce without requesting a
-                        // reload. Read the latest immutable snapshot so it is not overwritten here.
                         val pSnapshot = brushParams[name] ?: return@runCore
-                        KppHelper.updateKppFile(kppFile, name, pSnapshot)
                         if (ReverieCoreBridge.loadBrushPreset(targetIdx)) {
                             ReverieCoreBridge.setPresetIsEraser(isEraserPreset)
                             ReverieCoreBridge.setBrushColor(brushColor)
@@ -628,10 +634,6 @@ import kotlinx.coroutines.launch
                             ReverieCoreBridge.setBrushAirbrush(pSnapshot.airbrush, pSnapshot.airbrushRate)
                         }
                     }
-                }
-            } else {
-                runCore(render = false) {
-                    KppHelper.updateKppFile(kppFile, name, p)
                 }
             }
         }
