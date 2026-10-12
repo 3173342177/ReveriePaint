@@ -638,9 +638,9 @@ fun ReVerticalSlider(
                 val capsuleRadius = (trackWidth / 2).dp
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrow")
 
-                // Track Background (Hollowed-out groove with panel background at 0.25x opacity)
+                // Track Background (Hollowed-out groove with panel background at 0.6x opacity)
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.25f).coerceIn(0.04f, 0.40f)
+                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
                 Box(
                     modifier = Modifier
                         .width(trackWidth.dp)
@@ -916,7 +916,7 @@ fun ReHorizontalSlider(
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrowH")
 
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.25f).coerceIn(0.04f, 0.40f)
+                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
