@@ -606,11 +606,13 @@ fun SlidersPanelContent(
                     ),
                 contentAlignment = Alignment.Center
             ) {
+                val parsedColor = parseColor(brushColor)
                 Box(
                     modifier = Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .background(parseColor(brushColor))
+                        .background(parsedColor.copy(alpha = 0.85f))
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
                 )
             }
             Spacer(Modifier.width(6.dp))
@@ -661,11 +663,13 @@ fun SlidersPanelContent(
                     ),
                 contentAlignment = Alignment.Center
             ) {
+                val parsedColor = parseColor(brushColor)
                 Box(
                     modifier = Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .background(parseColor(brushColor))
+                        .background(parsedColor.copy(alpha = 0.85f))
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
                 )
             }
             Spacer(Modifier.height(5.dp))

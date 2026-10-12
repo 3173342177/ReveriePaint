@@ -638,9 +638,8 @@ fun ReVerticalSlider(
                 val capsuleRadius = (trackWidth / 2).dp
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrow")
 
-                // Track Background (Hollowed-out groove with panel background at 0.6x opacity)
+                // Track Background (Hollowed-out groove using semi-transparent overlay to avoid nested Haze jitter)
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
                 Box(
                     modifier = Modifier
                         .width(trackWidth.dp)
@@ -651,19 +650,10 @@ fun ReVerticalSlider(
                             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .then(
-                            if (vm?.blurBackground == true && hazeState != null) {
-                                Modifier.hazeChild(
-                                    state = hazeState,
-                                    style = Glass.barStyle(grooveAlpha),
-                                )
-                            } else {
-                                Modifier.background(colors.panel.copy(alpha = grooveAlpha))
-                            }
-                        )
+                        .background(Color.Black.copy(alpha = (0.22f * panelAlpha).coerceIn(0.06f, 0.28f)))
                         .border(
                             0.5.dp,
-                            Color.Black.copy(alpha = (0.25f * panelAlpha).coerceIn(0.05f, 0.35f)),
+                            Color.Black.copy(alpha = (0.28f * panelAlpha).coerceIn(0.08f, 0.38f)),
                             RoundedCornerShape(capsuleRadius)
                         )
                 ) {
@@ -673,7 +663,7 @@ fun ReVerticalSlider(
                             .fillMaxWidth()
                             .fillMaxHeight(localFraction.coerceIn(0f, 1f))
                             .align(Alignment.BottomCenter)
-                            .background(colors.accent.copy(alpha = 0.38f))
+                            .background(colors.accent.copy(alpha = (0.22f * panelAlpha).coerceIn(0.10f, 0.26f)))
                     )
                 }
 
@@ -916,7 +906,6 @@ fun ReHorizontalSlider(
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrowH")
 
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -926,19 +915,10 @@ fun ReHorizontalSlider(
                             scaleX = 1f + (capsuleGrow - 1f) * 0.4f
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .then(
-                            if (vm?.blurBackground == true && hazeState != null) {
-                                Modifier.hazeChild(
-                                    state = hazeState,
-                                    style = Glass.barStyle(grooveAlpha),
-                                )
-                            } else {
-                                Modifier.background(colors.panel.copy(alpha = grooveAlpha))
-                            }
-                        )
+                        .background(Color.Black.copy(alpha = (0.22f * panelAlpha).coerceIn(0.06f, 0.28f)))
                         .border(
                             0.5.dp,
-                            Color.Black.copy(alpha = (0.25f * panelAlpha).coerceIn(0.05f, 0.35f)),
+                            Color.Black.copy(alpha = (0.28f * panelAlpha).coerceIn(0.08f, 0.38f)),
                             RoundedCornerShape(capsuleRadius)
                         )
                 ) {
@@ -947,7 +927,7 @@ fun ReHorizontalSlider(
                             .fillMaxHeight()
                             .fillMaxWidth(localFraction.coerceIn(0f, 1f))
                             .align(Alignment.CenterStart)
-                            .background(colors.accent.copy(alpha = 0.38f))
+                            .background(colors.accent.copy(alpha = (0.22f * panelAlpha).coerceIn(0.10f, 0.26f)))
                     )
                 }
 
