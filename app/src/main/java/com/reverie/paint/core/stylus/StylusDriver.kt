@@ -238,7 +238,13 @@ class StylusDriver(
             keyCode == KeyEvent.KEYCODE_BUTTON_2 ||
             keyCode == KeyEvent.KEYCODE_BUTTON_3 ||
             keyCode == 304 || keyCode == 305 ||
-            keyCode == 308 || keyCode == 309 || keyCode == 310
+            keyCode == 308 || keyCode == 309 || keyCode == 310 ||
+            keyCode == KeyEvent.KEYCODE_CAMERA ||
+            keyCode == KeyEvent.KEYCODE_BUTTON_C ||
+            keyCode == KeyEvent.KEYCODE_BUTTON_Z ||
+            keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+            keyCode == KeyEvent.KEYCODE_F1 ||
+            keyCode == KeyEvent.KEYCODE_F2
         ) {
             return true
         }

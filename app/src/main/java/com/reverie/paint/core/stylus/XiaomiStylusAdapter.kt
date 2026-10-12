@@ -28,8 +28,13 @@ class XiaomiStylusAdapter : StylusBrandAdapter {
     companion object {
         private const val DOUBLE_CLICK_TIMEOUT_MS = 320L
         private const val MIN_CLICK_INTERVAL_MS = 60L
+        private const val LONG_PRESS_TIMEOUT_MS = 500L
         private const val KEY_FOCUS_KEYCODE_1 = 310
         private const val KEY_FOCUS_KEYCODE_2 = KeyEvent.KEYCODE_F1
+        private const val KEY_FOCUS_KEYCODE_3 = KeyEvent.KEYCODE_DPAD_CENTER
+        private const val KEY_FOCUS_KEYCODE_4 = KeyEvent.KEYCODE_ENTER
+        private const val KEY_FOCUS_KEYCODE_5 = KeyEvent.KEYCODE_VOLUME_DOWN
+        private const val KEY_FOCUS_KEYCODE_6 = KeyEvent.KEYCODE_VOLUME_UP
     }
 
     private var isSupportedXiaomiDevice: Boolean = run {
@@ -295,80 +300,50 @@ class XiaomiStylusAdapter : StylusBrandAdapter {
             keyCode == KeyEvent.KEYCODE_BUTTON_3 ||
             keyCode == KEY_FOCUS_KEYCODE_1 ||
             keyCode == KEY_FOCUS_KEYCODE_2 ||
+            keyCode == KEY_FOCUS_KEYCODE_3 ||
+            keyCode == KEY_FOCUS_KEYCODE_4 ||
+            keyCode == KEY_FOCUS_KEYCODE_5 ||
+            keyCode == KEY_FOCUS_KEYCODE_6 ||
             keyCode == KeyEvent.KEYCODE_CAMERA ||
             keyCode == KeyEvent.KEYCODE_BUTTON_C ||
             keyCode == KeyEvent.KEYCODE_BUTTON_Z ||
             keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
         ) {
+            val actionId = vm.xiaomiFocusButtonAction
+            if (actionId.equals("none", ignoreCase = true)) {
+                return false
+            }
             if (event.action == KeyEvent.ACTION_DOWN) {
                 return true
             } else if (event.action == KeyEvent.ACTION_UP) {
-                val actionId = vm.xiaomiFocusButtonAction
-                if (!actionId.equals("none", ignoreCase = true)) {
-                    val action = StylusAction.fromActionId(actionId)
-                    if (action != StylusAction.NONE) {
-                        feedbackManager.triggerActionConfirmation()
-                        vm.executeStylusAction(action)
-                        return true
-                    }
+                val action = StylusAction.fromActionId(actionId)
+                if (action != StylusAction.NONE) {
+                    feedbackManager.triggerActionConfirmation()
+                    vm.executeStylusAction(action)
+                    return true
                 }
                 return false
             }
             return true
         }
 
-        // 2. Secondary button (Screenshot key / Assistant key / 下侧键)
-        if (keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY ||
-            keyCode == KeyEvent.KEYCODE_BUTTON_2 ||
+        // 2. Primary button (Writing key / 主键 / 书写键 / 靠近笔尖下侧键: KEYCODE_PAGE_DOWN / 309)
+        if (keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY ||
+            keyCode == KeyEvent.KEYCODE_BUTTON_1 ||
             keyCode == 309 ||
             keyCode == KeyEvent.KEYCODE_PAGE_DOWN ||
             keyCode == KeyEvent.KEYCODE_DPAD_DOWN
         ) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                if (event.repeatCount == 0) {
-                    if (now - lastSecondaryReleaseTime < MIN_CLICK_INTERVAL_MS) {
-                        return true
-                    }
-                    isSecondaryCurrentlyDown = true
-                    lastSecondaryDownTime = now
-                    strokeHappenedSinceSecondaryPress = false
-                }
-                return true
-            } else if (event.action == KeyEvent.ACTION_UP) {
-                if (now - lastSecondaryReleaseTime < MIN_CLICK_INTERVAL_MS) {
-                    return true
-                }
-                isSecondaryCurrentlyDown = false
-                lastSecondaryReleaseTime = now
+            val singleActionId = vm.xiaomiPrimaryButtonAction
+            val doubleActionId = vm.xiaomiDoubleTapAction
+            val hasDoubleTap = vm.xiaomiPencilModel.hasDoubleTap && !doubleActionId.equals("none", ignoreCase = true)
+            val isEraseCandidate = vm.xiaomiSideButtonErase
 
-                // 按住副键真正画过临时橡皮笔画: 抑制动作 (小米笔记标准行为)
-                if (strokeHappenedSinceSecondaryPress && vm.xiaomiSideButtonErase) {
-                    strokeHappenedSinceSecondaryPress = false
-                    return true
-                }
-                strokeHappenedSinceSecondaryPress = false
-
-                val actionId = vm.xiaomiSecondaryButtonAction
-                if (!actionId.equals("none", ignoreCase = true)) {
-                    val action = StylusAction.fromActionId(actionId)
-                    if (action != StylusAction.NONE) {
-                        feedbackManager.triggerActionConfirmation()
-                        vm.executeStylusAction(action)
-                        return true
-                    }
-                }
+            // 若既不需要按住擦除，也未配置主键单击和双击，且当前不在擦除状态，不拦截事件，透传至应用快捷键系统
+            if (!isEraseCandidate && !hasDoubleTap && singleActionId.equals("none", ignoreCase = true) && !isPrimaryCurrentlyDown) {
                 return false
             }
-            return true
-        }
 
-        // 3. Primary button (Writing key / 上侧键)
-        if (keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY ||
-            keyCode == KeyEvent.KEYCODE_BUTTON_1 ||
-            keyCode == 308 ||
-            keyCode == KeyEvent.KEYCODE_PAGE_UP ||
-            keyCode == KeyEvent.KEYCODE_DPAD_UP
-        ) {
             if (event.action == KeyEvent.ACTION_DOWN) {
                 if (event.repeatCount == 0) {
                     if (now - lastPrimaryReleaseTime < MIN_CLICK_INTERVAL_MS) {
@@ -380,14 +355,16 @@ class XiaomiStylusAdapter : StylusBrandAdapter {
                 }
                 return true
             } else if (event.action == KeyEvent.ACTION_UP) {
+                val pressDuration = now - lastPrimaryDownTime
                 if (now - lastPrimaryReleaseTime < MIN_CLICK_INTERVAL_MS) {
+                    isPrimaryCurrentlyDown = false
                     return true
                 }
                 isPrimaryCurrentlyDown = false
                 lastPrimaryReleaseTime = now
 
-                // 按住书写键真正画过临时橡皮笔画: 抑制动作 (小米笔记标准行为)
-                if (strokeHappenedSincePrimaryPress && vm.xiaomiSideButtonErase) {
+                // 按住书写键画过笔画或长按超过阈值: 抑制单击动作
+                if ((strokeHappenedSincePrimaryPress && vm.xiaomiSideButtonErase) || pressDuration > LONG_PRESS_TIMEOUT_MS) {
                     strokeHappenedSincePrimaryPress = false
                     pendingPrimarySingleClickRunnable?.let { handler.removeCallbacks(it) }
                     pendingPrimarySingleClickRunnable = null
@@ -397,6 +374,60 @@ class XiaomiStylusAdapter : StylusBrandAdapter {
                 strokeHappenedSincePrimaryPress = false
 
                 return dispatchPrimaryClick(now, vm, feedbackManager)
+            }
+            return true
+        }
+
+        // 3. Secondary button (Screenshot key / 副键 / 截图键 / 靠上侧键: KEYCODE_PAGE_UP / 308)
+        if (keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY ||
+            keyCode == KeyEvent.KEYCODE_BUTTON_2 ||
+            keyCode == 308 ||
+            keyCode == KeyEvent.KEYCODE_PAGE_UP ||
+            keyCode == KeyEvent.KEYCODE_DPAD_UP
+        ) {
+            val actionId = vm.xiaomiSecondaryButtonAction
+            val isEraseCandidate = vm.xiaomiSideButtonErase
+
+            // 若既不需要按住擦除，也未配置副键动作，且当前不在擦除状态，不拦截事件，透传至应用快捷键系统
+            if (!isEraseCandidate && actionId.equals("none", ignoreCase = true) && !isSecondaryCurrentlyDown) {
+                return false
+            }
+
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                if (event.repeatCount == 0) {
+                    if (now - lastSecondaryReleaseTime < MIN_CLICK_INTERVAL_MS) {
+                        return true
+                    }
+                    isSecondaryCurrentlyDown = true
+                    lastSecondaryDownTime = now
+                    strokeHappenedSinceSecondaryPress = false
+                }
+                return true
+            } else if (event.action == KeyEvent.ACTION_UP) {
+                val pressDuration = now - lastSecondaryDownTime
+                if (now - lastSecondaryReleaseTime < MIN_CLICK_INTERVAL_MS) {
+                    isSecondaryCurrentlyDown = false
+                    return true
+                }
+                isSecondaryCurrentlyDown = false
+                lastSecondaryReleaseTime = now
+
+                // 按住副键画过笔画或长按超过阈值: 抑制单击动作
+                if ((strokeHappenedSinceSecondaryPress && vm.xiaomiSideButtonErase) || pressDuration > LONG_PRESS_TIMEOUT_MS) {
+                    strokeHappenedSinceSecondaryPress = false
+                    return true
+                }
+                strokeHappenedSinceSecondaryPress = false
+
+                if (!actionId.equals("none", ignoreCase = true)) {
+                    val action = StylusAction.fromActionId(actionId)
+                    if (action != StylusAction.NONE) {
+                        feedbackManager.triggerActionConfirmation()
+                        vm.executeStylusAction(action)
+                        return true
+                    }
+                }
+                return false
             }
             return true
         }
@@ -431,10 +462,11 @@ class XiaomiStylusAdapter : StylusBrandAdapter {
                 strokeHappenedSincePrimaryPress = true
             }
         } else if (!isPrimaryBtnDown && isPrimaryCurrentlyDown) {
+            val pressDuration = now - lastPrimaryDownTime
             isPrimaryCurrentlyDown = false
             if (now - lastPrimaryReleaseTime >= MIN_CLICK_INTERVAL_MS) {
                 lastPrimaryReleaseTime = now
-                if (strokeHappenedSincePrimaryPress && vm.xiaomiSideButtonErase) {
+                if ((strokeHappenedSincePrimaryPress && vm.xiaomiSideButtonErase) || pressDuration > LONG_PRESS_TIMEOUT_MS) {
                     strokeHappenedSincePrimaryPress = false
                     pendingPrimarySingleClickRunnable?.let { handler.removeCallbacks(it) }
                     pendingPrimarySingleClickRunnable = null
@@ -459,10 +491,11 @@ class XiaomiStylusAdapter : StylusBrandAdapter {
                 strokeHappenedSinceSecondaryPress = true
             }
         } else if (!isSecondaryBtnDown && isSecondaryCurrentlyDown) {
+            val pressDuration = now - lastSecondaryDownTime
             isSecondaryCurrentlyDown = false
             if (now - lastSecondaryReleaseTime >= MIN_CLICK_INTERVAL_MS) {
                 lastSecondaryReleaseTime = now
-                if (strokeHappenedSinceSecondaryPress && vm.xiaomiSideButtonErase) {
+                if ((strokeHappenedSinceSecondaryPress && vm.xiaomiSideButtonErase) || pressDuration > LONG_PRESS_TIMEOUT_MS) {
                     strokeHappenedSinceSecondaryPress = false
                 } else {
                     strokeHappenedSinceSecondaryPress = false
@@ -539,27 +572,15 @@ class XiaomiStylusAdapter : StylusBrandAdapter {
     }
 
     override fun onStylusHoverExited(vm: PaintViewModel, feedbackManager: StylusFeedbackManager) {
-        val now = SystemClock.uptimeMillis()
+        // 离开悬停区域时仅冲销按键状态与挂起的双击任务，绝不派发单击动作，避免悬停移出时误触发动作
         if (isPrimaryCurrentlyDown) {
             isPrimaryCurrentlyDown = false
-            lastPrimaryReleaseTime = now
-            if (!strokeHappenedSincePrimaryPress) {
-                dispatchPrimaryClick(now, vm, feedbackManager)
-            }
+            pendingPrimarySingleClickRunnable?.let { handler.removeCallbacks(it) }
+            pendingPrimarySingleClickRunnable = null
+            primaryClickCount = 0
         }
         if (isSecondaryCurrentlyDown) {
             isSecondaryCurrentlyDown = false
-            lastSecondaryReleaseTime = now
-            if (!strokeHappenedSinceSecondaryPress) {
-                val actionId = vm.xiaomiSecondaryButtonAction
-                if (!actionId.equals("none", ignoreCase = true)) {
-                    val action = StylusAction.fromActionId(actionId)
-                    if (action != StylusAction.NONE) {
-                        feedbackManager.triggerActionConfirmation()
-                        vm.executeStylusAction(action)
-                    }
-                }
-            }
         }
         strokeHappenedSincePrimaryPress = false
         strokeHappenedSinceSecondaryPress = false

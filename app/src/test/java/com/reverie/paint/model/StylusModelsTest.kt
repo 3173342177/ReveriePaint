@@ -411,24 +411,26 @@ class StylusModelsTest {
         assertTrue("Focus Pen Pro is buttonless and uses TouchFilm PenEngine", needsPenEnginePro)
         assertFalse("Smart Pen 2 has physical buttons, must NOT use TouchFilm PenEngine", needsPenEngineSmart2)
 
-        // KeyCodes used by Xiaomi physical buttons: PageUp/PageDown are emitted by standard Xiaomi Focus Pen
+        // KeyCodes used by Xiaomi physical buttons:
+        // Primary (Writing key, closer to tip): emits KEYCODE_PAGE_DOWN / 309
+        // Secondary (Screenshot / Assistant key, upper): emits KEYCODE_PAGE_UP / 308
         val primaryKeyCodes = listOf(
-            android.view.KeyEvent.KEYCODE_PAGE_UP,
-            android.view.KeyEvent.KEYCODE_DPAD_UP,
-            android.view.KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY,
-            android.view.KeyEvent.KEYCODE_BUTTON_1,
-            308,
-        )
-        val secondaryKeyCodes = listOf(
             android.view.KeyEvent.KEYCODE_PAGE_DOWN,
             android.view.KeyEvent.KEYCODE_DPAD_DOWN,
-            android.view.KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY,
-            android.view.KeyEvent.KEYCODE_BUTTON_2,
+            android.view.KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY,
+            android.view.KeyEvent.KEYCODE_BUTTON_1,
             309,
         )
+        val secondaryKeyCodes = listOf(
+            android.view.KeyEvent.KEYCODE_PAGE_UP,
+            android.view.KeyEvent.KEYCODE_DPAD_UP,
+            android.view.KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY,
+            android.view.KeyEvent.KEYCODE_BUTTON_2,
+            308,
+        )
 
-        assertTrue(primaryKeyCodes.contains(android.view.KeyEvent.KEYCODE_PAGE_UP))
-        assertTrue(secondaryKeyCodes.contains(android.view.KeyEvent.KEYCODE_PAGE_DOWN))
+        assertTrue(primaryKeyCodes.contains(android.view.KeyEvent.KEYCODE_PAGE_DOWN))
+        assertTrue(secondaryKeyCodes.contains(android.view.KeyEvent.KEYCODE_PAGE_UP))
     }
 }
 
