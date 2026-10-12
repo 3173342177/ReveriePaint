@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -104,17 +105,14 @@ fun QuickColorWindow(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val configuration = LocalConfiguration.current
     val density = LocalDensity.current
 
     val isCollapsed = vm.quickColorCollapsed
     var windowSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val dm = context.resources.displayMetrics
-    val screenWidthPx = dm.widthPixels.toFloat()
-    val screenHeightPx = dm.heightPixels.toFloat()
-
-    val currentScreenWidthPx by rememberUpdatedState(screenWidthPx)
-    val currentScreenHeightPx by rememberUpdatedState(screenHeightPx)
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
     val marginPx = with(density) { 8.dp.toPx() }
     val defaultW = with(density) { if (isCollapsed) 48.dp.toPx() else 212.dp.toPx() }
@@ -263,18 +261,18 @@ fun QuickColorWindow(
                 Box(
                     modifier = Modifier
                         .size(46.dp)
-                        .pointerInput(Unit) {
+                        .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
                             detectDragGestures(
                                 onDragEnd = { vm.persistQuickColorState() },
                                 onDragCancel = { vm.persistQuickColorState() },
                             ) { change, dragAmount ->
                                 change.consume()
-                                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                                 val curMinX = marginPx
-                                val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
                                 val curMinY = marginPx
-                                val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
                                 vm.quickColorWindowX = (vm.quickColorWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
                                 vm.quickColorWindowY = (vm.quickColorWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                             }
@@ -309,12 +307,12 @@ fun QuickColorWindow(
                     ) {
                         DragPillHandle(
                             onDrag = { dragAmount ->
-                                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                                 val curMinX = marginPx
-                                val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
                                 val curMinY = marginPx
-                                val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
                                 vm.quickColorWindowX = (vm.quickColorWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
                                 vm.quickColorWindowY = (vm.quickColorWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                                 vm.persistQuickColorState()

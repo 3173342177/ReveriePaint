@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -105,6 +106,25 @@ fun ReferenceWindow(
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val configuration = LocalConfiguration.current
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val marginPx = with(density) { 8.dp.toPx() }
+
+    LaunchedEffect(screenWidthPx, screenHeightPx, vm.referenceWindowWidth, vm.referenceWindowHeight) {
+        val panelW = with(density) { vm.referenceWindowWidth.dp.toPx() }
+        val panelH = with(density) { vm.referenceWindowHeight.dp.toPx() }
+        val maxX = (screenWidthPx - panelW - marginPx).coerceAtLeast(marginPx)
+        val maxY = (screenHeightPx - panelH - marginPx).coerceAtLeast(marginPx)
+        val clampedX = vm.referenceWindowX.coerceIn(marginPx, maxX)
+        val clampedY = vm.referenceWindowY.coerceIn(marginPx, maxY)
+        if (clampedX != vm.referenceWindowX || clampedY != vm.referenceWindowY) {
+            vm.referenceWindowX = clampedX
+            vm.referenceWindowY = clampedY
+            vm.persistReferenceState()
+        }
+    }
+
     LaunchedEffect(vm.referenceWindowOpen) {
         if (vm.referenceWindowOpen) vm.ensureReferenceImagesLoaded()
     }
@@ -134,10 +154,13 @@ fun ReferenceWindow(
     Box(
         modifier = modifier
             .offset {
-                IntOffset(
-                    vm.referenceWindowX.roundToInt(),
-                    vm.referenceWindowY.roundToInt()
-                )
+                val panelW = with(density) { vm.referenceWindowWidth.dp.toPx() }
+                val panelH = with(density) { vm.referenceWindowHeight.dp.toPx() }
+                val maxX = (screenWidthPx - panelW - marginPx).coerceAtLeast(marginPx)
+                val maxY = (screenHeightPx - panelH - marginPx).coerceAtLeast(marginPx)
+                val x = vm.referenceWindowX.coerceIn(marginPx, maxX).roundToInt()
+                val y = vm.referenceWindowY.coerceIn(marginPx, maxY).roundToInt()
+                IntOffset(x, y)
             }
             .size(vm.referenceWindowWidth.dp, vm.referenceWindowHeight.dp)
             .shadow(14.dp, windowShape)
@@ -457,13 +480,17 @@ fun ReferenceWindow(
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .height(28.dp)
-                    .pointerInput(Unit) {
+                    .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
                         detectDragGestures(
                             onDragEnd = { vm.persistReferenceState() }
                         ) { change, dragAmount ->
                             change.consume()
-                            vm.referenceWindowX += dragAmount.x
-                            vm.referenceWindowY += dragAmount.y
+                            val panelW = with(density) { vm.referenceWindowWidth.dp.toPx() }
+                            val panelH = with(density) { vm.referenceWindowHeight.dp.toPx() }
+                            val maxX = (screenWidthPx - panelW - marginPx).coerceAtLeast(marginPx)
+                            val maxY = (screenHeightPx - panelH - marginPx).coerceAtLeast(marginPx)
+                            vm.referenceWindowX = (vm.referenceWindowX + dragAmount.x).coerceIn(marginPx, maxX)
+                            vm.referenceWindowY = (vm.referenceWindowY + dragAmount.y).coerceIn(marginPx, maxY)
                         }
                     },
                 contentAlignment = Alignment.TopCenter
@@ -495,8 +522,12 @@ fun ReferenceWindow(
                 },
                 onOpenAlbum = { showAlbumPicker = true },
                 onDrag = { dx, dy ->
-                    vm.referenceWindowX += dx
-                    vm.referenceWindowY += dy
+                    val panelW = with(density) { vm.referenceWindowWidth.dp.toPx() }
+                    val panelH = with(density) { vm.referenceWindowHeight.dp.toPx() }
+                    val maxX = (screenWidthPx - panelW - marginPx).coerceAtLeast(marginPx)
+                    val maxY = (screenHeightPx - panelH - marginPx).coerceAtLeast(marginPx)
+                    vm.referenceWindowX = (vm.referenceWindowX + dx).coerceIn(marginPx, maxX)
+                    vm.referenceWindowY = (vm.referenceWindowY + dy).coerceIn(marginPx, maxY)
                     vm.persistReferenceState()
                 },
                 onToggleSettings = { showSettingsPopup = !showSettingsPopup },

@@ -108,12 +108,8 @@ fun QuickBrushWindow(
     }
 
     val configuration = LocalConfiguration.current
-    val dm = context.resources.displayMetrics
-    val screenWidthPx = dm.widthPixels.toFloat()
-    val screenHeightPx = dm.heightPixels.toFloat()
-
-    val currentScreenWidthPx by rememberUpdatedState(screenWidthPx)
-    val currentScreenHeightPx by rememberUpdatedState(screenHeightPx)
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
     val marginPx = with(density) { 8.dp.toPx() }
     val defaultW = with(density) {
@@ -225,18 +221,18 @@ fun QuickBrushWindow(
                 Row(
                     modifier = Modifier
                         .wrapContentSize()
-                        .pointerInput(Unit) {
+                        .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
                             detectDragGestures(
                                 onDragEnd = { vm.persistQuickBrushState() },
                                 onDragCancel = { vm.persistQuickBrushState() },
                             ) { change, dragAmount ->
                                 change.consume()
-                                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                                 val curMinX = marginPx
-                                val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
                                 val curMinY = marginPx
-                                val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
                                 vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
                                 vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                             }
@@ -302,18 +298,18 @@ fun QuickBrushWindow(
                             modifier = Modifier
                                 .width(42.dp)
                                 .height(20.dp)
-                                .pointerInput(Unit) {
+                                .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
                                     detectDragGestures(
                                         onDragEnd = { vm.persistQuickBrushState() },
                                         onDragCancel = { vm.persistQuickBrushState() },
                                     ) { change, dragAmount ->
                                         change.consume()
-                                        val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                        val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                        val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                        val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                                         val curMinX = marginPx
-                                        val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                        val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
                                         val curMinY = marginPx
-                                        val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                        val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
                                         vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
                                         vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                                     }
@@ -433,28 +429,44 @@ fun QuickBrushWindow(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
-                        // 拖动手柄与操作区
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        // 独立拖拽手柄
+                        Box(
                             modifier = Modifier
-                                .pointerInput(Unit) {
+                                .width(14.dp)
+                                .height(28.dp)
+                                .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
                                     detectDragGestures(
                                         onDragEnd = { vm.persistQuickBrushState() },
                                         onDragCancel = { vm.persistQuickBrushState() },
                                     ) { change, dragAmount ->
                                         change.consume()
-                                        val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                        val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                        val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                        val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                                         val curMinX = marginPx
-                                        val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                        val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
                                         val curMinY = marginPx
-                                        val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                        val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
                                         vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
                                         vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                                     }
                                 }
-                                .padding(end = 2.dp),
+                                .padding(horizontal = 2.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(3.5.dp)
+                                    .height(16.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Morandi.subText.copy(alpha = 0.5f))
+                            )
+                        }
+
+                        // 操作区: 折叠与齿轮配置
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            modifier = Modifier.padding(end = 2.dp),
                         ) {
                             // 折叠按钮
                             Box(

@@ -79,12 +79,8 @@ fun QuickActionWindow(
     val haptic = LocalHapticFeedback.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val dm = context.resources.displayMetrics
-    val screenWidthPx = dm.widthPixels.toFloat()
-    val screenHeightPx = dm.heightPixels.toFloat()
-
-    val currentScreenWidthPx by rememberUpdatedState(screenWidthPx)
-    val currentScreenHeightPx by rememberUpdatedState(screenHeightPx)
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
     val marginPx = with(density) { 8.dp.toPx() }
 
@@ -238,18 +234,18 @@ fun QuickActionWindow(
             Row(
                 modifier = Modifier
                     .wrapContentSize()
-                    .pointerInput(Unit) {
+                    .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
                         detectDragGestures(
                             onDragEnd = { vm.persistQuickActionsState() },
                             onDragCancel = { vm.persistQuickActionsState() },
                         ) { change, dragAmount ->
                             change.consume()
-                            val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                            val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                            val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                            val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                             val curMinX = marginPx
-                            val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                            val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
                             val curMinY = marginPx
-                            val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                            val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
                             vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
                             vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                         }
@@ -322,18 +318,18 @@ fun QuickActionWindow(
                             }
                         )
                         .height(24.dp)
-                        .pointerInput(Unit) {
+                        .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
                             detectDragGestures(
                                 onDragEnd = { vm.persistQuickActionsState() },
                                 onDragCancel = { vm.persistQuickActionsState() },
                             ) { change, dragAmount ->
                                 change.consume()
-                                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                                 val curMinX = marginPx
-                                val curMaxX = (currentScreenWidthPx - curEffectiveW - marginPx).coerceAtLeast(curMinX)
+                                val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
                                 val curMinY = marginPx
-                                val curMaxY = (currentScreenHeightPx - curEffectiveH - marginPx).coerceAtLeast(curMinY)
+                                val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
                                 vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
                                 vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
                             }
