@@ -18,6 +18,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -26,8 +27,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -60,6 +59,8 @@ import androidx.compose.ui.unit.sp
 import com.reverie.paint.R
 import com.reverie.paint.core.*
 import com.reverie.paint.ui.components.PanelCloseButton
+import com.reverie.paint.ui.components.ReDropdownMenu
+import com.reverie.paint.ui.components.ReDropdownMenuItem
 import com.reverie.paint.ui.components.pressScale
 import com.reverie.paint.ui.painting.layers.LightCheckerboard
 import com.reverie.paint.ui.painting.layers.layerDisplayName
@@ -314,7 +315,9 @@ fun QuickLayerWindow(
                         .padding(bottom = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // 1. 顶部操作栏 (拖动手柄 + 新建图层 + 新建组 + 关闭按钮)
+                    // 1. 顶部操作栏 (新建图层 / 更多操作菜单 / 居中拖动手柄 / 关闭按钮 - 极简单层结构)
+                    var showQuickMenu by remember { mutableStateOf(false) }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -339,25 +342,30 @@ fun QuickLayerWindow(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        // 左侧操作按钮组: [+] 新建图层 / [📁] 新建组
+                        // 左侧操作按钮组: [+] 新建图层 (短按新建, 长按呼出更多菜单) + [···] 更多操作
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
                             // [+] 新建图层
                             val addSource = remember { MutableInteractionSource() }
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
+                                    .size(28.dp)
                                     .pressScale(addSource)
                                     .clip(RoundedCornerShape(6.dp))
-                                    .clickable(
+                                    .combinedClickable(
                                         interactionSource = addSource,
                                         indication = null,
-                                    ) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        vm.addLayer()
-                                    },
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            vm.addLayer()
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            showQuickMenu = true
+                                        },
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
@@ -368,28 +376,119 @@ fun QuickLayerWindow(
                                 )
                             }
 
-                            // [📁] 新建组
-                            val folderSource = remember { MutableInteractionSource() }
-                            Box(
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .pressScale(folderSource)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable(
-                                        interactionSource = folderSource,
-                                        indication = null,
-                                    ) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        vm.addGroupLayer()
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_folder),
-                                    contentDescription = stringResource(R.string.layer_add_group),
-                                    tint = Morandi.icon,
-                                    modifier = Modifier.size(16.dp),
-                                )
+                            // [···] 更多图层操作菜单
+                            Box {
+                                val moreSource = remember { MutableInteractionSource() }
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .pressScale(moreSource)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable(
+                                            interactionSource = moreSource,
+                                            indication = null,
+                                        ) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            showQuickMenu = true
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_dots_vertical),
+                                        contentDescription = stringResource(R.string.quick_layer_more_options),
+                                        tint = Morandi.icon,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+
+                                val canChangeClipping = selectedLayer != null && !selectedLayer.isBackground &&
+                                    selectedLayer.index > 0 && selectedLayer.nodeType !in 10..13
+
+                                ReDropdownMenu(
+                                    expanded = showQuickMenu,
+                                    onDismissRequest = { showQuickMenu = false },
+                                    modifier = Modifier.width(180.dp),
+                                ) {
+                                    // 1. 新建组
+                                    ReDropdownMenuItem(
+                                        text = stringResource(R.string.layer_add_group),
+                                        icon = R.drawable.ic_folder_plus,
+                                        onClick = {
+                                            showQuickMenu = false
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            vm.addGroupLayer()
+                                        },
+                                    )
+
+                                    // 分割线
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                            .fillMaxWidth()
+                                            .height(0.5.dp)
+                                            .background(Morandi.border.copy(alpha = 0.25f))
+                                    )
+
+                                    // 2. 剪贴蒙版开关
+                                    val isClipped = selectedLayer?.clipped == true
+                                    ReDropdownMenuItem(
+                                        text = stringResource(R.string.layer_op_clip),
+                                        icon = R.drawable.ic_clip,
+                                        selected = isClipped,
+                                        onClick = {
+                                            showQuickMenu = false
+                                            if (canChangeClipping) {
+                                                vm.layers.firstOrNull {
+                                                    it.index == vm.currentLayerIndex && it.index > 0 &&
+                                                        !it.isBackground && it.nodeType !in 10..13
+                                                }?.let {
+                                                    vm.setLayerClipped(it.index, !it.clipped)
+                                                }
+                                            }
+                                        },
+                                    )
+
+                                    // 3. 锁定透明度 / 继承透明度开关
+                                    val isAlphaInherited = selectedLayer?.alphaInherited == true
+                                    ReDropdownMenuItem(
+                                        text = stringResource(R.string.layer_op_alpha_inherit),
+                                        icon = R.drawable.ic_alpha_inherit,
+                                        selected = isAlphaInherited,
+                                        onClick = {
+                                            showQuickMenu = false
+                                            if (canChangeClipping) {
+                                                vm.layers.firstOrNull {
+                                                    it.index == vm.currentLayerIndex && it.index > 0 &&
+                                                        !it.isBackground && it.nodeType !in 10..13
+                                                }?.let {
+                                                    vm.setLayerAlphaInherited(it.index, !it.alphaInherited)
+                                                }
+                                            }
+                                        },
+                                    )
+
+                                    // 4. 图层详情设置
+                                    if (selectedLayer != null) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                                .fillMaxWidth()
+                                                .height(0.5.dp)
+                                                .background(Morandi.border.copy(alpha = 0.25f))
+                                        )
+
+                                        ReDropdownMenuItem(
+                                            text = stringResource(R.string.layer_settings_title),
+                                            icon = R.drawable.ic_sliders,
+                                            onClick = {
+                                                showQuickMenu = false
+                                                vm.layers.firstOrNull { it.index == vm.currentLayerIndex }?.let {
+                                                    onOpenLayerDetails(it.id)
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -402,7 +501,7 @@ fun QuickLayerWindow(
                                 .background(Morandi.icon.copy(alpha = 0.3f))
                         )
 
-                        // 右侧：优雅关闭按钮 (替换原先多余的钉子图标)
+                        // 右侧：优雅关闭按钮
                         PanelCloseButton(onClose = onClose)
                     }
 
@@ -413,59 +512,6 @@ fun QuickLayerWindow(
                             .height(0.6.dp)
                             .background(Morandi.border.copy(alpha = 0.35f))
                     )
-
-                    // Reuse the same model operations as the full panel, including recording and undo.
-                    // Keep 48dp targets in a separate header row instead of shrinking the drag handle.
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        // Masks are KisMask nodes, so the engine's KisLayer-only switches do not apply.
-                        val canChangeClipping = selectedLayer != null && !selectedLayer.isBackground &&
-                            selectedLayer.index > 0 && selectedLayer.nodeType !in 10..13
-                        QuickLayerToggle(
-                            icon = R.drawable.ic_clip,
-                            description = stringResource(R.string.layer_op_clip),
-                            checked = selectedLayer?.clipped == true,
-                            enabled = canChangeClipping,
-                        ) {
-                            vm.layers.firstOrNull {
-                                it.index == vm.currentLayerIndex && it.index > 0 &&
-                                    !it.isBackground && it.nodeType !in 10..13
-                            }?.let {
-                                vm.setLayerClipped(it.index, !it.clipped)
-                            }
-                        }
-                        QuickLayerToggle(
-                            icon = R.drawable.ic_alpha_inherit,
-                            description = stringResource(R.string.layer_op_alpha_inherit),
-                            checked = selectedLayer?.alphaInherited == true,
-                            enabled = canChangeClipping,
-                        ) {
-                            vm.layers.firstOrNull {
-                                it.index == vm.currentLayerIndex && it.index > 0 &&
-                                    !it.isBackground && it.nodeType !in 10..13
-                            }?.let {
-                                vm.setLayerAlphaInherited(it.index, !it.alphaInherited)
-                            }
-                        }
-                        IconButton(
-                            onClick = {
-                                vm.layers.firstOrNull { it.index == vm.currentLayerIndex }?.let {
-                                    onOpenLayerDetails(it.id)
-                                }
-                            },
-                            enabled = selectedLayer != null,
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Icon(
-                                painterResource(R.drawable.ic_sliders),
-                                contentDescription = stringResource(R.string.layer_settings_title),
-                                tint = if (selectedLayer != null) Morandi.icon else Morandi.subText.copy(alpha = 0.35f),
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
 
                     // 2. 纵向图层列表 (每个图层高度 46dp, 独立左侧眼睛显隐区 + 右侧预览区与名称)
 
@@ -881,33 +927,3 @@ fun QuickLayerWindow(
     }
 }
 
-@Composable
-private fun QuickLayerToggle(
-    icon: Int,
-    description: String,
-    checked: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    IconToggleButton(
-        checked = checked,
-        onCheckedChange = { onClick() },
-        enabled = enabled,
-        modifier = Modifier.size(48.dp),
-    ) {
-        Icon(
-            painterResource(icon),
-            contentDescription = description,
-            tint = when {
-                !enabled -> Morandi.subText.copy(alpha = 0.35f)
-                checked -> Morandi.accent
-                else -> Morandi.icon
-            },
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (checked) Morandi.accent.copy(alpha = 0.16f) else Color.Transparent)
-                .padding(6.dp)
-                .size(18.dp),
-        )
-    }
-}

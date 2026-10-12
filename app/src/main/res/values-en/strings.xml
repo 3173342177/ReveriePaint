@@ -880,6 +880,7 @@
     <string name="quick_layer_delete">Delete Layer</string>
     <string name="quick_layer_alpha_lock">Lock Alpha</string>
     <string name="quick_layer_empty">No Layers</string>
+    <string name="quick_layer_more_options">More Layer Options</string>
 
     <string name="settings_gesture_pen_hint">Note: Multi-touch gestures work regardless of stylus mode. Two-finger undo and three-finger redo remain available</string>
     <string name="settings_eyedropper_long_press_title">Long Press Eyedropper</string>
