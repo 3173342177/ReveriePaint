@@ -249,6 +249,7 @@ internal fun PaintViewModel.exitReplay() {
     // eraser context - the brush literally behaved like an eraser until the
     // user re-tapped the tool icon.
     renderHandler?.post {
+        ReverieCoreBridge.setUndoLimit(maxUndoSteps)
         ReverieCoreBridge.setUndoCaptureEnabled(true)
         ReverieCoreBridge.clearUndoHistory()
         restoreBrushStateFromUi()
@@ -422,7 +423,11 @@ internal fun PaintViewModel.resetReplayDocLocked(s: ReplaySession) {
         renderH = -1
         setRenderViewport(coreW, coreH)
         ReverieCoreBridge.resetStrokeCounter()
-        ReverieCoreBridge.setUndoLimit(maxUndoSteps)
+        // 回放期间不设撤销步数限制(0 = 无限): 回放严格重放笔画和 T_UNDO/T_REDO，
+        // 若使用常规 50 步上限，超过 50 步后旧命令从栈底被截断淘汰并调用 purgeHistory()，
+        // 后续遇到录制流中的 T_REDO 时将访问已损坏的 Memento 导致 SIGABRT 闪退。
+        // 退出回放时在 exitReplay() 中恢复正常 maxUndoSteps 并清空栈。
+        ReverieCoreBridge.setUndoLimit(0)
         ReverieCoreBridge.setUndoCaptureEnabled(true)
         ReverieCoreBridge.clearUndoHistory()
         // Paint the initial frame right away so the canvas isn't stale
