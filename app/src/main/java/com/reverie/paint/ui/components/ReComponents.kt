@@ -638,9 +638,9 @@ fun ReVerticalSlider(
                 val capsuleRadius = (trackWidth / 2).dp
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrow")
 
-                // Track Background (Procreate style: lower groove opacity based on panel opacity with frosted glass border)
+                // Track Background (Procreate style: recessed/sunken dark groove inside panel)
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.28f).coerceIn(0.12f, 0.45f)
+                val grooveBaseAlpha = (panelAlpha * 0.45f).coerceIn(0.18f, 0.55f)
                 Box(
                     modifier = Modifier
                         .width(trackWidth.dp)
@@ -651,16 +651,32 @@ fun ReVerticalSlider(
                             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .background(colors.panelHi.copy(alpha = grooveAlpha))
-                        .border(0.5.dp, colors.border.copy(alpha = 0.22f), RoundedCornerShape(capsuleRadius))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = grooveBaseAlpha * 1.15f),
+                                    Color.Black.copy(alpha = grooveBaseAlpha * 0.85f),
+                                )
+                            )
+                        )
+                        .border(
+                            0.5.dp,
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = 0.35f * panelAlpha),
+                                    Color.White.copy(alpha = 0.08f * panelAlpha),
+                                )
+                            ),
+                            RoundedCornerShape(capsuleRadius)
+                        )
                 ) {
-                    // Active progress fill level
+                    // Active progress fill level (softer accent tint inside the sunken groove)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .fillMaxHeight(localFraction.coerceIn(0f, 1f))
                             .align(Alignment.BottomCenter)
-                            .background(colors.accent.copy(alpha = 0.50f))
+                            .background(colors.accent.copy(alpha = 0.42f))
                     )
                 }
 
@@ -692,12 +708,12 @@ fun ReVerticalSlider(
                         .width(indicatorWidth)
                         .height(indicatorHeight)
                         .shadow(
-                            elevation = if (isDragging) 6.dp else 1.dp,
+                            elevation = if (isDragging) 6.dp else 2.dp,
                             shape = RoundedCornerShape(indicatorHeight / 2),
-                            spotColor = colors.accent.copy(alpha = 0.5f),
+                            spotColor = Color.Black.copy(alpha = 0.4f),
                         )
                         .clip(RoundedCornerShape(indicatorHeight / 2))
-                        .background(colors.accent.copy(alpha = indicatorAlpha))
+                        .background(colors.text.copy(alpha = indicatorAlpha))
                 )
 
                 // Live floating tooltip (Fixed cleanly at Center-Start/Center-End of the slider, no jumping/jittering)
@@ -903,7 +919,7 @@ fun ReHorizontalSlider(
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrowH")
 
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.28f).coerceIn(0.12f, 0.45f)
+                val grooveBaseAlpha = (panelAlpha * 0.45f).coerceIn(0.18f, 0.55f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -913,15 +929,31 @@ fun ReHorizontalSlider(
                             scaleX = 1f + (capsuleGrow - 1f) * 0.4f
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .background(colors.panelHi.copy(alpha = grooveAlpha))
-                        .border(0.5.dp, colors.border.copy(alpha = 0.22f), RoundedCornerShape(capsuleRadius))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = grooveBaseAlpha * 1.15f),
+                                    Color.Black.copy(alpha = grooveBaseAlpha * 0.85f),
+                                )
+                            )
+                        )
+                        .border(
+                            0.5.dp,
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = 0.35f * panelAlpha),
+                                    Color.White.copy(alpha = 0.08f * panelAlpha),
+                                )
+                            ),
+                            RoundedCornerShape(capsuleRadius)
+                        )
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(localFraction.coerceIn(0f, 1f))
                             .align(Alignment.CenterStart)
-                            .background(colors.accent.copy(alpha = 0.50f))
+                            .background(colors.accent.copy(alpha = 0.42f))
                     )
                 }
 
@@ -952,12 +984,12 @@ fun ReHorizontalSlider(
                         .width(indicatorWidth)
                         .height(indicatorHeight)
                         .shadow(
-                            elevation = if (isDragging) 6.dp else 1.dp,
+                            elevation = if (isDragging) 6.dp else 2.dp,
                             shape = RoundedCornerShape(indicatorWidth / 2),
-                            spotColor = colors.accent.copy(alpha = 0.5f),
+                            spotColor = Color.Black.copy(alpha = 0.4f),
                         )
                         .clip(RoundedCornerShape(indicatorWidth / 2))
-                        .background(colors.accent.copy(alpha = indicatorAlpha))
+                        .background(colors.text.copy(alpha = indicatorAlpha))
                 )
 
                 if (isDragging) {
