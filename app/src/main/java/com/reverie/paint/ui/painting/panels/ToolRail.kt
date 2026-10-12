@@ -572,22 +572,19 @@ fun SlidersPanelContent(
     onColorDropCancel: (() -> Unit)? = null,
     isHorizontal: Boolean = false,
 ) {
-    // Procreate 风格：滑块面板外壳采用超轻薄高透磨砂胶囊，避免双层实色底板叠盖，让滑块真正嵌入并透出底层画布
-    val sliderPanelAlpha = (opacity.toFloat() * 0.45f).coerceIn(0.18f, 0.70f)
     val contentModifier = modifier
-        .shadow(6.dp, shape, spotColor = Color.Black.copy(alpha = 0.25f))
+        .shadow(10.dp, shape, spotColor = Color.Black.copy(alpha = 0.5f))
         .clip(shape)
         .then(
             if (vm.blurBackground && hazeState != null) {
                 Modifier.hazeChild(
                     state = hazeState,
-                    style = Glass.popupStyle(sliderPanelAlpha),
+                    style = Glass.barStyle(if (opacity >= 0.99) 0.90f else opacity.toFloat()),
                 )
             } else {
-                Modifier.background(Morandi.panel.copy(alpha = sliderPanelAlpha))
+                Modifier.background(Morandi.panel.copy(alpha = opacity.toFloat()))
             }
         )
-        .glassBorder(shape)
 
     if (isHorizontal) {
         Row(
