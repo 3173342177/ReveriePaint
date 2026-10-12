@@ -109,16 +109,53 @@ fun SettingsPanel(
             .systemHoverIcon(context)
             .noRippleClickable(onClose),
     ) {
+        val (baseAlign, basePaddingModifier) = if (vm.floatingUiConfig.enabled) {
+            val hostPos = vm.floatingUiConfig.topBarPosition
+            val mDp = (vm.floatingUiConfig.marginDp + 44).dp
+            when (hostPos.edge) {
+                com.reverie.paint.model.PanelEdge.TOP -> {
+                    when (hostPos.alignment) {
+                        com.reverie.paint.model.PanelAlignment.START -> Alignment.TopStart to Modifier.padding(start = 16.dp, top = mDp)
+                        com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.TopCenter to Modifier.padding(top = mDp)
+                        com.reverie.paint.model.PanelAlignment.END -> Alignment.TopEnd to Modifier.padding(end = 16.dp, top = mDp)
+                    }
+                }
+                com.reverie.paint.model.PanelEdge.BOTTOM -> {
+                    when (hostPos.alignment) {
+                        com.reverie.paint.model.PanelAlignment.START -> Alignment.BottomStart to Modifier.padding(start = 16.dp, bottom = mDp)
+                        com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.BottomCenter to Modifier.padding(bottom = mDp)
+                        com.reverie.paint.model.PanelAlignment.END -> Alignment.BottomEnd to Modifier.padding(end = 16.dp, bottom = mDp)
+                    }
+                }
+                com.reverie.paint.model.PanelEdge.LEFT -> {
+                    when (hostPos.alignment) {
+                        com.reverie.paint.model.PanelAlignment.START -> Alignment.TopStart to Modifier.padding(start = mDp, top = 16.dp)
+                        com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.CenterStart to Modifier.padding(start = mDp)
+                        com.reverie.paint.model.PanelAlignment.END -> Alignment.BottomStart to Modifier.padding(start = mDp, bottom = 16.dp)
+                    }
+                }
+                com.reverie.paint.model.PanelEdge.RIGHT -> {
+                    when (hostPos.alignment) {
+                        com.reverie.paint.model.PanelAlignment.START -> Alignment.TopEnd to Modifier.padding(end = mDp, top = 16.dp)
+                        com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.CenterEnd to Modifier.padding(end = mDp)
+                        com.reverie.paint.model.PanelAlignment.END -> Alignment.BottomEnd to Modifier.padding(end = mDp, bottom = 16.dp)
+                    }
+                }
+            }
+        } else {
+            (if (vm.leftHandMode) Alignment.TopStart else Alignment.TopEnd) to Modifier.padding(
+                top = 44.dp,
+                start = if (vm.leftHandMode) 8.dp else 0.dp,
+                end = if (vm.leftHandMode) 0.dp else 8.dp,
+                bottom = 16.dp,
+            )
+        }
+
         Column(
             modifier = Modifier
                 .systemHoverIcon(context)
-                .align(if (vm.leftHandMode) Alignment.TopStart else Alignment.TopEnd)
-                .padding(
-                    top = 44.dp,
-                    start = if (vm.leftHandMode) 8.dp else 0.dp,
-                    end = if (vm.leftHandMode) 0.dp else 8.dp,
-                    bottom = 16.dp,
-                )
+                .align(baseAlign)
+                .then(basePaddingModifier)
                 .width(350.dp)
                 .heightIn(max = (LocalConfiguration.current.screenHeightDp - 60).coerceAtLeast(240).dp)
                 .shadow(16.dp, panelShape, spotColor = Color.Black.copy(alpha = 0.45f))

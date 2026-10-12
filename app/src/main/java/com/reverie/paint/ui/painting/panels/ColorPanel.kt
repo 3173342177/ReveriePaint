@@ -261,15 +261,57 @@ fun ColorPanel(
                 .noRippleClickable(onClose)
                 .systemHoverIcon(context)
         ) {
+            val (baseAlign, basePaddingModifier) = if (vm.floatingUiConfig.enabled) {
+                val hostPos = vm.floatingUiConfig.sliderRailPosition
+                val mDp = (vm.floatingUiConfig.marginDp + 44).dp
+                when (hostPos.edge) {
+                    com.reverie.paint.model.PanelEdge.LEFT -> {
+                        when (hostPos.alignment) {
+                            com.reverie.paint.model.PanelAlignment.START -> Alignment.TopStart to Modifier.padding(start = mDp, top = 16.dp)
+                            com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.CenterStart to Modifier.padding(start = mDp)
+                            com.reverie.paint.model.PanelAlignment.END -> Alignment.BottomStart to Modifier.padding(start = mDp, bottom = 16.dp)
+                        }
+                    }
+                    com.reverie.paint.model.PanelEdge.RIGHT -> {
+                        when (hostPos.alignment) {
+                            com.reverie.paint.model.PanelAlignment.START -> Alignment.TopEnd to Modifier.padding(end = mDp, top = 16.dp)
+                            com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.CenterEnd to Modifier.padding(end = mDp)
+                            com.reverie.paint.model.PanelAlignment.END -> Alignment.BottomEnd to Modifier.padding(end = mDp, bottom = 16.dp)
+                        }
+                    }
+                    com.reverie.paint.model.PanelEdge.TOP -> {
+                        when (hostPos.alignment) {
+                            com.reverie.paint.model.PanelAlignment.START -> Alignment.TopStart to Modifier.padding(start = 16.dp, top = mDp)
+                            com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.TopCenter to Modifier.padding(top = mDp)
+                            com.reverie.paint.model.PanelAlignment.END -> Alignment.TopEnd to Modifier.padding(end = 16.dp, top = mDp)
+                        }
+                    }
+                    com.reverie.paint.model.PanelEdge.BOTTOM -> {
+                        when (hostPos.alignment) {
+                            com.reverie.paint.model.PanelAlignment.START -> Alignment.BottomStart to Modifier.padding(start = 16.dp, bottom = mDp)
+                            com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.BottomCenter to Modifier.padding(bottom = mDp)
+                            com.reverie.paint.model.PanelAlignment.END -> Alignment.BottomEnd to Modifier.padding(end = mDp, bottom = mDp)
+                        }
+                    }
+                }
+            } else {
+                (if (vm.leftHandMode) Alignment.BottomEnd else Alignment.BottomStart) to Modifier.offset {
+                    IntOffset(
+                        ((if (vm.leftHandMode) -baseStartOffsetPx else baseStartOffsetPx) + vm.colorPanelOffset.x).roundToInt(),
+                        (baseBottomOffsetPx + vm.colorPanelOffset.y).roundToInt(),
+                    )
+                }
+            }
+
             cardContent(
                 Modifier
-                    .align(if (vm.leftHandMode) Alignment.BottomEnd else Alignment.BottomStart)
-                    .offset {
-                        IntOffset(
-                            ((if (vm.leftHandMode) -baseStartOffsetPx else baseStartOffsetPx) + vm.colorPanelOffset.x).roundToInt(),
-                            (baseBottomOffsetPx + vm.colorPanelOffset.y).roundToInt(),
-                        )
-                    }
+                    .align(baseAlign)
+                    .then(basePaddingModifier)
+                    .then(
+                        if (vm.floatingUiConfig.enabled) {
+                            Modifier.offset { IntOffset(vm.colorPanelOffset.x.roundToInt(), vm.colorPanelOffset.y.roundToInt()) }
+                        } else Modifier
+                    )
             )
         }
     }
