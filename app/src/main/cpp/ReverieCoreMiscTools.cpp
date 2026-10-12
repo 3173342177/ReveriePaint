@@ -8,6 +8,7 @@
  * ReverieCoreInternal.h, public API in ReverieCore.h)
  * ============================================================ */
 #include "ReverieCoreInternal.h"
+#include "ReverieCoreUndoStore.h"
 #include "PixelAlpha.h"
 #include "PixelRegion.h"
 #include "LiquifyMaterializeBatch.h"
@@ -38,6 +39,10 @@ void ReverieCore::cropCanvas(int x, int y, int w, int h)
     m_dirtyRect = QRect(0, 0, m_docWidth, m_docHeight);
     m_bitmapInited = false;
     m_lastDirty = QRect();
+    if (m_undoStore) {
+        m_undoStore->purgeRedoState();
+    }
+    m_redoCount = 0;
     recompositeProjection();
     markDirty();
 }
@@ -69,6 +74,10 @@ void ReverieCore::scaleImage(int w, int h, int filterStrategyType)
     m_dirtyRect = QRect(0, 0, m_docWidth, m_docHeight);
     m_bitmapInited = false;
     m_lastDirty = QRect();
+    if (m_undoStore) {
+        m_undoStore->purgeRedoState();
+    }
+    m_redoCount = 0;
     recompositeProjection();
     markDirty();
 }

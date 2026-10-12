@@ -1403,6 +1403,8 @@ internal fun PaintViewModel.undo() {
         }
         return
     }
+    if (pendingHistoryOps.get() >= 2) return
+    pendingHistoryOps.incrementAndGet()
     stopAirbrush()
     disarmStrokeStartKick()
     clearPendingStrokeSamples()
@@ -1410,6 +1412,7 @@ internal fun PaintViewModel.undo() {
         showActionToast(R.string.toast_undo, R.drawable.ic_undo)
     }
     runCore(render = false, after = {
+        pendingHistoryOps.decrementAndGet()
         val nw = ReverieCoreBridge.docWidth()
         val nh = ReverieCoreBridge.docHeight()
         coreW = nw
@@ -1439,6 +1442,8 @@ internal fun PaintViewModel.undo() {
 
 internal fun PaintViewModel.redo() {
     if (isQuickShapeEditing) return
+    if (pendingHistoryOps.get() >= 2) return
+    pendingHistoryOps.incrementAndGet()
     stopAirbrush()
     disarmStrokeStartKick()
     clearPendingStrokeSamples()
@@ -1446,6 +1451,7 @@ internal fun PaintViewModel.redo() {
         showActionToast(R.string.toast_redo, R.drawable.ic_redo)
     }
     runCore(render = false, after = {
+        pendingHistoryOps.decrementAndGet()
         val nw = ReverieCoreBridge.docWidth()
         val nh = ReverieCoreBridge.docHeight()
         coreW = nw

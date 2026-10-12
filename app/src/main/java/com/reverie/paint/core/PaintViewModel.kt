@@ -4309,6 +4309,7 @@ class PaintViewModel : ViewModel() {
     }
 
     internal val pendingCoreOps = java.util.concurrent.atomic.AtomicInteger(0)
+    internal val pendingHistoryOps = java.util.concurrent.atomic.AtomicInteger(0)
 
     /**
      * 「帧转图层」整条链复用的中转位图(一张 ARGB_8888, 2800×1840 约 20MB)。
