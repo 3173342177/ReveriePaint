@@ -1984,8 +1984,13 @@
     <string name="panel_dock_scale_title">Floating Panel Scale</string>
     <string name="panel_dock_scale_desc">Adjust floating capsule size independently from overall UI scale</string>
     <string name="panel_dock_dialog_title">Floating Layout Setup</string>
+    <string name="panel_dock_preset_default">Standard Left</string>
+    <string name="panel_dock_preset_righthand">Standard Right</string>
+    <string name="panel_dock_preset_bottom">Bottom Dual-Hand</string>
+    <string name="panel_dock_preset_title">Quick Presets</string>
+    <string name="panel_dock_reset">Reset</string>
     <string name="panel_dock_dialog_tip">Drag panel capsules to dashed slots to dock them</string>
-    <string name="panel_dock_reset">Reset Docking</string>
+    <string name="panel_dock_drag_tip">Drag capsule or tap slot to place</string>
     <string name="theme_category_effects">Display &amp; Effects</string>
     <string name="theme_blur_title">Background Frosted Glass Effect</string>
     <string name="theme_blur_desc">Enable translucent background Gaussian blur for all panels and toolbars</string>

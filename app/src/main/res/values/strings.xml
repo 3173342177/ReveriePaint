@@ -1984,8 +1984,13 @@
     <string name="panel_dock_scale_title">悬浮面板大小</string>
     <string name="panel_dock_scale_desc">独立调整悬浮胶囊的缩放尺寸，不受全局界面大小影响</string>
     <string name="panel_dock_dialog_title">悬浮面板布局调整</string>
+    <string name="panel_dock_preset_default">标准左手</string>
+    <string name="panel_dock_preset_righthand">标准右手</string>
+    <string name="panel_dock_preset_bottom">双手环绕底栏</string>
+    <string name="panel_dock_preset_title">快捷排布预设</string>
+    <string name="panel_dock_reset">恢复默认</string>
     <string name="panel_dock_dialog_tip">拖拽面板胶囊到目标虚线槽位即可完成停靠</string>
-    <string name="panel_dock_reset">恢复默认停靠</string>
+    <string name="panel_dock_drag_tip">拖拽或点击槽位放置胶囊</string>
     <string name="theme_category_effects">显示与效果</string>
     <string name="theme_blur_title">背景毛玻璃效果</string>
     <string name="theme_blur_desc">为所有面板与工具栏启用半透明背景高斯模糊</string>

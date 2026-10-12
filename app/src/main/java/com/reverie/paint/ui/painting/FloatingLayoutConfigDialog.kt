@@ -4,9 +4,16 @@
 
 package com.reverie.paint.ui.painting
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -14,6 +21,8 @@ import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,8 +31,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
@@ -58,7 +70,6 @@ import com.reverie.paint.model.PanelEdge
 import com.reverie.paint.model.PanelPosition
 import com.reverie.paint.ui.components.ReButton
 import com.reverie.paint.ui.components.ReSlider
-import com.reverie.paint.ui.theme.Morandi
 import com.reverie.paint.ui.theme.Theme
 import com.reverie.paint.ui.theme.glassBorder
 import kotlin.math.roundToInt
@@ -71,7 +82,7 @@ private enum class DragTargetPanel {
 }
 
 /**
- * 悬浮模式可视化拖拽排布与边距调整对话框
+ * 悬浮模式可视化排布与尺寸调整对话框 (平板专业分栏设计)
  */
 @Composable
 fun FloatingLayoutConfigDialog(
@@ -85,6 +96,7 @@ fun FloatingLayoutConfigDialog(
     var marginDp by remember { mutableFloatStateOf(vm.floatingUiConfig.marginDp.toFloat()) }
     var floatingScale by remember { mutableFloatStateOf(vm.floatingUiConfig.scale) }
 
+    var selectedPanel by remember { mutableStateOf(DragTargetPanel.TOPBAR) }
     var draggingPanel by remember { mutableStateOf(DragTargetPanel.NONE) }
     var dragGlobalPos by remember { mutableStateOf<Offset?>(null) }
     var slotBoundsMap by remember { mutableStateOf(mapOf<PanelPosition, Rect>()) }
@@ -96,269 +108,434 @@ fun FloatingLayoutConfigDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
+                .background(Color.Black.copy(alpha = 0.6f))
                 .padding(24.dp),
             contentAlignment = Alignment.Center,
         ) {
             Column(
                 modifier = Modifier
-                    .widthIn(max = 760.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .widthIn(max = 880.dp)
+                    .clip(RoundedCornerShape(24.dp))
                     .background(colors.panel)
-                    .glassBorder(RoundedCornerShape(20.dp))
-                    .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                    .glassBorder(RoundedCornerShape(24.dp))
+                    .padding(24.dp),
             ) {
-                // Header
+                // 1. Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.accent)
+                            )
+                            Text(
+                                text = stringResource(R.string.panel_dock_dialog_title),
+                                color = colors.text,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            text = stringResource(R.string.panel_dock_dialog_title),
-                            color = colors.text,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            text = stringResource(R.string.panel_dock_dialog_tip),
+                            text = stringResource(R.string.panel_dock_drag_tip),
                             color = colors.subText,
                             fontSize = 12.sp,
                         )
                     }
 
-                    // Reset button
-                    ReButton(
-                        text = stringResource(R.string.panel_dock_reset),
-                        primary = false,
-                        onClick = {
-                            topPos = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER)
-                            toolPos = PanelPosition(PanelEdge.LEFT, PanelAlignment.START)
-                            sliderPos = PanelPosition(PanelEdge.LEFT, PanelAlignment.END)
-                            marginDp = 12f
-                        },
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ReButton(
+                            text = stringResource(R.string.panel_dock_reset),
+                            primary = false,
+                            onClick = {
+                                topPos = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER)
+                                toolPos = PanelPosition(PanelEdge.LEFT, PanelAlignment.START)
+                                sliderPos = PanelPosition(PanelEdge.LEFT, PanelAlignment.END)
+                                marginDp = 12f
+                                floatingScale = 1.0f
+                                selectedPanel = DragTargetPanel.TOPBAR
+                            },
+                        )
+                    }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(18.dp))
 
-                // Interactive Tablet Mockup Canvas
-                BoxWithConstraints(
+                // 2. Main Content: Left Tablet Mockup vs Right Settings Controls
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(320.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(colors.panelHi.copy(alpha = 0.6f))
-                        .border(1.5.dp, colors.border, RoundedCornerShape(14.dp))
-                        .padding(14.dp),
+                        .height(390.dp),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
                 ) {
-                    val allSlots = remember {
-                        val list = mutableListOf<PanelPosition>()
-                        PanelEdge.entries.forEach { edge ->
-                            PanelAlignment.entries.forEach { align ->
-                                list.add(PanelPosition(edge, align))
+                    // Left: Realistic Tablet Mockup Preview
+                    Box(
+                        modifier = Modifier
+                            .weight(1.35f)
+                            .fillMaxHeight()
+                            .shadow(8.dp, RoundedCornerShape(18.dp), spotColor = Color.Black.copy(alpha = 0.3f))
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(colors.panelHi.copy(alpha = 0.5f))
+                            .border(1.5.dp, colors.border.copy(alpha = 0.8f), RoundedCornerShape(18.dp))
+                            .padding(14.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        // Tablet Device Shell
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .shadow(6.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.25f))
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            colors.canvasBg.copy(alpha = 0.95f),
+                                            colors.panelHi.copy(alpha = 0.75f),
+                                        )
+                                    )
+                                )
+                                .border(1.dp, colors.border.copy(alpha = 0.45f), RoundedCornerShape(14.dp)),
+                        ) {
+                            // Center Canvas Sheet Placeholder
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize(0.66f)
+                                    .align(Alignment.Center)
+                                    .shadow(4.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.15f))
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.panel.copy(alpha = 0.4f))
+                                    .border(0.75.dp, colors.border.copy(alpha = 0.35f), RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_canvas_tab),
+                                        contentDescription = null,
+                                        tint = colors.subText.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.panel_tab_canvas),
+                                        color = colors.subText.copy(alpha = 0.4f),
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            }
+
+                            // 12 Dock Slots & Draggable Capsules
+                            BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                                val allSlots = remember {
+                                    val list = mutableListOf<PanelPosition>()
+                                    PanelEdge.entries.forEach { edge ->
+                                        PanelAlignment.entries.forEach { align ->
+                                            list.add(PanelPosition(edge, align))
+                                        }
+                                    }
+                                    list
+                                }
+
+                                allSlots.forEach { slot ->
+                                    val isSlotOccupied = slot == topPos || slot == toolPos || slot == sliderPos
+                                    val isDropHovered = draggingPanel != DragTargetPanel.NONE &&
+                                        dragGlobalPos?.let { pos ->
+                                            slotBoundsMap[slot]?.contains(pos) == true
+                                        } == true
+
+                                    val slotModifier = resolveSlotAlignmentModifier(slot.edge, slot.alignment)
+                                    val slotShape = RoundedCornerShape(8.dp)
+
+                                    val slotBg by animateColorAsState(
+                                        targetValue = when {
+                                            isDropHovered -> colors.accent.copy(alpha = 0.4f)
+                                            isSlotOccupied -> colors.accent.copy(alpha = 0.1f)
+                                            else -> colors.panel.copy(alpha = 0.25f)
+                                        },
+                                        label = "slotBg"
+                                    )
+                                    val slotBorderColor by animateColorAsState(
+                                        targetValue = when {
+                                            isDropHovered -> colors.accent
+                                            isSlotOccupied -> colors.accent.copy(alpha = 0.3f)
+                                            else -> colors.border.copy(alpha = 0.35f)
+                                        },
+                                        label = "slotBorder"
+                                    )
+
+                                    Box(
+                                        modifier = slotModifier
+                                            .onGloballyPositioned { coords ->
+                                                slotBoundsMap = slotBoundsMap + (slot to coords.boundsInRoot())
+                                            }
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null,
+                                                onClick = {
+                                                    // Tap to quickly place selected panel
+                                                    when (selectedPanel) {
+                                                        DragTargetPanel.TOPBAR -> topPos = slot
+                                                        DragTargetPanel.TOOLRAIL -> toolPos = slot
+                                                        DragTargetPanel.SLIDERRAIL -> sliderPos = slot
+                                                        DragTargetPanel.NONE -> {}
+                                                    }
+                                                }
+                                            )
+                                            .width(if (slot.edge.isHorizontal) 84.dp else 38.dp)
+                                            .height(if (slot.edge.isHorizontal) 30.dp else 64.dp)
+                                            .clip(slotShape)
+                                            .background(slotBg)
+                                            .border(
+                                                width = if (isDropHovered) 1.8.dp else 1.dp,
+                                                color = slotBorderColor,
+                                                shape = slotShape,
+                                            ),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        if (!isSlotOccupied) {
+                                            Text(
+                                                text = when (slot.alignment) {
+                                                    PanelAlignment.START -> if (slot.edge.isHorizontal) "左" else "上"
+                                                    PanelAlignment.CENTER -> "中"
+                                                    PanelAlignment.END -> if (slot.edge.isHorizontal) "右" else "下"
+                                                },
+                                                color = if (isDropHovered) colors.accent else colors.subText.copy(alpha = 0.45f),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium,
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // 3 Draggable Capsules
+                                DraggablePanelCapsule(
+                                    title = stringResource(R.string.panel_dock_topbar),
+                                    icon = R.drawable.ic_canvas_tab,
+                                    pos = topPos,
+                                    isSelected = selectedPanel == DragTargetPanel.TOPBAR,
+                                    isDragging = draggingPanel == DragTargetPanel.TOPBAR,
+                                    onSelect = { selectedPanel = DragTargetPanel.TOPBAR },
+                                    onDragStart = {
+                                        selectedPanel = DragTargetPanel.TOPBAR
+                                        draggingPanel = DragTargetPanel.TOPBAR
+                                    },
+                                    onDrag = { global -> dragGlobalPos = global },
+                                    onDragEnd = {
+                                        dragGlobalPos?.let { pos ->
+                                            slotBoundsMap.entries.firstOrNull { it.value.contains(pos) }?.key?.let { targetSlot ->
+                                                topPos = targetSlot
+                                            }
+                                        }
+                                        draggingPanel = DragTargetPanel.NONE
+                                        dragGlobalPos = null
+                                    },
+                                )
+
+                                DraggablePanelCapsule(
+                                    title = stringResource(R.string.panel_dock_toolrail),
+                                    icon = R.drawable.ic_brush,
+                                    pos = toolPos,
+                                    isSelected = selectedPanel == DragTargetPanel.TOOLRAIL,
+                                    isDragging = draggingPanel == DragTargetPanel.TOOLRAIL,
+                                    onSelect = { selectedPanel = DragTargetPanel.TOOLRAIL },
+                                    onDragStart = {
+                                        selectedPanel = DragTargetPanel.TOOLRAIL
+                                        draggingPanel = DragTargetPanel.TOOLRAIL
+                                    },
+                                    onDrag = { global -> dragGlobalPos = global },
+                                    onDragEnd = {
+                                        dragGlobalPos?.let { pos ->
+                                            slotBoundsMap.entries.firstOrNull { it.value.contains(pos) }?.key?.let { targetSlot ->
+                                                toolPos = targetSlot
+                                            }
+                                        }
+                                        draggingPanel = DragTargetPanel.NONE
+                                        dragGlobalPos = null
+                                    },
+                                )
+
+                                DraggablePanelCapsule(
+                                    title = stringResource(R.string.panel_dock_sliderrail),
+                                    icon = R.drawable.ic_eye,
+                                    pos = sliderPos,
+                                    isSelected = selectedPanel == DragTargetPanel.SLIDERRAIL,
+                                    isDragging = draggingPanel == DragTargetPanel.SLIDERRAIL,
+                                    onSelect = { selectedPanel = DragTargetPanel.SLIDERRAIL },
+                                    onDragStart = {
+                                        selectedPanel = DragTargetPanel.SLIDERRAIL
+                                        draggingPanel = DragTargetPanel.SLIDERRAIL
+                                    },
+                                    onDrag = { global -> dragGlobalPos = global },
+                                    onDragEnd = {
+                                        dragGlobalPos?.let { pos ->
+                                            slotBoundsMap.entries.firstOrNull { it.value.contains(pos) }?.key?.let { targetSlot ->
+                                                sliderPos = targetSlot
+                                            }
+                                        }
+                                        draggingPanel = DragTargetPanel.NONE
+                                        dragGlobalPos = null
+                                    },
+                                )
                             }
                         }
-                        list
                     }
 
-                    // Render 12 Drop Slots (3 per edge)
-                    allSlots.forEach { slot ->
-                        val isSlotOccupied = slot == topPos || slot == toolPos || slot == sliderPos
-                        val isHighlighted = draggingPanel != DragTargetPanel.NONE &&
-                            dragGlobalPos?.let { pos ->
-                                slotBoundsMap[slot]?.contains(pos) == true
-                            } == true
-
-                        val slotModifier = resolveSlotAlignmentModifier(slot.edge, slot.alignment)
-                        val slotShape = RoundedCornerShape(10.dp)
-
-                        Box(
-                            modifier = slotModifier
-                                .onGloballyPositioned { coords ->
-                                    slotBoundsMap = slotBoundsMap + (slot to coords.boundsInRoot())
-                                }
-                                .width(if (slot.edge.isHorizontal) 92.dp else 46.dp)
-                                .height(if (slot.edge.isHorizontal) 36.dp else 72.dp)
-                                .clip(slotShape)
-                                .background(
-                                    when {
-                                        isHighlighted -> colors.accent.copy(alpha = 0.35f)
-                                        isSlotOccupied -> colors.accent.copy(alpha = 0.12f)
-                                        else -> colors.panel.copy(alpha = 0.4f)
-                                    }
-                                )
-                                .border(
-                                    width = if (isHighlighted) 2.dp else 1.dp,
-                                    color = when {
-                                        isHighlighted -> colors.accent
-                                        isSlotOccupied -> colors.accent.copy(alpha = 0.5f)
-                                        else -> colors.border.copy(alpha = 0.5f)
-                                    },
-                                    shape = slotShape,
-                                ),
-                            contentAlignment = Alignment.Center,
+                    // Right: Presets & Controls Column
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        // Quick Presets
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(colors.panelHi.copy(alpha = 0.5f))
+                                .border(1.dp, colors.border.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                .padding(12.dp),
                         ) {
-                            if (!isSlotOccupied) {
-                                Text(
-                                    text = when (slot.alignment) {
-                                        PanelAlignment.START -> if (slot.edge.isHorizontal) "左" else "上"
-                                        PanelAlignment.CENTER -> "中"
-                                        PanelAlignment.END -> if (slot.edge.isHorizontal) "右" else "下"
+                            Text(
+                                text = stringResource(R.string.panel_dock_preset_title),
+                                color = colors.text,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                PresetChip(
+                                    title = stringResource(R.string.panel_dock_preset_default),
+                                    onClick = {
+                                        topPos = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER)
+                                        toolPos = PanelPosition(PanelEdge.LEFT, PanelAlignment.START)
+                                        sliderPos = PanelPosition(PanelEdge.LEFT, PanelAlignment.END)
                                     },
-                                    color = colors.subText.copy(alpha = 0.5f),
-                                    fontSize = 11.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                PresetChip(
+                                    title = stringResource(R.string.panel_dock_preset_righthand),
+                                    onClick = {
+                                        topPos = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER)
+                                        toolPos = PanelPosition(PanelEdge.RIGHT, PanelAlignment.START)
+                                        sliderPos = PanelPosition(PanelEdge.RIGHT, PanelAlignment.END)
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            PresetChip(
+                                title = stringResource(R.string.panel_dock_preset_bottom),
+                                onClick = {
+                                    topPos = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER)
+                                    toolPos = PanelPosition(PanelEdge.BOTTOM, PanelAlignment.START)
+                                    sliderPos = PanelPosition(PanelEdge.BOTTOM, PanelAlignment.END)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        // Margin Slider
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(colors.panelHi.copy(alpha = 0.5f))
+                                .border(1.dp, colors.border.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.panel_dock_margin_title),
+                                    color = colors.text,
+                                    fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Medium,
                                 )
+                                Text(
+                                    text = "${marginDp.roundToInt()} dp",
+                                    color = colors.accent,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
                             }
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                text = stringResource(R.string.panel_dock_margin_desc),
+                                color = colors.subText,
+                                fontSize = 10.5.sp,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            ReSlider(
+                                value = ((marginDp - 8f) / (48f - 8f)).coerceIn(0f, 1f),
+                                onValue = { frac ->
+                                    marginDp = 8f + frac * (48f - 8f)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+
+                        // Scale Slider
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(colors.panelHi.copy(alpha = 0.5f))
+                                .border(1.dp, colors.border.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.panel_dock_scale_title),
+                                    color = colors.text,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    text = "${(floatingScale * 100).roundToInt()}%",
+                                    color = colors.accent,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                text = stringResource(R.string.panel_dock_scale_desc),
+                                color = colors.subText,
+                                fontSize = 10.5.sp,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            ReSlider(
+                                value = ((floatingScale - 0.70f) / (1.40f - 0.70f)).coerceIn(0f, 1f),
+                                onValue = { frac ->
+                                    floatingScale = 0.70f + frac * 0.70f
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
                     }
-
-                    // Render the 3 Draggable Panel Capsules
-                    // 1. TopBar Capsule
-                    DraggablePanelCapsule(
-                        title = stringResource(R.string.panel_dock_topbar),
-                        icon = R.drawable.ic_canvas_tab,
-                        pos = topPos,
-                        isDragging = draggingPanel == DragTargetPanel.TOPBAR,
-                        onDragStart = { draggingPanel = DragTargetPanel.TOPBAR },
-                        onDrag = { global -> dragGlobalPos = global },
-                        onDragEnd = {
-                            dragGlobalPos?.let { pos ->
-                                slotBoundsMap.entries.firstOrNull { it.value.contains(pos) }?.key?.let { targetSlot ->
-                                    topPos = targetSlot
-                                }
-                            }
-                            draggingPanel = DragTargetPanel.NONE
-                            dragGlobalPos = null
-                        },
-                    )
-
-                    // 2. ToolRail Capsule
-                    DraggablePanelCapsule(
-                        title = stringResource(R.string.panel_dock_toolrail),
-                        icon = R.drawable.ic_brush,
-                        pos = toolPos,
-                        isDragging = draggingPanel == DragTargetPanel.TOOLRAIL,
-                        onDragStart = { draggingPanel = DragTargetPanel.TOOLRAIL },
-                        onDrag = { global -> dragGlobalPos = global },
-                        onDragEnd = {
-                            dragGlobalPos?.let { pos ->
-                                slotBoundsMap.entries.firstOrNull { it.value.contains(pos) }?.key?.let { targetSlot ->
-                                    toolPos = targetSlot
-                                }
-                            }
-                            draggingPanel = DragTargetPanel.NONE
-                            dragGlobalPos = null
-                        },
-                    )
-
-                    // 3. SliderRail Capsule
-                    DraggablePanelCapsule(
-                        title = stringResource(R.string.panel_dock_sliderrail),
-                        icon = R.drawable.ic_eye,
-                        pos = sliderPos,
-                        isDragging = draggingPanel == DragTargetPanel.SLIDERRAIL,
-                        onDragStart = { draggingPanel = DragTargetPanel.SLIDERRAIL },
-                        onDrag = { global -> dragGlobalPos = global },
-                        onDragEnd = {
-                            dragGlobalPos?.let { pos ->
-                                slotBoundsMap.entries.firstOrNull { it.value.contains(pos) }?.key?.let { targetSlot ->
-                                    sliderPos = targetSlot
-                                }
-                            }
-                            draggingPanel = DragTargetPanel.NONE
-                            dragGlobalPos = null
-                        },
-                    )
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(18.dp))
 
-                // Margin Slider (8dp ~ 48dp)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.panelHi.copy(alpha = 0.5f))
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.panel_dock_margin_title),
-                            color = colors.text,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = "${marginDp.roundToInt()} dp",
-                            color = colors.accent,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.panel_dock_margin_desc),
-                        color = colors.subText,
-                        fontSize = 11.sp,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    ReSlider(
-                        value = ((marginDp - 8f) / (48f - 8f)).coerceIn(0f, 1f),
-                        onValue = { frac ->
-                            marginDp = 8f + frac * (48f - 8f)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    Spacer(Modifier.height(14.dp))
-
-                    // Scale Slider
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.panel_dock_scale_title),
-                            color = colors.text,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = "${(floatingScale * 100).roundToInt()}%",
-                            color = colors.accent,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.panel_dock_scale_desc),
-                        color = colors.subText,
-                        fontSize = 11.sp,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    ReSlider(
-                        value = ((floatingScale - 0.70f) / (1.40f - 0.70f)).coerceIn(0f, 1f),
-                        onValue = { frac ->
-                            floatingScale = 0.70f + frac * 0.70f
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // Footer Actions
+                // 3. Footer
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -391,11 +568,38 @@ fun FloatingLayoutConfigDialog(
 }
 
 @Composable
+private fun PresetChip(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = Theme.current
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(colors.panel.copy(alpha = 0.8f))
+            .border(1.dp, colors.border.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 7.dp, horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = title,
+            color = colors.text,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
 private fun BoxWithConstraintsScope.DraggablePanelCapsule(
     title: String,
     icon: Int,
     pos: PanelPosition,
+    isSelected: Boolean,
     isDragging: Boolean,
+    onSelect: () -> Unit,
     onDragStart: () -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
@@ -406,6 +610,16 @@ private fun BoxWithConstraintsScope.DraggablePanelCapsule(
 
     val slotModifier = resolveSlotAlignmentModifier(pos.edge, pos.alignment)
     val isH = pos.edge.isHorizontal
+
+    val elevation by animateDpAsState(
+        targetValue = if (isDragging) 12.dp else if (isSelected) 6.dp else 2.dp,
+        label = "capsuleElevation"
+    )
+    val scaleAnim by animateFloatAsState(
+        targetValue = if (isDragging) 1.08f else if (isSelected) 1.02f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "capsuleScale"
+    )
 
     Box(
         modifier = slotModifier
@@ -419,7 +633,7 @@ private fun BoxWithConstraintsScope.DraggablePanelCapsule(
                     IntOffset.Zero
                 }
             }
-            .zIndex(if (isDragging) 100f else 10f)
+            .zIndex(if (isDragging) 100f else if (isSelected) 20f else 10f)
             .pointerInput(pos) {
                 detectDragGestures(
                     onDragStart = {
@@ -443,15 +657,31 @@ private fun BoxWithConstraintsScope.DraggablePanelCapsule(
                     },
                 )
             }
-            .width(if (isH) 92.dp else 46.dp)
-            .height(if (isH) 36.dp else 72.dp)
-            .shadow(if (isDragging) 12.dp else 4.dp, RoundedCornerShape(10.dp))
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.accent.copy(alpha = if (isDragging) 0.95f else 0.85f))
-            .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-            .padding(4.dp),
+            .clickable(onClick = onSelect)
+            .width(if (isH) 84.dp else 38.dp)
+            .height(if (isH) 30.dp else 64.dp)
+            .shadow(elevation, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.4f))
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                Brush.linearGradient(
+                    colors = if (isSelected || isDragging) {
+                        listOf(colors.accent, colors.accent.copy(alpha = 0.88f))
+                    } else {
+                        listOf(colors.panelHi, colors.panel)
+                    }
+                )
+            )
+            .border(
+                width = if (isSelected || isDragging) 1.5.dp else 1.dp,
+                color = if (isSelected || isDragging) Color.White.copy(alpha = 0.6f) else colors.border,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center,
     ) {
+        val textColor = if (isSelected || isDragging) Color.White else colors.text
+        val iconColor = if (isSelected || isDragging) Color.White else colors.accent
+
         if (isH) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -460,31 +690,31 @@ private fun BoxWithConstraintsScope.DraggablePanelCapsule(
                 Icon(
                     painter = painterResource(icon),
                     contentDescription = title,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp),
+                    tint = iconColor,
+                    modifier = Modifier.size(13.dp),
                 )
                 Text(
                     text = title.substringBefore(" "),
-                    color = Color.White,
-                    fontSize = 11.sp,
+                    color = textColor,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
         } else {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Icon(
                     painter = painterResource(icon),
                     contentDescription = title,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp),
+                    tint = iconColor,
+                    modifier = Modifier.size(13.dp),
                 )
                 Text(
                     text = title.substringBefore(" "),
-                    color = Color.White,
-                    fontSize = 10.sp,
+                    color = textColor,
+                    fontSize = 9.5.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
@@ -531,30 +761,30 @@ private fun BoxWithConstraintsScope.resolveSlotAlignmentModifier(
     val offsetModifier = when (edge) {
         PanelEdge.TOP -> {
             when (alignment) {
-                PanelAlignment.START -> Modifier.padding(start = 12.dp, top = 8.dp)
-                PanelAlignment.CENTER -> Modifier.padding(top = 8.dp)
-                PanelAlignment.END -> Modifier.padding(end = 12.dp, top = 8.dp)
+                PanelAlignment.START -> Modifier.padding(start = 10.dp, top = 6.dp)
+                PanelAlignment.CENTER -> Modifier.padding(top = 6.dp)
+                PanelAlignment.END -> Modifier.padding(end = 10.dp, top = 6.dp)
             }
         }
         PanelEdge.BOTTOM -> {
             when (alignment) {
-                PanelAlignment.START -> Modifier.padding(start = 12.dp, bottom = 8.dp)
-                PanelAlignment.CENTER -> Modifier.padding(bottom = 8.dp)
-                PanelAlignment.END -> Modifier.padding(end = 12.dp, bottom = 8.dp)
+                PanelAlignment.START -> Modifier.padding(start = 10.dp, bottom = 6.dp)
+                PanelAlignment.CENTER -> Modifier.padding(bottom = 6.dp)
+                PanelAlignment.END -> Modifier.padding(end = 10.dp, bottom = 6.dp)
             }
         }
         PanelEdge.LEFT -> {
             when (alignment) {
-                PanelAlignment.START -> Modifier.padding(start = 8.dp, top = 12.dp)
-                PanelAlignment.CENTER -> Modifier.padding(start = 8.dp)
-                PanelAlignment.END -> Modifier.padding(start = 8.dp, bottom = 12.dp)
+                PanelAlignment.START -> Modifier.padding(start = 6.dp, top = 10.dp)
+                PanelAlignment.CENTER -> Modifier.padding(start = 6.dp)
+                PanelAlignment.END -> Modifier.padding(start = 6.dp, bottom = 10.dp)
             }
         }
         PanelEdge.RIGHT -> {
             when (alignment) {
-                PanelAlignment.START -> Modifier.padding(end = 8.dp, top = 12.dp)
-                PanelAlignment.CENTER -> Modifier.padding(end = 8.dp)
-                PanelAlignment.END -> Modifier.padding(end = 8.dp, bottom = 12.dp)
+                PanelAlignment.START -> Modifier.padding(end = 6.dp, top = 10.dp)
+                PanelAlignment.CENTER -> Modifier.padding(end = 6.dp)
+                PanelAlignment.END -> Modifier.padding(end = 6.dp, bottom = 10.dp)
             }
         }
     }
