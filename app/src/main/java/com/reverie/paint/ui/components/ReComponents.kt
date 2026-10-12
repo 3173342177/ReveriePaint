@@ -638,9 +638,9 @@ fun ReVerticalSlider(
                 val capsuleRadius = (trackWidth / 2).dp
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrow")
 
-                // Track Background (嵌入式内嵌凹槽：半透明暗部与高光雕刻边缘，彻底解除嵌套 Haze 抖动)
+                // Track Background (打孔嵌入式毛玻璃：独立0.6x毛玻璃轨道与下凹雕刻光影)
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.40f).coerceIn(0.12f, 0.50f)
+                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
                 Box(
                     modifier = Modifier
                         .width(trackWidth.dp)
@@ -651,14 +651,7 @@ fun ReVerticalSlider(
                             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.Black.copy(alpha = (grooveAlpha * 1.25f).coerceIn(0.15f, 0.65f)),
-                                    Color.Black.copy(alpha = (grooveAlpha * 0.85f).coerceIn(0.10f, 0.45f)),
-                                )
-                            )
-                        )
+                        .background(colors.panel.copy(alpha = grooveAlpha))
                         .border(
                             0.5.dp,
                             Brush.verticalGradient(
@@ -919,7 +912,7 @@ fun ReHorizontalSlider(
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrowH")
 
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.40f).coerceIn(0.12f, 0.50f)
+                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -929,14 +922,7 @@ fun ReHorizontalSlider(
                             scaleX = 1f + (capsuleGrow - 1f) * 0.4f
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(
-                                    Color.Black.copy(alpha = (grooveAlpha * 1.25f).coerceIn(0.15f, 0.65f)),
-                                    Color.Black.copy(alpha = (grooveAlpha * 0.85f).coerceIn(0.10f, 0.45f)),
-                                )
-                            )
-                        )
+                        .background(colors.panel.copy(alpha = grooveAlpha))
                         .border(
                             0.5.dp,
                             Brush.horizontalGradient(
