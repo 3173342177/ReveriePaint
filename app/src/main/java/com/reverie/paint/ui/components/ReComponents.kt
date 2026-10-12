@@ -638,8 +638,9 @@ fun ReVerticalSlider(
                 val capsuleRadius = (trackWidth / 2).dp
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrow")
 
-                // Track Background (Hollowed-out groove using semi-transparent overlay to avoid nested Haze jitter)
+                // Track Background (毛玻璃挖空质感：按面板透明度 0.6x 挖空)
                 val panelAlpha = vm?.uiOpacity ?: 1f
+                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
                 Box(
                     modifier = Modifier
                         .width(trackWidth.dp)
@@ -650,7 +651,16 @@ fun ReVerticalSlider(
                             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .background(Color.Black.copy(alpha = (0.22f * panelAlpha).coerceIn(0.06f, 0.28f)))
+                        .then(
+                            if (vm?.blurBackground == true && hazeState != null) {
+                                Modifier.hazeChild(
+                                    state = hazeState,
+                                    style = Glass.barStyle(grooveAlpha),
+                                )
+                            } else {
+                                Modifier.background(colors.panel.copy(alpha = grooveAlpha))
+                            }
+                        )
                         .border(
                             0.5.dp,
                             Color.Black.copy(alpha = (0.28f * panelAlpha).coerceIn(0.08f, 0.38f)),
@@ -906,6 +916,7 @@ fun ReHorizontalSlider(
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrowH")
 
                 val panelAlpha = vm?.uiOpacity ?: 1f
+                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -915,7 +926,16 @@ fun ReHorizontalSlider(
                             scaleX = 1f + (capsuleGrow - 1f) * 0.4f
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .background(Color.Black.copy(alpha = (0.22f * panelAlpha).coerceIn(0.06f, 0.28f)))
+                        .then(
+                            if (vm?.blurBackground == true && hazeState != null) {
+                                Modifier.hazeChild(
+                                    state = hazeState,
+                                    style = Glass.barStyle(grooveAlpha),
+                                )
+                            } else {
+                                Modifier.background(colors.panel.copy(alpha = grooveAlpha))
+                            }
+                        )
                         .border(
                             0.5.dp,
                             Color.Black.copy(alpha = (0.28f * panelAlpha).coerceIn(0.08f, 0.38f)),

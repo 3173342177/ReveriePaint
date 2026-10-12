@@ -572,19 +572,18 @@ fun SlidersPanelContent(
     onColorDropCancel: (() -> Unit)? = null,
     isHorizontal: Boolean = false,
 ) {
-    val contentModifier = modifier
+    val baseModifier = modifier
         .shadow(10.dp, shape, spotColor = Color.Black.copy(alpha = 0.5f))
         .clip(shape)
-        .then(
-            if (vm.blurBackground && hazeState != null) {
-                Modifier.hazeChild(
-                    state = hazeState,
-                    style = Glass.barStyle(if (opacity >= 0.99) 0.90f else opacity.toFloat()),
-                )
-            } else {
-                Modifier.background(Morandi.panel.copy(alpha = opacity.toFloat()))
-            }
+
+    val contentModifier = if (vm.blurBackground && hazeState != null) {
+        baseModifier.hazeChild(
+            state = hazeState,
+            style = Glass.barStyle(if (opacity >= 0.99) 0.90f else opacity.toFloat()),
         )
+    } else {
+        baseModifier.background(Morandi.panel.copy(alpha = opacity.toFloat()))
+    }
 
     if (isHorizontal) {
         Row(
