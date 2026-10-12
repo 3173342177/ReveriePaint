@@ -19,7 +19,19 @@ add_compile_options(-fno-operator-names)
 # does not compile C++). Paths default to $HOME conventions but can be
 # overridden per machine via -D, e.g.:
 #   ./gradlew assembleDebug -PbuildNative #     -PcmakeArgs=-DQT_ANDROID_DIR=/opt/Qt6/6.6.3/android_arm64_v8a
-set(QT_ANDROID_DIR "$ENV{HOME}/Qt6/6.6.3/android_arm64_v8a" CACHE PATH "Qt for Android install dir")
+if(NOT ANDROID_ABI)
+    set(ANDROID_ABI "arm64-v8a")
+endif()
+
+if(ANDROID_ABI STREQUAL "armeabi-v7a")
+    set(DEFAULT_QT_ARCH "android_armv7")
+    set(NDK_TARGET_TRIPLE "arm-linux-androideabi")
+else()
+    set(DEFAULT_QT_ARCH "android_arm64_v8a")
+    set(NDK_TARGET_TRIPLE "aarch64-linux-android")
+endif()
+
+set(QT_ANDROID_DIR "$ENV{HOME}/Qt6/6.6.3/${DEFAULT_QT_ARCH}" CACHE PATH "Qt for Android install dir")
 set(KRITA_BIN_DIR "$ENV{HOME}/Projects/krita-source/build-android" CACHE PATH "Krita cross-compile build dir")
 set(KRITA_SRC_DIR "$ENV{HOME}/Projects/krita-source" CACHE PATH "Krita source tree")
 set(DEPS_DIR "$ENV{HOME}/ReveriePaint-android/deps" CACHE PATH "KF6/deps install prefix")
@@ -134,16 +146,16 @@ set(KRITA_INCLUDES
 
 # Qt modules needed by the Krita core
 set(QT_LIBS
-    ${QT_ANDROID_DIR}/lib/libQt6Core_arm64-v8a.so
-    ${QT_ANDROID_DIR}/lib/libQt6Gui_arm64-v8a.so
-    ${QT_ANDROID_DIR}/lib/libQt6Widgets_arm64-v8a.so
-    ${QT_ANDROID_DIR}/lib/libQt6Svg_arm64-v8a.so
-    ${QT_ANDROID_DIR}/lib/libQt6OpenGL_arm64-v8a.so
-    ${QT_ANDROID_DIR}/lib/libQt6Network_arm64-v8a.so
-    ${QT_ANDROID_DIR}/lib/libQt6Concurrent_arm64-v8a.so
-    ${QT_ANDROID_DIR}/lib/libQt6Xml_arm64-v8a.so
-    ${QT_ANDROID_DIR}/lib/libQt6Sql_arm64-v8a.so
-    ${QT_ANDROID_DIR}/lib/libQt6Core5Compat_arm64-v8a.so
+    ${QT_ANDROID_DIR}/lib/libQt6Core_${ANDROID_ABI}.so
+    ${QT_ANDROID_DIR}/lib/libQt6Gui_${ANDROID_ABI}.so
+    ${QT_ANDROID_DIR}/lib/libQt6Widgets_${ANDROID_ABI}.so
+    ${QT_ANDROID_DIR}/lib/libQt6Svg_${ANDROID_ABI}.so
+    ${QT_ANDROID_DIR}/lib/libQt6OpenGL_${ANDROID_ABI}.so
+    ${QT_ANDROID_DIR}/lib/libQt6Network_${ANDROID_ABI}.so
+    ${QT_ANDROID_DIR}/lib/libQt6Concurrent_${ANDROID_ABI}.so
+    ${QT_ANDROID_DIR}/lib/libQt6Xml_${ANDROID_ABI}.so
+    ${QT_ANDROID_DIR}/lib/libQt6Sql_${ANDROID_ABI}.so
+    ${QT_ANDROID_DIR}/lib/libQt6Core5Compat_${ANDROID_ABI}.so
 )
 
 # Krita core libs needed by the engine. We deliberately do NOT link the
@@ -258,7 +270,7 @@ target_include_directories(reverie_jni PRIVATE
     ${QT_ANDROID_DIR}/include/QtConcurrent
     ${QT_ANDROID_DIR}/include/QtCore5Compat
     ${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include
-    ${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/aarch64-linux-android
+    ${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/${NDK_TARGET_TRIPLE}
 )
 
 # All prebuilt dependency dirs so the linker can resolve transitive NEEDED
@@ -266,9 +278,12 @@ set(LINK_DIRS
     ${KRITA_BIN_DIR}/lib
     ${QT_ANDROID_DIR}/lib
     ${DEPS_DIR}/lib
-    ${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24
+    ${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/${NDK_TARGET_TRIPLE}/24
 )
 target_link_directories(reverie_jni PRIVATE ${LINK_DIRS})
+
+# 16KB page size alignment for Android 15+ compatibility
+target_link_options(reverie_jni PRIVATE "-Wl,-z,max-page-size=16384")
 
 target_link_libraries(reverie_jni
     ${KRITA_LIBS}
@@ -294,6 +309,6 @@ target_link_libraries(reverie_jni
 add_custom_command(TARGET reverie_jni POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:reverie_jni>
-        ${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/arm64-v8a/libreverie_jni.so
+        ${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libreverie_jni.so
 )
 

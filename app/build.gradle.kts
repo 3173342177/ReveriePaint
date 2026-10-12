@@ -74,17 +74,27 @@ android {
             ((project.findProperty("lqProxy") as? String)?.toIntOrNull() ?: 100).coerceIn(10, 100)
         buildConfigField("int", "LQ_PROXY_PERCENT", lqProxyPercent.toString())
 
-        ndk {
-            abiFilters += listOf("arm64-v8a")
+        // ABI 支持: 默认构建 arm64-v8a。通过 -PtargetAbis=arm64-v8a,armeabi-v7a 或 -PenableAbiSplits=true 开启分包
+        val targetAbisProp = (project.findProperty("targetAbis") as? String)
+        val enableAbiSplits = project.hasProperty("enableAbiSplits") || (targetAbisProp?.contains(",") == true)
+        val configuredAbis = targetAbisProp?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+            ?: if (enableAbiSplits) listOf("arm64-v8a", "armeabi-v7a") else listOf("arm64-v8a")
+
+        if (!enableAbiSplits) {
+            ndk {
+                abiFilters += configuredAbis
+            }
         }
         if (buildNative) {
             externalNativeBuild {
                 cmake {
                     cppFlags += "-std=c++17"
+                    // 16KB 页面对齐 (Android 15+)
+                    cppFlags += "-Wl,-z,max-page-size=16384"
                     arguments +=
                         buildList {
-                            add("-DANDROID_ABI=arm64-v8a")
                             add("-DCMAKE_BUILD_TYPE=Release")
+                            add("-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384")
                             // 追加自定义 CMake 参数, 例如:
                             // ./gradlew assembleDebug -PbuildNative -PcmakeArgs="-DQT_ANDROID_DIR=/opt/Qt6"
                             val cmakeArgs =
@@ -94,6 +104,19 @@ android {
                             if (cmakeArgs != null) addAll(cmakeArgs)
                         }
                 }
+            }
+        }
+    }
+
+    val enableAbiSplits = project.hasProperty("enableAbiSplits") ||
+        ((project.findProperty("targetAbis") as? String)?.contains(",") == true)
+    if (enableAbiSplits) {
+        splits {
+            abi {
+                isEnable = true
+                reset()
+                include("arm64-v8a", "armeabi-v7a")
+                isUniversalApk = false
             }
         }
     }
