@@ -179,10 +179,9 @@ fun FloatingLayoutConfigDialog(
                         modifier = Modifier
                             .weight(1.35f)
                             .fillMaxHeight()
-                            .shadow(8.dp, RoundedCornerShape(18.dp), spotColor = Color.Black.copy(alpha = 0.3f))
+                            .shadow(8.dp, RoundedCornerShape(18.dp), spotColor = Color.Black.copy(alpha = 0.25f))
                             .clip(RoundedCornerShape(18.dp))
-                            .background(colors.panelHi.copy(alpha = 0.5f))
-                            .border(1.5.dp, colors.border.copy(alpha = 0.8f), RoundedCornerShape(18.dp))
+                            .background(colors.panelHi.copy(alpha = 0.35f))
                             .padding(14.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -190,27 +189,25 @@ fun FloatingLayoutConfigDialog(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .shadow(6.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.25f))
+                                .shadow(6.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.2f))
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(
                                     Brush.linearGradient(
                                         colors = listOf(
-                                            colors.canvasBg.copy(alpha = 0.95f),
-                                            colors.panelHi.copy(alpha = 0.75f),
+                                            colors.canvasBg.copy(alpha = 0.85f),
+                                            colors.panelHi.copy(alpha = 0.6f),
                                         )
                                     )
-                                )
-                                .border(1.dp, colors.border.copy(alpha = 0.45f), RoundedCornerShape(14.dp)),
+                                ),
                         ) {
                             // Center Canvas Sheet Placeholder
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize(0.66f)
                                     .align(Alignment.Center)
-                                    .shadow(4.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.15f))
+                                    .shadow(4.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.12f))
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(colors.panel.copy(alpha = 0.4f))
-                                    .border(0.75.dp, colors.border.copy(alpha = 0.35f), RoundedCornerShape(8.dp)),
+                                    .background(colors.panel.copy(alpha = 0.35f)),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -291,10 +288,10 @@ fun FloatingLayoutConfigDialog(
                                             .height(if (slot.edge.isHorizontal) 30.dp else 64.dp)
                                             .clip(slotShape)
                                             .background(slotBg)
-                                            .border(
-                                                width = if (isDropHovered) 1.8.dp else 1.dp,
-                                                color = slotBorderColor,
-                                                shape = slotShape,
+                                            .then(
+                                                if (isDropHovered) {
+                                                    Modifier.border(1.5.dp, colors.accent, slotShape)
+                                                } else Modifier
                                             ),
                                         contentAlignment = Alignment.Center,
                                     ) {
@@ -400,7 +397,6 @@ fun FloatingLayoutConfigDialog(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(colors.panelHi.copy(alpha = 0.5f))
-                                .border(1.dp, colors.border.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                                 .padding(12.dp),
                         ) {
                             Text(
@@ -451,7 +447,6 @@ fun FloatingLayoutConfigDialog(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(colors.panelHi.copy(alpha = 0.5f))
-                                .border(1.dp, colors.border.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                         ) {
                             Row(
@@ -494,7 +489,6 @@ fun FloatingLayoutConfigDialog(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(colors.panelHi.copy(alpha = 0.5f))
-                                .border(1.dp, colors.border.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                         ) {
                             Row(
@@ -577,16 +571,15 @@ private fun PresetChip(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(colors.panel.copy(alpha = 0.8f))
-            .border(1.dp, colors.border.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+            .background(colors.panel.copy(alpha = 0.85f))
             .clickable(onClick = onClick)
-            .padding(vertical = 7.dp, horizontal = 10.dp),
+            .padding(vertical = 8.dp, horizontal = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = title,
             color = colors.text,
-            fontSize = 11.sp,
+            fontSize = 11.5.sp,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -660,7 +653,7 @@ private fun BoxWithConstraintsScope.DraggablePanelCapsule(
             .clickable(onClick = onSelect)
             .width(if (isH) 84.dp else 38.dp)
             .height(if (isH) 30.dp else 64.dp)
-            .shadow(elevation, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.4f))
+            .shadow(elevation, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.35f))
             .clip(RoundedCornerShape(8.dp))
             .background(
                 Brush.linearGradient(
@@ -671,10 +664,10 @@ private fun BoxWithConstraintsScope.DraggablePanelCapsule(
                     }
                 )
             )
-            .border(
-                width = if (isSelected || isDragging) 1.5.dp else 1.dp,
-                color = if (isSelected || isDragging) Color.White.copy(alpha = 0.6f) else colors.border,
-                shape = RoundedCornerShape(8.dp)
+            .then(
+                if (isSelected || isDragging) {
+                    Modifier.border(1.2.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                } else Modifier
             )
             .padding(horizontal = 4.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center,
