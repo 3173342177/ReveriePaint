@@ -1007,7 +1007,7 @@ static inline void writeRegionToDevice(KisPaintDevice *dev, const quint8 *full,
 }
 static inline void blitBgraToRgbaFast(const quint8 *src, int srcStride, quint8 *dst, int dstStride, int width, int height)
 {
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#if defined(__aarch64__)
     static const uint8_t swapRBMask[16] = {
         2, 1, 0, 3,
         6, 5, 4, 7,
@@ -1038,6 +1038,31 @@ static inline void blitBgraToRgbaFast(const quint8 *src, int srcStride, quint8 *
             vst1q_u8(d + x * 4, vqtbl1q_u8(pix, mask));
         }
         // Scalar tail handling: remaining 1-3 pixels
+        for (; x < width; ++x) {
+            uint8_t b = s[x * 4 + 0];
+            uint8_t g = s[x * 4 + 1];
+            uint8_t r = s[x * 4 + 2];
+            uint8_t a = s[x * 4 + 3];
+            d[x * 4 + 0] = r;
+            d[x * 4 + 1] = g;
+            d[x * 4 + 2] = b;
+            d[x * 4 + 3] = a;
+        }
+    }
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+    for (int y = 0; y < height; ++y) {
+        const uint8_t *s = src + y * srcStride;
+        uint8_t *d = dst + y * dstStride;
+        int x = 0;
+        for (; x <= width - 8; x += 8) {
+            uint8x8x4_t bgra = vld4_u8(s + x * 4);
+            uint8x8x4_t rgba;
+            rgba.val[0] = bgra.val[2]; // R = B
+            rgba.val[1] = bgra.val[1]; // G = G
+            rgba.val[2] = bgra.val[0]; // B = R
+            rgba.val[3] = bgra.val[3]; // A = A
+            vst4_u8(d + x * 4, rgba);
+        }
         for (; x < width; ++x) {
             uint8_t b = s[x * 4 + 0];
             uint8_t g = s[x * 4 + 1];

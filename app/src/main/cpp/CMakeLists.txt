@@ -25,16 +25,20 @@ endif()
 
 if(ANDROID_ABI STREQUAL "armeabi-v7a")
     set(DEFAULT_QT_ARCH "android_armv7")
+    set(DEFAULT_KRITA_BIN "$ENV{HOME}/Projects/krita-source/build-android-armv7")
+    set(DEFAULT_DEPS "$ENV{HOME}/ReveriePaint-android/deps-armv7")
     set(NDK_TARGET_TRIPLE "arm-linux-androideabi")
 else()
     set(DEFAULT_QT_ARCH "android_arm64_v8a")
+    set(DEFAULT_KRITA_BIN "$ENV{HOME}/Projects/krita-source/build-android")
+    set(DEFAULT_DEPS "$ENV{HOME}/ReveriePaint-android/deps")
     set(NDK_TARGET_TRIPLE "aarch64-linux-android")
 endif()
 
 set(QT_ANDROID_DIR "$ENV{HOME}/Qt6/6.6.3/${DEFAULT_QT_ARCH}" CACHE PATH "Qt for Android install dir")
-set(KRITA_BIN_DIR "$ENV{HOME}/Projects/krita-source/build-android" CACHE PATH "Krita cross-compile build dir")
+set(KRITA_BIN_DIR "${DEFAULT_KRITA_BIN}" CACHE PATH "Krita cross-compile build dir")
 set(KRITA_SRC_DIR "$ENV{HOME}/Projects/krita-source" CACHE PATH "Krita source tree")
-set(DEPS_DIR "$ENV{HOME}/ReveriePaint-android/deps" CACHE PATH "KF6/deps install prefix")
+set(DEPS_DIR "${DEFAULT_DEPS}" CACHE PATH "KF6/deps install prefix")
 
 # --- Krita core include dirs (same set the working APK build used) ---
 set(KRITA_INCLUDES
