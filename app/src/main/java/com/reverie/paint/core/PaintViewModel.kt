@@ -2932,7 +2932,7 @@ class PaintViewModel : ViewModel() {
 
     fun resetFloatingUiEdges() {
         floatingUiConfig = floatingUiConfig.copy(
-            topBarPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.TOP, com.reverie.paint.model.PanelAlignment.CENTER),
+            topBarPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.TOP, com.reverie.paint.model.PanelAlignment.END),
             toolRailPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.LEFT, com.reverie.paint.model.PanelAlignment.START),
             sliderRailPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.LEFT, com.reverie.paint.model.PanelAlignment.END),
             marginDp = 12,
@@ -3236,7 +3236,7 @@ class PaintViewModel : ViewModel() {
             val isTabletDevice = DeviceUtils.isTablet(appContext)
             val floatingSavedEnabled = prefs.getBoolean("floatingUi_enabled", isTabletDevice)
             val topBarEdgeName = prefs.getString("floatingUi_topBarEdge", "TOP") ?: "TOP"
-            val topBarAlignName = prefs.getString("floatingUi_topBarAlign", "CENTER") ?: "CENTER"
+            val topBarAlignName = prefs.getString("floatingUi_topBarAlign", "END") ?: "END"
             val toolRailEdgeName = prefs.getString("floatingUi_toolRailEdge", "LEFT") ?: "LEFT"
             val toolRailAlignName = prefs.getString("floatingUi_toolRailAlign", "START") ?: "START"
             val sliderRailEdgeName = prefs.getString("floatingUi_sliderRailEdge", "LEFT") ?: "LEFT"
@@ -3247,7 +3247,7 @@ class PaintViewModel : ViewModel() {
                 enabled = isTabletDevice && floatingSavedEnabled,
                 topBarPosition = com.reverie.paint.model.PanelPosition(
                     edge = runCatching { com.reverie.paint.model.PanelEdge.valueOf(topBarEdgeName) }.getOrDefault(com.reverie.paint.model.PanelEdge.TOP),
-                    alignment = runCatching { com.reverie.paint.model.PanelAlignment.valueOf(topBarAlignName) }.getOrDefault(com.reverie.paint.model.PanelAlignment.CENTER),
+                    alignment = runCatching { com.reverie.paint.model.PanelAlignment.valueOf(topBarAlignName) }.getOrDefault(com.reverie.paint.model.PanelAlignment.END),
                 ),
                 toolRailPosition = com.reverie.paint.model.PanelPosition(
                     edge = runCatching { com.reverie.paint.model.PanelEdge.valueOf(toolRailEdgeName) }.getOrDefault(com.reverie.paint.model.PanelEdge.LEFT),

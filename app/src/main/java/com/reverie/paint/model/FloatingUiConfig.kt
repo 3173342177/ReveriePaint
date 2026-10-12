@@ -45,7 +45,7 @@ data class PanelPosition(
  */
 data class FloatingUiConfig(
     val enabled: Boolean = false,
-    val topBarPosition: PanelPosition = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER),
+    val topBarPosition: PanelPosition = PanelPosition(PanelEdge.TOP, PanelAlignment.END),
     val toolRailPosition: PanelPosition = PanelPosition(PanelEdge.LEFT, PanelAlignment.START),
     val sliderRailPosition: PanelPosition = PanelPosition(PanelEdge.LEFT, PanelAlignment.END),
     val marginDp: Int = 12,
