@@ -900,57 +900,486 @@ fun PaintingPage(
             androidx.compose.ui.platform.LocalDensity provides scaledDensity
         ) {
             if (filterController == null && !vm.isCanvasAdjustActive) {
-                // ---- Top bar ----
-                TopBar(
-                    modifier = Modifier.align(if (vm.leftHandMode) Alignment.TopStart else Alignment.TopEnd).zIndex(50f),
-                    vm = vm,
-                    opacity = vm.uiOpacity,
-                    hazeState = hazeState,
-                    onBack = requestExit,
-                    onRotateCw = {
-                        rotation = (rotation + 90) % 360
-                        flashIndicator()
-                    },
-                    onRotateCcw = {
-                        rotation = (rotation - 90 + 360) % 360
-                        flashIndicator()
-                    },
-                    onZoomIn = {
-                        zoom = (zoom * 1.2f).coerceAtMost(16f)
-                        flashIndicator()
-                    },
-                    onZoomOut = {
-                        zoom = (zoom / 1.2f).coerceAtLeast(0.1f)
-                        flashIndicator()
-                    },
-                    onLayers = {
-                        layerPanelOpen = true
-                        if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
-                            vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                val floatingUi = vm.floatingUiConfig.enabled
+                if (floatingUi) {
+                    val config = vm.floatingUiConfig
+                    val margin = config.marginDp.dp
+                    val topPos = config.topBarPosition
+                    val toolPos = config.toolRailPosition
+                    val sliderPos = config.sliderRailPosition
+
+                    // Group panels by PanelPosition to prevent overlapping if assigned to identical slot
+                    val positionGroups = listOf<Pair<String, com.reverie.paint.model.PanelPosition>>(
+                        "TOPBAR" to topPos,
+                        "TOOLRAIL" to toolPos,
+                        "SLIDERRAIL" to sliderPos,
+                    ).groupBy({ it.second }, { it.first })
+
+                    fun resolveFloatingModifier(
+                        panelId: String,
+                        pos: com.reverie.paint.model.PanelPosition,
+                    ): Modifier {
+                        val edge = pos.edge
+                        val align = pos.alignment
+                        val sharingPanels = positionGroups[pos] ?: listOf(panelId)
+                        val panelIdx = sharingPanels.indexOf(panelId).coerceAtLeast(0)
+                        val overlapOffset = (panelIdx * 48).dp // Offset to avoid overlapping if multiple panels share same slot
+
+                        val baseAlignment = when (edge) {
+                            com.reverie.paint.model.PanelEdge.TOP -> {
+                                when (align) {
+                                    com.reverie.paint.model.PanelAlignment.START -> Alignment.TopStart
+                                    com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.TopCenter
+                                    com.reverie.paint.model.PanelAlignment.END -> Alignment.TopEnd
+                                }
+                            }
+                            com.reverie.paint.model.PanelEdge.BOTTOM -> {
+                                when (align) {
+                                    com.reverie.paint.model.PanelAlignment.START -> Alignment.BottomStart
+                                    com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.BottomCenter
+                                    com.reverie.paint.model.PanelAlignment.END -> Alignment.BottomEnd
+                                }
+                            }
+                            com.reverie.paint.model.PanelEdge.LEFT -> {
+                                when (align) {
+                                    com.reverie.paint.model.PanelAlignment.START -> Alignment.TopStart
+                                    com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.CenterStart
+                                    com.reverie.paint.model.PanelAlignment.END -> Alignment.BottomStart
+                                }
+                            }
+                            com.reverie.paint.model.PanelEdge.RIGHT -> {
+                                when (align) {
+                                    com.reverie.paint.model.PanelAlignment.START -> Alignment.TopEnd
+                                    com.reverie.paint.model.PanelAlignment.CENTER -> Alignment.CenterEnd
+                                    com.reverie.paint.model.PanelAlignment.END -> Alignment.BottomEnd
+                                }
+                            }
                         }
-                        if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
-                            brushPanelOpen = false
-                            vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+
+                        val paddingModifier = when (edge) {
+                            com.reverie.paint.model.PanelEdge.TOP -> {
+                                when (align) {
+                                    com.reverie.paint.model.PanelAlignment.START -> Modifier.padding(start = margin + overlapOffset, top = margin)
+                                    com.reverie.paint.model.PanelAlignment.CENTER -> Modifier.offset(x = overlapOffset).padding(top = margin)
+                                    com.reverie.paint.model.PanelAlignment.END -> Modifier.padding(end = margin + overlapOffset, top = margin)
+                                }
+                            }
+                            com.reverie.paint.model.PanelEdge.BOTTOM -> {
+                                when (align) {
+                                    com.reverie.paint.model.PanelAlignment.START -> Modifier.padding(start = margin + overlapOffset, bottom = margin)
+                                    com.reverie.paint.model.PanelAlignment.CENTER -> Modifier.offset(x = overlapOffset).padding(bottom = margin)
+                                    com.reverie.paint.model.PanelAlignment.END -> Modifier.padding(end = margin + overlapOffset, bottom = margin)
+                                }
+                            }
+                            com.reverie.paint.model.PanelEdge.LEFT -> {
+                                when (align) {
+                                    com.reverie.paint.model.PanelAlignment.START -> Modifier.padding(start = margin, top = margin + overlapOffset)
+                                    com.reverie.paint.model.PanelAlignment.CENTER -> Modifier.offset(y = overlapOffset).padding(start = margin)
+                                    com.reverie.paint.model.PanelAlignment.END -> Modifier.padding(start = margin, bottom = margin + overlapOffset)
+                                }
+                            }
+                            com.reverie.paint.model.PanelEdge.RIGHT -> {
+                                when (align) {
+                                    com.reverie.paint.model.PanelAlignment.START -> Modifier.padding(end = margin, top = margin + overlapOffset)
+                                    com.reverie.paint.model.PanelAlignment.CENTER -> Modifier.offset(y = overlapOffset).padding(end = margin)
+                                    com.reverie.paint.model.PanelAlignment.END -> Modifier.padding(end = margin, bottom = margin + overlapOffset)
+                                }
+                            }
                         }
-                        if (!vm.isColorPanelPinned) colorPanelOpen = false
-                        settingsPanelOpen = false
-                        moreToolsOpen = false
-                    },
-                    onSettings = {
-                        settingsPanelOpen = true
-                        if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
-                            layerPanelOpen = false
-                            vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
-                        }
-                        if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
-                            brushPanelOpen = false
-                            vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
-                        }
-                        if (!vm.isColorPanelPinned) colorPanelOpen = false
-                        moreToolsOpen = false
-                        drawingGuidePanelOpen = false
-                    },
-                )
+
+                        return Modifier.align(baseAlignment).then(paddingModifier)
+                    }
+
+                    // 1. Floating TopBar
+                    TopBar(
+                        modifier = resolveFloatingModifier("TOPBAR", topPos).zIndex(50f),
+                        vm = vm,
+                        opacity = vm.uiOpacity,
+                        hazeState = hazeState,
+                        isFloating = true,
+                        isVertical = topPos.edge.isVertical,
+                        onBack = requestExit,
+                        onRotateCw = {
+                            rotation = (rotation + 90) % 360
+                            flashIndicator()
+                        },
+                        onRotateCcw = {
+                            rotation = (rotation - 90 + 360) % 360
+                            flashIndicator()
+                        },
+                        onZoomIn = {
+                            zoom = (zoom * 1.2f).coerceAtMost(16f)
+                            flashIndicator()
+                        },
+                        onZoomOut = {
+                            zoom = (zoom / 1.2f).coerceAtLeast(0.1f)
+                            flashIndicator()
+                        },
+                        onLayers = {
+                            layerPanelOpen = true
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                brushPanelOpen = false
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!vm.isColorPanelPinned) colorPanelOpen = false
+                            settingsPanelOpen = false
+                            moreToolsOpen = false
+                        },
+                        onSettings = {
+                            settingsPanelOpen = true
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                layerPanelOpen = false
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                brushPanelOpen = false
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!vm.isColorPanelPinned) colorPanelOpen = false
+                            moreToolsOpen = false
+                            drawingGuidePanelOpen = false
+                        },
+                    )
+
+                    // 2. Floating ToolRail
+                    FloatingToolRailCapsule(
+                        modifier = resolveFloatingModifier("TOOLRAIL", toolPos).zIndex(50f),
+                        vm = vm,
+                        hazeState = hazeState,
+                        opacity = vm.uiOpacity.toDouble(),
+                        tool = tool,
+                        onTool = {
+                            when (it) {
+                                Tool.REFERENCE -> {
+                                    vm.referenceWindowOpen = !vm.referenceWindowOpen
+                                    vm.persistReferenceState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.SHORTCUT -> {
+                                    vm.quickActionWindowOpen = !vm.quickActionWindowOpen
+                                    vm.persistQuickActionsState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.QUICK_BRUSH -> {
+                                    vm.quickBrushWindowOpen = !vm.quickBrushWindowOpen
+                                    vm.persistQuickBrushState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.QUICK_COLOR -> {
+                                    vm.quickColorWindowOpen = !vm.quickColorWindowOpen
+                                    vm.persistQuickColorState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.QUICK_LAYER -> {
+                                    vm.quickLayerWindowOpen = !vm.quickLayerWindowOpen
+                                    vm.persistQuickLayerState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.SYMMETRY -> {
+                                    if (vm.drawingGuide.mode == com.reverie.paint.model.GuideMode.SYMMETRY) {
+                                        vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.OFF, assistedDrawing = false)
+                                        drawingGuidePanelOpen = false
+                                    } else {
+                                        vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.SYMMETRY, assistedDrawing = true)
+                                        drawingGuidePanelOpen = true
+                                        vm.applyTool(Tool.BRUSH.id)
+                                    }
+                                    moreToolsOpen = false
+                                }
+                                Tool.PERSPECTIVE -> {
+                                    if (vm.drawingGuide.mode == com.reverie.paint.model.GuideMode.PERSPECTIVE) {
+                                        vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.OFF, assistedDrawing = false)
+                                        drawingGuidePanelOpen = false
+                                    } else {
+                                        val pts = if (vm.drawingGuide.perspectiveVanishingPoints.isEmpty()) {
+                                            listOf(com.reverie.paint.model.Point2D(vm.docWidth * 0.5f, vm.docHeight * 0.35f))
+                                        } else vm.drawingGuide.perspectiveVanishingPoints
+                                        vm.drawingGuide = vm.drawingGuide.copy(
+                                            mode = com.reverie.paint.model.GuideMode.PERSPECTIVE,
+                                            assistedDrawing = true,
+                                            perspectiveVanishingPoints = pts,
+                                        )
+                                        drawingGuidePanelOpen = true
+                                        vm.applyTool(Tool.BRUSH.id)
+                                    }
+                                    moreToolsOpen = false
+                                }
+                                else -> {
+                                    vm.applyTool(it.id)
+                                    if (it in selectionTools) {
+                                        selectionPanelOpen = true
+                                    }
+                                    moreToolsOpen = false
+                                }
+                            }
+                        },
+                        moreToolsOpen = moreToolsOpen,
+                        onToggleMoreTools = {
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                brushPanelOpen = false
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!vm.isColorPanelPinned) colorPanelOpen = false
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                layerPanelOpen = false
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            settingsPanelOpen = false
+                            moreToolsOpen = !moreToolsOpen
+                        },
+                        onOpenBrush = {
+                            brushPanelOpen = true
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!vm.isColorPanelPinned) colorPanelOpen = false
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                layerPanelOpen = false
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            settingsPanelOpen = false
+                            moreToolsOpen = false
+                        },
+                        isHorizontal = toolPos.edge.isHorizontal,
+                    )
+
+                    // 3. Floating SliderRail
+                    FloatingSliderRailCapsule(
+                        modifier = resolveFloatingModifier("SLIDERRAIL", sliderPos).zIndex(50f),
+                        vm = vm,
+                        hazeState = hazeState,
+                        opacity = vm.uiOpacity.toDouble(),
+                        brushSize = vm.brushSize,
+                        canvasScale = (zoom * fitScale).coerceAtLeast(0.001f),
+                        onBrushSize = { size, commit -> vm.updateBrushSize(size, commit) },
+                        brushOpacity = vm.brushOpacity,
+                        onOpacity = { op, commit -> vm.updateBrushOpacity(op, commit) },
+                        brushColor = vm.brushColor,
+                        onOpenColor = {
+                            colorPanelOpen = true
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                brushPanelOpen = false
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                layerPanelOpen = false
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            settingsPanelOpen = false
+                            moreToolsOpen = false
+                        },
+                        onColorDropStart = { pos ->
+                            colorDropHex = vm.brushColor
+                            colorDropPos = pos
+                            isColorDropping = true
+                        },
+                        onColorDropMove = { pos ->
+                            colorDropPos = pos
+                        },
+                        onColorDropEnd = { pos ->
+                            handleColorDrop(pos)
+                        },
+                        onColorDropCancel = {
+                            isColorDropping = false
+                        },
+                        isHorizontal = sliderPos.edge.isHorizontal,
+                    )
+                } else {
+                    // ---- Default Attached Top bar ----
+                    TopBar(
+                        modifier = Modifier.align(if (vm.leftHandMode) Alignment.TopStart else Alignment.TopEnd).zIndex(50f),
+                        vm = vm,
+                        opacity = vm.uiOpacity,
+                        hazeState = hazeState,
+                        onBack = requestExit,
+                        onRotateCw = {
+                            rotation = (rotation + 90) % 360
+                            flashIndicator()
+                        },
+                        onRotateCcw = {
+                            rotation = (rotation - 90 + 360) % 360
+                            flashIndicator()
+                        },
+                        onZoomIn = {
+                            zoom = (zoom * 1.2f).coerceAtMost(16f)
+                            flashIndicator()
+                        },
+                        onZoomOut = {
+                            zoom = (zoom / 1.2f).coerceAtLeast(0.1f)
+                            flashIndicator()
+                        },
+                        onLayers = {
+                            layerPanelOpen = true
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                brushPanelOpen = false
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!vm.isColorPanelPinned) colorPanelOpen = false
+                            settingsPanelOpen = false
+                            moreToolsOpen = false
+                        },
+                        onSettings = {
+                            settingsPanelOpen = true
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                layerPanelOpen = false
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                brushPanelOpen = false
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!vm.isColorPanelPinned) colorPanelOpen = false
+                            moreToolsOpen = false
+                            drawingGuidePanelOpen = false
+                        },
+                    )
+
+                    // ---- Default Attached Left tool rail ----
+                    ToolRail(
+                        modifier =
+                            Modifier
+                                .align(if (vm.leftHandMode) Alignment.TopEnd else Alignment.TopStart)
+                                .padding(top = 48.dp) // Gap from top bar
+                                .fillMaxHeight()
+                                .zIndex(50f),
+                        vm = vm,
+                        hazeState = hazeState,
+                        opacity = vm.uiOpacity.toDouble(),
+                        tool = tool,
+                        onTool = {
+                            when (it) {
+                                Tool.REFERENCE -> {
+                                    vm.referenceWindowOpen = !vm.referenceWindowOpen
+                                    vm.persistReferenceState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.SHORTCUT -> {
+                                    vm.quickActionWindowOpen = !vm.quickActionWindowOpen
+                                    vm.persistQuickActionsState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.QUICK_BRUSH -> {
+                                    vm.quickBrushWindowOpen = !vm.quickBrushWindowOpen
+                                    vm.persistQuickBrushState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.QUICK_COLOR -> {
+                                    vm.quickColorWindowOpen = !vm.quickColorWindowOpen
+                                    vm.persistQuickColorState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.QUICK_LAYER -> {
+                                    vm.quickLayerWindowOpen = !vm.quickLayerWindowOpen
+                                    vm.persistQuickLayerState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.SYMMETRY -> {
+                                    if (vm.drawingGuide.mode == com.reverie.paint.model.GuideMode.SYMMETRY) {
+                                        vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.OFF, assistedDrawing = false)
+                                        drawingGuidePanelOpen = false
+                                    } else {
+                                        vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.SYMMETRY, assistedDrawing = true)
+                                        drawingGuidePanelOpen = true
+                                        vm.applyTool(Tool.BRUSH.id)
+                                    }
+                                    moreToolsOpen = false
+                                }
+                                Tool.PERSPECTIVE -> {
+                                    if (vm.drawingGuide.mode == com.reverie.paint.model.GuideMode.PERSPECTIVE) {
+                                        vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.OFF, assistedDrawing = false)
+                                        drawingGuidePanelOpen = false
+                                    } else {
+                                        val pts = if (vm.drawingGuide.perspectiveVanishingPoints.isEmpty()) {
+                                            listOf(com.reverie.paint.model.Point2D(vm.docWidth * 0.5f, vm.docHeight * 0.35f))
+                                        } else vm.drawingGuide.perspectiveVanishingPoints
+                                        vm.drawingGuide = vm.drawingGuide.copy(
+                                            mode = com.reverie.paint.model.GuideMode.PERSPECTIVE,
+                                            assistedDrawing = true,
+                                            perspectiveVanishingPoints = pts,
+                                        )
+                                        drawingGuidePanelOpen = true
+                                        vm.applyTool(Tool.BRUSH.id)
+                                    }
+                                    moreToolsOpen = false
+                                }
+                                else -> {
+                                    vm.applyTool(it.id)
+                                    if (it in selectionTools) {
+                                        selectionPanelOpen = true
+                                    }
+                                    moreToolsOpen = false
+                                }
+                            }
+                        },
+                        moreToolsOpen = moreToolsOpen,
+                        onToggleMoreTools = {
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                brushPanelOpen = false
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!vm.isColorPanelPinned) colorPanelOpen = false
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                layerPanelOpen = false
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            settingsPanelOpen = false
+                            moreToolsOpen = !moreToolsOpen
+                        },
+                        brushSize = vm.brushSize,
+                        canvasScale = (zoom * fitScale).coerceAtLeast(0.001f),
+                        onBrushSize = { size, commit -> vm.updateBrushSize(size, commit) },
+                        popupOpacity = vm.popupPanelOpacity,
+                        brushOpacity = vm.brushOpacity,
+                        onOpacity = { op, commit -> vm.updateBrushOpacity(op, commit) },
+                        brushColor = vm.brushColor,
+                        onOpenBrush = {
+                            brushPanelOpen = true
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!vm.isColorPanelPinned) colorPanelOpen = false
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                layerPanelOpen = false
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            settingsPanelOpen = false
+                            moreToolsOpen = false
+                        },
+                        onOpenColor = {
+                            colorPanelOpen = true
+                            if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
+                                brushPanelOpen = false
+                                vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
+                                layerPanelOpen = false
+                                vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
+                            }
+                            settingsPanelOpen = false
+                            moreToolsOpen = false
+                        },
+                        onColorDropStart = { pos ->
+                            colorDropHex = vm.brushColor
+                            colorDropPos = pos
+                            isColorDropping = true
+                        },
+                        onColorDropMove = { pos ->
+                            colorDropPos = pos
+                        },
+                        onColorDropEnd = { pos ->
+                            handleColorDrop(pos)
+                        },
+                        onColorDropCancel = {
+                            isColorDropping = false
+                        },
+                    )
+                }
 
                 // ---- Selection operations menu (全选 / 反选 / 清除选区) ----
                 if (selectionMenuOpen) {
@@ -989,146 +1418,6 @@ fun PaintingPage(
                         }
                     }
                 }
-
-                // ---- Left tool rail ----
-                ToolRail(
-                    modifier =
-                        Modifier
-                            .align(if (vm.leftHandMode) Alignment.TopEnd else Alignment.TopStart)
-                            .padding(top = 48.dp) // Gap from top bar
-                            .fillMaxHeight()
-                            .zIndex(50f),
-                    vm = vm,
-                    hazeState = hazeState,
-                    opacity = vm.uiOpacity.toDouble(),
-                    tool = tool,
-                    onTool = {
-                        when (it) {
-                            Tool.REFERENCE -> {
-                                vm.referenceWindowOpen = !vm.referenceWindowOpen
-                                vm.persistReferenceState()
-                                moreToolsOpen = false
-                            }
-                            Tool.SHORTCUT -> {
-                                vm.quickActionWindowOpen = !vm.quickActionWindowOpen
-                                vm.persistQuickActionsState()
-                                moreToolsOpen = false
-                            }
-                            Tool.QUICK_BRUSH -> {
-                                vm.quickBrushWindowOpen = !vm.quickBrushWindowOpen
-                                vm.persistQuickBrushState()
-                                moreToolsOpen = false
-                            }
-                            Tool.QUICK_COLOR -> {
-                                vm.quickColorWindowOpen = !vm.quickColorWindowOpen
-                                vm.persistQuickColorState()
-                                moreToolsOpen = false
-                            }
-                            Tool.QUICK_LAYER -> {
-                                vm.quickLayerWindowOpen = !vm.quickLayerWindowOpen
-                                vm.persistQuickLayerState()
-                                moreToolsOpen = false
-                            }
-                            Tool.SYMMETRY -> {
-                                if (vm.drawingGuide.mode == com.reverie.paint.model.GuideMode.SYMMETRY) {
-                                    vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.OFF, assistedDrawing = false)
-                                    drawingGuidePanelOpen = false
-                                } else {
-                                    vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.SYMMETRY, assistedDrawing = true)
-                                    drawingGuidePanelOpen = true
-                                    vm.applyTool(Tool.BRUSH.id)
-                                }
-                                moreToolsOpen = false
-                            }
-                            Tool.PERSPECTIVE -> {
-                                if (vm.drawingGuide.mode == com.reverie.paint.model.GuideMode.PERSPECTIVE) {
-                                    vm.drawingGuide = vm.drawingGuide.copy(mode = com.reverie.paint.model.GuideMode.OFF, assistedDrawing = false)
-                                    drawingGuidePanelOpen = false
-                                } else {
-                                    val pts = if (vm.drawingGuide.perspectiveVanishingPoints.isEmpty()) {
-                                        listOf(com.reverie.paint.model.Point2D(vm.docWidth * 0.5f, vm.docHeight * 0.35f))
-                                    } else vm.drawingGuide.perspectiveVanishingPoints
-                                    vm.drawingGuide = vm.drawingGuide.copy(
-                                        mode = com.reverie.paint.model.GuideMode.PERSPECTIVE,
-                                        assistedDrawing = true,
-                                        perspectiveVanishingPoints = pts,
-                                    )
-                                    drawingGuidePanelOpen = true
-                                    vm.applyTool(Tool.BRUSH.id)
-                                }
-                                moreToolsOpen = false
-                            }
-                            else -> {
-                                vm.applyTool(it.id)
-                                if (it in selectionTools) {
-                                    selectionPanelOpen = true
-                                }
-                                moreToolsOpen = false
-                            }
-                        }
-                    },
-                    moreToolsOpen = moreToolsOpen,
-                    onToggleMoreTools = {
-                        if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
-                            brushPanelOpen = false
-                            vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
-                        }
-                        if (!vm.isColorPanelPinned) colorPanelOpen = false
-                        if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
-                            layerPanelOpen = false
-                            vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
-                        }
-                        settingsPanelOpen = false
-                        moreToolsOpen = !moreToolsOpen
-                    },
-                    brushSize = vm.brushSize,
-                    canvasScale = (zoom * fitScale).coerceAtLeast(0.001f),
-                    onBrushSize = { size, commit -> vm.updateBrushSize(size, commit) },
-                    popupOpacity = vm.popupPanelOpacity,
-                    brushOpacity = vm.brushOpacity,
-                    onOpacity = { op, commit -> vm.updateBrushOpacity(op, commit) },
-                    brushColor = vm.brushColor,
-                    onOpenBrush = {
-                        brushPanelOpen = true
-                        if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
-                            vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
-                        }
-                        if (!vm.isColorPanelPinned) colorPanelOpen = false
-                        if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
-                            layerPanelOpen = false
-                            vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
-                        }
-                        settingsPanelOpen = false
-                        moreToolsOpen = false
-                    },
-                    onOpenColor = {
-                        colorPanelOpen = true
-                        if (!(vm.panelPinningEnabled && vm.isBrushPanelPinned)) {
-                            brushPanelOpen = false
-                            vm.brushPanelOffset = androidx.compose.ui.geometry.Offset.Zero
-                        }
-                        if (!(vm.panelPinningEnabled && vm.isLayerPanelPinned)) {
-                            layerPanelOpen = false
-                            vm.layerPanelOffset = androidx.compose.ui.geometry.Offset.Zero
-                        }
-                        settingsPanelOpen = false
-                        moreToolsOpen = false
-                    },
-                    onColorDropStart = { pos ->
-                        colorDropHex = vm.brushColor
-                        colorDropPos = pos
-                        isColorDropping = true
-                    },
-                    onColorDropMove = { pos ->
-                        colorDropPos = pos
-                    },
-                    onColorDropEnd = { pos ->
-                        handleColorDrop(pos)
-                    },
-                    onColorDropCancel = {
-                        isColorDropping = false
-                    },
-                )
             }
 
         // ---- Filter Fullscreen HUD (Top Pill & Bottom Dock) ----

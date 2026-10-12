@@ -79,6 +79,7 @@ internal fun ThemeSettingsSubPage(
     var customColorAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     var showCustomCanvasBgDialog by remember { mutableStateOf(false) }
     var customCanvasBgAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    var showFloatingLayoutDialog by remember { mutableStateOf(false) }
     val presetSwatches = listOf(
         "#5A6E8A", "#5A8A86", "#5A8A6A", "#768A5A", "#8A7A5A",
         "#8A665A", "#8A5A66", "#825A8A", "#625A8A"
@@ -459,6 +460,52 @@ internal fun ThemeSettingsSubPage(
                 )
             }
 
+            // Section 5.5: 界面布局 (自由悬浮模式: 平板专属)
+            val isTabletDevice = com.reverie.paint.core.DeviceUtils.isTablet(androidx.compose.ui.platform.LocalContext.current)
+            SettingCategoryTitle(stringResource(R.string.theme_category_layout))
+            SettingGroup {
+                // 1. 默认贴边布局单选
+                SettingRadioGroupItem(
+                    title = stringResource(R.string.theme_layout_docked),
+                    summary = stringResource(R.string.theme_layout_docked_desc),
+                    selected = !vm.floatingUiConfig.enabled,
+                    shape = settingGroupShape(0, if (isTabletDevice && vm.floatingUiConfig.enabled) 6 else if (isTabletDevice) 2 else 1),
+                    indentStart = 16.dp,
+                    onClick = { vm.updateFloatingUiEnabled(false) },
+                )
+
+                // 2. 自由悬浮模式 (平板专属)
+                if (isTabletDevice) {
+                    SettingRadioGroupItem(
+                        title = stringResource(R.string.theme_layout_floating),
+                        summary = stringResource(R.string.theme_layout_floating_desc),
+                        selected = vm.floatingUiConfig.enabled,
+                        shape = settingGroupShape(1, if (vm.floatingUiConfig.enabled) 4 else 2),
+                        indentStart = 16.dp,
+                        onClick = { vm.updateFloatingUiEnabled(true) },
+                    )
+
+                    if (vm.floatingUiConfig.enabled) {
+                        // 专属可视化排布调整入口
+                        SettingNavGroupItem(
+                            icon = Icons.AutoMirrored.Rounded.ViewSidebar,
+                            title = stringResource(R.string.panel_dock_dialog_title),
+                            summary = stringResource(R.string.panel_dock_dialog_tip),
+                            shape = settingGroupShape(2, 4),
+                            onClick = { showFloatingLayoutDialog = true },
+                        )
+
+                        // 一键恢复默认停靠
+                        SettingNavGroupItem(
+                            icon = R.drawable.ic_undo,
+                            title = stringResource(R.string.panel_dock_reset),
+                            shape = settingGroupShape(3, 4),
+                            onClick = { vm.resetFloatingUiEdges() },
+                        )
+                    }
+                }
+            }
+
             // Section 6: 选区显示
             SettingCategoryTitle(stringResource(R.string.theme_category_selection_mask))
             SettingGroup {
@@ -542,6 +589,13 @@ internal fun ThemeSettingsSubPage(
                 showCustomCanvasBgDialog = false
             },
             onDismiss = { showCustomCanvasBgDialog = false },
+        )
+    }
+
+    if (showFloatingLayoutDialog) {
+        com.reverie.paint.ui.painting.FloatingLayoutConfigDialog(
+            vm = vm,
+            onDismiss = { showFloatingLayoutDialog = false },
         )
     }
 }

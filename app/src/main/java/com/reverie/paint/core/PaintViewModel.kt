@@ -1251,6 +1251,8 @@ class PaintViewModel : ViewModel() {
     var layerHeaderInheritAlpha by mutableStateOf(false) // 图层面板顶部按钮行为: false 为剪切蒙版, true 为继承透明度
     var quickSliderHeightDp by mutableIntStateOf(175) // 绘画界面快捷滑块长度 (100 - 260 dp, 默认 175)
     var leftHandMode by mutableStateOf(false) // 左手模式: 快捷工具栏与滑块镜像停靠在右侧
+    /** 自由悬浮布局配置 (平板专属) */
+    var floatingUiConfig by mutableStateOf(com.reverie.paint.model.FloatingUiConfig())
     var selectionMaskColorHex by mutableStateOf("#141416") // 选区蒙版遮罩颜色 (默认深空灰黑)
     var selectionMaskOpacity by mutableFloatStateOf(0.47f) // 选区蒙版遮罩不透明度 (0.10 - 0.90, 默认 0.47)
 
@@ -2900,6 +2902,56 @@ class PaintViewModel : ViewModel() {
         }
     }
 
+    fun updateFloatingUiEnabled(enabled: Boolean) {
+        floatingUiConfig = floatingUiConfig.copy(enabled = enabled)
+        persistFloatingUiConfig()
+    }
+
+    fun updateFloatingUiPositions(
+        topBarPosition: com.reverie.paint.model.PanelPosition = floatingUiConfig.topBarPosition,
+        toolRailPosition: com.reverie.paint.model.PanelPosition = floatingUiConfig.toolRailPosition,
+        sliderRailPosition: com.reverie.paint.model.PanelPosition = floatingUiConfig.sliderRailPosition,
+    ) {
+        floatingUiConfig = floatingUiConfig.copy(
+            topBarPosition = topBarPosition,
+            toolRailPosition = toolRailPosition,
+            sliderRailPosition = sliderRailPosition,
+        )
+        persistFloatingUiConfig()
+    }
+
+    fun updateFloatingUiMargin(marginDp: Int) {
+        floatingUiConfig = floatingUiConfig.copy(marginDp = marginDp.coerceIn(8, 48))
+        persistFloatingUiConfig()
+    }
+
+    fun resetFloatingUiEdges() {
+        floatingUiConfig = floatingUiConfig.copy(
+            topBarPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.TOP, com.reverie.paint.model.PanelAlignment.CENTER),
+            toolRailPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.LEFT, com.reverie.paint.model.PanelAlignment.START),
+            sliderRailPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.LEFT, com.reverie.paint.model.PanelAlignment.END),
+            marginDp = 12,
+        )
+        persistFloatingUiConfig()
+    }
+
+    private fun persistFloatingUiConfig() {
+        if (::appContext.isInitialized) {
+            appContext
+                .getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("floatingUi_enabled", floatingUiConfig.enabled)
+                .putString("floatingUi_topBarEdge", floatingUiConfig.topBarPosition.edge.name)
+                .putString("floatingUi_topBarAlign", floatingUiConfig.topBarPosition.alignment.name)
+                .putString("floatingUi_toolRailEdge", floatingUiConfig.toolRailPosition.edge.name)
+                .putString("floatingUi_toolRailAlign", floatingUiConfig.toolRailPosition.alignment.name)
+                .putString("floatingUi_sliderRailEdge", floatingUiConfig.sliderRailPosition.edge.name)
+                .putString("floatingUi_sliderRailAlign", floatingUiConfig.sliderRailPosition.alignment.name)
+                .putInt("floatingUi_marginDp", floatingUiConfig.marginDp)
+                .apply()
+        }
+    }
+
     fun updateLayerHeaderInheritAlpha(enabled: Boolean) {
         layerHeaderInheritAlpha = enabled
         if (::appContext.isInitialized) {
@@ -3174,6 +3226,31 @@ class PaintViewModel : ViewModel() {
             panelPinningEnabled = prefs.getBoolean("panelPinningEnabled", false)
             layerHeaderInheritAlpha = prefs.getBoolean("layerHeaderInheritAlpha", false)
             leftHandMode = prefs.getBoolean("leftHandMode", false)
+            val isTabletDevice = DeviceUtils.isTablet(appContext)
+            val floatingSavedEnabled = prefs.getBoolean("floatingUi_enabled", false)
+            val topBarEdgeName = prefs.getString("floatingUi_topBarEdge", "TOP") ?: "TOP"
+            val topBarAlignName = prefs.getString("floatingUi_topBarAlign", "CENTER") ?: "CENTER"
+            val toolRailEdgeName = prefs.getString("floatingUi_toolRailEdge", "LEFT") ?: "LEFT"
+            val toolRailAlignName = prefs.getString("floatingUi_toolRailAlign", "START") ?: "START"
+            val sliderRailEdgeName = prefs.getString("floatingUi_sliderRailEdge", "LEFT") ?: "LEFT"
+            val sliderRailAlignName = prefs.getString("floatingUi_sliderRailAlign", "END") ?: "END"
+            val marginDp = prefs.getInt("floatingUi_marginDp", 12).coerceIn(8, 48)
+            floatingUiConfig = com.reverie.paint.model.FloatingUiConfig(
+                enabled = isTabletDevice && floatingSavedEnabled,
+                topBarPosition = com.reverie.paint.model.PanelPosition(
+                    edge = runCatching { com.reverie.paint.model.PanelEdge.valueOf(topBarEdgeName) }.getOrDefault(com.reverie.paint.model.PanelEdge.TOP),
+                    alignment = runCatching { com.reverie.paint.model.PanelAlignment.valueOf(topBarAlignName) }.getOrDefault(com.reverie.paint.model.PanelAlignment.CENTER),
+                ),
+                toolRailPosition = com.reverie.paint.model.PanelPosition(
+                    edge = runCatching { com.reverie.paint.model.PanelEdge.valueOf(toolRailEdgeName) }.getOrDefault(com.reverie.paint.model.PanelEdge.LEFT),
+                    alignment = runCatching { com.reverie.paint.model.PanelAlignment.valueOf(toolRailAlignName) }.getOrDefault(com.reverie.paint.model.PanelAlignment.START),
+                ),
+                sliderRailPosition = com.reverie.paint.model.PanelPosition(
+                    edge = runCatching { com.reverie.paint.model.PanelEdge.valueOf(sliderRailEdgeName) }.getOrDefault(com.reverie.paint.model.PanelEdge.LEFT),
+                    alignment = runCatching { com.reverie.paint.model.PanelAlignment.valueOf(sliderRailAlignName) }.getOrDefault(com.reverie.paint.model.PanelAlignment.END),
+                ),
+                marginDp = marginDp,
+            )
             selectionMaskColorHex = prefs.getString("selection_mask_color", "#141416") ?: "#141416"
             selectionMaskOpacity = prefs.getFloat("selection_mask_opacity", 0.47f).coerceIn(0.10f, 0.90f)
             blurBackground = prefs.getBoolean("blurBackground", true) &&

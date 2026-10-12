@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +43,8 @@ fun TopBar(
     opacity: Float = 1.0f,
     vm: PaintViewModel,
     hazeState: HazeState? = null,
+    isFloating: Boolean = false,
+    isVertical: Boolean = false,
     onBack: () -> Unit,
     onRotateCw: () -> Unit,
     onRotateCcw: () -> Unit,
@@ -54,45 +57,78 @@ fun TopBar(
     onRedo: () -> Unit = { vm.redo() },
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val shape = if (vm.leftHandMode) {
+    val shape = if (isFloating) {
+        androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+    } else if (vm.leftHandMode) {
         androidx.compose.foundation.shape.RoundedCornerShape(bottomEnd = 16.dp)
     } else {
         androidx.compose.foundation.shape.RoundedCornerShape(bottomStart = 16.dp)
     }
-    Row(
-        modifier =
-            modifier
-                .pointerHoverIcon(com.reverie.paint.ui.theme.systemDefaultPointerIcon(context), overrideDescendants = true)
-                .shadow(10.dp, shape, spotColor = Color.Black.copy(alpha = 0.5f))
-                .clip(shape)
-                .then(
-                    if (vm.blurBackground && hazeState != null) {
-                        Modifier.hazeChild(
-                            state = hazeState,
-                            style = Glass.barStyle(if (opacity >= 0.99f) 0.90f else opacity),
-                        )
-                    } else {
-                        Modifier.background(Morandi.panel.copy(alpha = opacity))
-                    }
+
+    val sizeModifier = if (isFloating) {
+        if (isVertical) Modifier.width(36.dp) else Modifier.height(36.dp)
+    } else {
+        Modifier
+    }
+
+    val contentModifier = modifier
+        .then(sizeModifier)
+        .pointerHoverIcon(com.reverie.paint.ui.theme.systemDefaultPointerIcon(context), overrideDescendants = true)
+        .shadow(10.dp, shape, spotColor = Color.Black.copy(alpha = 0.5f))
+        .clip(shape)
+        .then(
+            if (vm.blurBackground && hazeState != null) {
+                Modifier.hazeChild(
+                    state = hazeState,
+                    style = Glass.barStyle(if (opacity >= 0.99f) 0.90f else opacity),
                 )
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        ReIconButton(R.drawable.ic_undo, stringResource(R.string.common_undo), onUndo)
-        ReIconButton(R.drawable.ic_redo, stringResource(R.string.common_redo), onRedo)
-        // 动画画布才显示: 展开/收起底部时间轴面板
-        // 用 ic_clock 而不是 ic_layers —— 后者与下面的"图层"按钮撞图标
-        if (vm.anim.enabled) {
-            ReIconButton(
-                R.drawable.ic_clock,
-                if (vm.anim.panelOpen) stringResource(R.string.anim_collapse_timeline) else stringResource(R.string.anim_expand_timeline),
-                { vm.anim.panelOpen = !vm.anim.panelOpen },
-                selected = vm.anim.panelOpen,
-            )
+            } else {
+                Modifier.background(Morandi.panel.copy(alpha = opacity))
+            }
+        )
+        .padding(horizontal = if (isVertical) 2.dp else 4.dp, vertical = if (isVertical) 4.dp else 2.dp)
+
+    if (isVertical) {
+        androidx.compose.foundation.layout.Column(
+            modifier = contentModifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            ReIconButton(R.drawable.ic_undo, stringResource(R.string.common_undo), onUndo, modifier = Modifier.size(32.dp))
+            ReIconButton(R.drawable.ic_redo, stringResource(R.string.common_redo), onRedo, modifier = Modifier.size(32.dp))
+            if (vm.anim.enabled) {
+                ReIconButton(
+                    R.drawable.ic_clock,
+                    if (vm.anim.panelOpen) stringResource(R.string.anim_collapse_timeline) else stringResource(R.string.anim_expand_timeline),
+                    { vm.anim.panelOpen = !vm.anim.panelOpen },
+                    selected = vm.anim.panelOpen,
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+            ReIconButton(R.drawable.ic_layers, stringResource(R.string.layer_title), onLayers, modifier = Modifier.size(32.dp))
+            ReIconButton(R.drawable.ic_settings, stringResource(R.string.common_settings), onSettings, modifier = Modifier.size(32.dp))
+            ReIconButton(R.drawable.ic_x, stringResource(R.string.common_close), onBack, modifier = Modifier.size(32.dp))
         }
-        ReIconButton(R.drawable.ic_layers, stringResource(R.string.layer_title), onLayers)
-        ReIconButton(R.drawable.ic_settings, stringResource(R.string.common_settings), onSettings)
-        ReIconButton(R.drawable.ic_x, stringResource(R.string.common_close), onBack) // Moved to the right
+    } else {
+        Row(
+            modifier = contentModifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            ReIconButton(R.drawable.ic_undo, stringResource(R.string.common_undo), onUndo, modifier = Modifier.size(32.dp))
+            ReIconButton(R.drawable.ic_redo, stringResource(R.string.common_redo), onRedo, modifier = Modifier.size(32.dp))
+            if (vm.anim.enabled) {
+                ReIconButton(
+                    R.drawable.ic_clock,
+                    if (vm.anim.panelOpen) stringResource(R.string.anim_collapse_timeline) else stringResource(R.string.anim_expand_timeline),
+                    { vm.anim.panelOpen = !vm.anim.panelOpen },
+                    selected = vm.anim.panelOpen,
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+            ReIconButton(R.drawable.ic_layers, stringResource(R.string.layer_title), onLayers, modifier = Modifier.size(32.dp))
+            ReIconButton(R.drawable.ic_settings, stringResource(R.string.common_settings), onSettings, modifier = Modifier.size(32.dp))
+            ReIconButton(R.drawable.ic_x, stringResource(R.string.common_close), onBack, modifier = Modifier.size(32.dp))
+        }
     }
 }

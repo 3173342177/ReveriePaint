@@ -779,6 +779,255 @@ fun ReVerticalSlider(
     }
 }
 
+/**
+ * 水平滑动条 (用于悬浮模式停靠在上下边缘时的笔刷大小与不透明度调节)
+ */
+@Composable
+fun ReHorizontalSlider(
+    label: String,
+    fraction: Float,
+    onFraction: (Float) -> Unit,
+    onRelease: ((Float) -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    trackWidth: Int = 175,
+    trackHeight: Int = 26,
+    title: String = stringResource(R.string.slider_fine_tune),
+    iconRes: Int = com.reverie.paint.R.drawable.ic_brush,
+    valueText: String,
+    previewCircleRadiusPx: Float? = null,
+    onStep: ((Boolean) -> Unit)? = null,
+    quickChips: List<Pair<String, () -> Unit>> = emptyList(),
+    presets: List<Double?> = emptyList(),
+    onSelectPreset: ((Double) -> Unit)? = null,
+    onSavePreset: ((Int) -> Unit)? = null,
+    onDeletePreset: ((Int) -> Unit)? = null,
+    formatPreset: (Double) -> String = { "${it.toInt()}" },
+    vm: PaintViewModel? = null,
+    hazeState: HazeState? = null,
+) {
+    val colors = Theme.current
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    var localFraction by remember(fraction) { mutableFloatStateOf(fraction) }
+    var trackPx by remember { mutableIntStateOf(1) }
+    var isDragging by remember { mutableStateOf(false) }
+    var showPopup by remember { mutableStateOf(false) }
+    var lastHapticStep by remember { mutableIntStateOf((fraction * 100).toInt()) }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier,
+    ) {
+        if (label.isNotEmpty()) {
+            Text(
+                text = label,
+                color = colors.subText,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.width(4.dp))
+        }
+
+        Box(
+            modifier = Modifier.width(trackWidth.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (showPopup && onStep != null) {
+                SliderFineTunePopup(
+                    title = title,
+                    iconRes = iconRes,
+                    valueText = valueText,
+                    fraction = localFraction,
+                    onFraction = { frac ->
+                        localFraction = frac
+                        onFraction(frac)
+                    },
+                    onStep = onStep,
+                    quickChips = quickChips,
+                    presets = presets,
+                    onSelectPreset = { p -> onSelectPreset?.invoke(p) },
+                    onSavePreset = { idx -> onSavePreset?.invoke(idx) },
+                    onDeletePreset = { idx -> onDeletePreset?.invoke(idx) },
+                    formatPreset = formatPreset,
+                    vm = vm,
+                    hazeState = hazeState,
+                    onDismiss = { showPopup = false },
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(trackWidth.dp)
+                    .height((trackHeight + 6).dp)
+                    .onSizeChanged { trackPx = it.width }
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                showPopup = !showPopup
+                            }
+                        )
+                    }
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = {
+                                isDragging = true
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            onDragEnd = {
+                                isDragging = false
+                                onRelease?.invoke(localFraction)
+                            },
+                            onDragCancel = {
+                                isDragging = false
+                                onRelease?.invoke(localFraction)
+                            }
+                        ) { change, _ ->
+                            val value = (change.position.x / trackPx.toFloat()).coerceIn(0f, 1f)
+                            localFraction = value
+                            onFraction(value)
+                            val curStep = (value * 50).toInt()
+                            if (curStep != lastHapticStep) {
+                                lastHapticStep = curStep
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            change.consume()
+                        }
+                    },
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                val capsuleRadius = (trackHeight / 2).dp
+                val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrowH")
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(trackHeight.dp)
+                        .graphicsLayer {
+                            scaleY = capsuleGrow
+                            scaleX = 1f + (capsuleGrow - 1f) * 0.4f
+                        }
+                        .clip(RoundedCornerShape(capsuleRadius))
+                        .background(colors.panelHi)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(localFraction.coerceIn(0f, 1f))
+                            .align(Alignment.CenterStart)
+                            .background(colors.accent.copy(alpha = 0.45f))
+                    )
+                }
+
+                val indicatorWidth by animateDpAsState(
+                    targetValue = if (isDragging) 6.dp else 3.dp,
+                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+                    label = "ind_w_h"
+                )
+                val indicatorHeight by animateDpAsState(
+                    targetValue = if (isDragging) (trackHeight + 4).dp else trackHeight.dp,
+                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+                    label = "ind_h_h"
+                )
+                val indicatorAlpha by animateFloatAsState(
+                    targetValue = if (isDragging) 0.85f else 1.0f,
+                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+                    label = "ind_alpha_h"
+                )
+
+                val travelPx = with(density) { (trackWidth - 4).dp.toPx() }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .graphicsLayer {
+                            translationX = localFraction.coerceIn(0f, 1f) * travelPx
+                        }
+                        .width(indicatorWidth)
+                        .height(indicatorHeight)
+                        .shadow(
+                            elevation = if (isDragging) 6.dp else 1.dp,
+                            shape = RoundedCornerShape(indicatorWidth / 2),
+                            spotColor = colors.accent.copy(alpha = 0.5f),
+                        )
+                        .clip(RoundedCornerShape(indicatorWidth / 2))
+                        .background(colors.accent.copy(alpha = indicatorAlpha))
+                )
+
+                if (isDragging) {
+                    val popupAlpha = vm?.popupPanelOpacity ?: 0.94f
+                    val tooltipOffsetYPx = with(density) { -(trackHeight + 28).dp.roundToPx() }
+                    Popup(
+                        alignment = Alignment.TopCenter,
+                        offset = androidx.compose.ui.unit.IntOffset(0, tooltipOffsetYPx),
+                        properties = androidx.compose.ui.window.PopupProperties(
+                            focusable = false,
+                            dismissOnBackPress = false,
+                            dismissOnClickOutside = false,
+                        )
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .shadow(8.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.25f))
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.panel.copy(alpha = popupAlpha))
+                                    .glassBorder(RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    valueText,
+                                    color = colors.text,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+
+                            if (previewCircleRadiusPx != null && previewCircleRadiusPx > 0f) {
+                                val safeRadius = previewCircleRadiusPx.coerceIn(2.5f, 100f)
+                                val canvasBoxSize = with(density) { ((safeRadius + 4f) * 2f).toDp() }
+                                Box(
+                                    modifier = Modifier
+                                        .shadow(8.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.2f))
+                                        .clip(CircleShape)
+                                        .background(colors.panel.copy(alpha = (popupAlpha * 0.75f).coerceIn(0.2f, 0.95f)))
+                                        .glassBorder(CircleShape)
+                                        .size(canvasBoxSize),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                                        val c = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+                                        drawCircle(colors.accent.copy(alpha = 0.12f), radius = safeRadius, center = c)
+                                        drawCircle(
+                                            Color.Black.copy(alpha = 0.6f),
+                                            radius = safeRadius + 0.8f,
+                                            center = c,
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6f)
+                                        )
+                                        drawCircle(
+                                            Color.White,
+                                            radius = safeRadius,
+                                            center = c,
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2f)
+                                        )
+                                        if (safeRadius >= 10f) {
+                                            drawCircle(Color.Black.copy(alpha = 0.6f), radius = 2.2f, center = c)
+                                            drawCircle(Color.White, radius = 1.2f, center = c)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ---------- horizontal slider (panels) ----------
 @Composable
 fun ReSlider(
