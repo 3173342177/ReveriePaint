@@ -100,7 +100,7 @@ internal fun PickerLayerSourceBar(
 ) {
     AnimatedVisibility(
         visible = tool == Tool.PICKER,
-        modifier = modifier.padding(bottom = 24.dp),
+        modifier = modifier,
         enter =
             androidx.compose.animation.fadeIn(
                 androidx.compose.animation.core.tween(200)

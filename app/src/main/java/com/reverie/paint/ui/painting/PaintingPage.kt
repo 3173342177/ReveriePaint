@@ -1477,6 +1477,27 @@ fun PaintingPage(
                 }
             }
 
+        // ---- Dynamic bottom padding for bottom-docked tool panels (avoid overlapping with floating panels docked at BOTTOM) ----
+        val bottomDockPadding = remember(vm.floatingUiConfig) {
+            if (vm.floatingUiConfig.enabled) {
+                val bottomPanels = listOf(
+                    vm.floatingUiConfig.topBarPosition,
+                    vm.floatingUiConfig.toolRailPosition,
+                    vm.floatingUiConfig.sliderRailPosition,
+                ).filter { it.edge == com.reverie.paint.model.PanelEdge.BOTTOM }
+                if (bottomPanels.isNotEmpty()) {
+                    val margin = vm.floatingUiConfig.marginDp.dp
+                    // 基础悬浮栏高度 36dp + 悬浮边距 + 多栏堆叠位移 (每栏 48dp) + 8dp 呼吸间隙
+                    val stackOffset = ((bottomPanels.size - 1) * 48).dp
+                    margin + 36.dp + stackOffset + 12.dp
+                } else {
+                    24.dp
+                }
+            } else {
+                24.dp
+            }
+        }
+
         // ---- Filter Fullscreen HUD (Top Pill & Bottom Dock) ----
         if (filterController != null) {
             FilterTopPillHUD(
@@ -1498,7 +1519,7 @@ fun PaintingPage(
                 controller = filterController,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp)
+                    .padding(bottom = bottomDockPadding)
                     .zIndex(30f),
                 hazeState = hazeState,
                 opacity = vm.popupPanelOpacity,
@@ -1511,7 +1532,7 @@ fun PaintingPage(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()),
             exit =
@@ -1550,7 +1571,7 @@ fun PaintingPage(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()),
             exit =
@@ -1571,7 +1592,7 @@ fun PaintingPage(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()),
             exit =
@@ -1593,7 +1614,7 @@ fun PaintingPage(
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()),
             exit =
@@ -1611,7 +1632,7 @@ fun PaintingPage(
         // ---- Gradient / Fill / Liquify tool options ----
         androidx.compose.animation.AnimatedVisibility(
             visible = filterController == null && tool == Tool.GRADIENT,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()),
             exit =
@@ -1637,7 +1658,7 @@ fun PaintingPage(
         // Closing solo restores every layer's original state exactly.
         androidx.compose.animation.AnimatedVisibility(
             visible = filterController == null && vm.soloActive,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()) +
                     androidx.compose.animation.scaleIn(
@@ -1681,7 +1702,7 @@ fun PaintingPage(
         }
         androidx.compose.animation.AnimatedVisibility(
             visible = filterController == null && tool == Tool.FILL,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()),
             exit =
@@ -1701,7 +1722,7 @@ fun PaintingPage(
         }
         androidx.compose.animation.AnimatedVisibility(
             visible = filterController == null && tool == Tool.LIQUIFY,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()),
             exit =
@@ -1728,7 +1749,7 @@ fun PaintingPage(
         }
         androidx.compose.animation.AnimatedVisibility(
             visible = filterController == null && tool == Tool.MEASURE,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()),
             exit =
@@ -1771,7 +1792,7 @@ fun PaintingPage(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .offset { IntOffset(selectionPanelOffsetX.roundToInt(), selectionPanelOffsetY.roundToInt()) }
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = bottomDockPadding),
             enter =
                 androidx.compose.animation.fadeIn(Motion.enterSpring()) +
                     androidx.compose.animation.slideInVertically(
@@ -1893,7 +1914,7 @@ fun PaintingPage(
             tool = tool,
             vm = vm,
             hazeState = hazeState,
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomDockPadding),
         )
         // ---- 动画时间轴面板 (仅动画画布): 左下角, 紧贴左侧滑块工具条右侧,
         //      无圆角, 与工具条同底融合; 可展开收起 / 缩放平移 ----
