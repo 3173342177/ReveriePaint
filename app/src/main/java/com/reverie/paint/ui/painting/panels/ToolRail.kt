@@ -573,7 +573,18 @@ fun SlidersPanelContent(
     isHorizontal: Boolean = false,
 ) {
     val contentModifier = modifier
+        .shadow(10.dp, shape, spotColor = Color.Black.copy(alpha = 0.5f))
         .clip(shape)
+        .then(
+            if (vm.blurBackground && hazeState != null) {
+                Modifier.hazeChild(
+                    state = hazeState,
+                    style = Glass.barStyle(if (opacity >= 0.99) 0.90f else opacity.toFloat()),
+                )
+            } else {
+                Modifier.background(Morandi.panel.copy(alpha = opacity.toFloat()))
+            }
+        )
 
     if (isHorizontal) {
         Row(

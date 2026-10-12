@@ -638,9 +638,9 @@ fun ReVerticalSlider(
                 val capsuleRadius = (trackWidth / 2).dp
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrow")
 
-                // Track Background (毛玻璃挖空质感：按面板透明度 0.6x 挖空)
+                // Track Background (嵌入式内嵌凹槽：半透明暗部与高光雕刻边缘，彻底解除嵌套 Haze 抖动)
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
+                val grooveAlpha = (panelAlpha * 0.40f).coerceIn(0.12f, 0.50f)
                 Box(
                     modifier = Modifier
                         .width(trackWidth.dp)
@@ -651,19 +651,22 @@ fun ReVerticalSlider(
                             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .then(
-                            if (vm?.blurBackground == true && hazeState != null) {
-                                Modifier.hazeChild(
-                                    state = hazeState,
-                                    style = Glass.barStyle(grooveAlpha),
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = (grooveAlpha * 1.25f).coerceIn(0.15f, 0.65f)),
+                                    Color.Black.copy(alpha = (grooveAlpha * 0.85f).coerceIn(0.10f, 0.45f)),
                                 )
-                            } else {
-                                Modifier.background(colors.panel.copy(alpha = grooveAlpha))
-                            }
+                            )
                         )
                         .border(
                             0.5.dp,
-                            Color.Black.copy(alpha = (0.28f * panelAlpha).coerceIn(0.08f, 0.38f)),
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = (0.35f * panelAlpha).coerceIn(0.10f, 0.45f)),
+                                    Color.White.copy(alpha = (0.12f * panelAlpha).coerceIn(0.04f, 0.18f)),
+                                )
+                            ),
                             RoundedCornerShape(capsuleRadius)
                         )
                 ) {
@@ -916,7 +919,7 @@ fun ReHorizontalSlider(
                 val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrowH")
 
                 val panelAlpha = vm?.uiOpacity ?: 1f
-                val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
+                val grooveAlpha = (panelAlpha * 0.40f).coerceIn(0.12f, 0.50f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -926,19 +929,22 @@ fun ReHorizontalSlider(
                             scaleX = 1f + (capsuleGrow - 1f) * 0.4f
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
-                        .then(
-                            if (vm?.blurBackground == true && hazeState != null) {
-                                Modifier.hazeChild(
-                                    state = hazeState,
-                                    style = Glass.barStyle(grooveAlpha),
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = (grooveAlpha * 1.25f).coerceIn(0.15f, 0.65f)),
+                                    Color.Black.copy(alpha = (grooveAlpha * 0.85f).coerceIn(0.10f, 0.45f)),
                                 )
-                            } else {
-                                Modifier.background(colors.panel.copy(alpha = grooveAlpha))
-                            }
+                            )
                         )
                         .border(
                             0.5.dp,
-                            Color.Black.copy(alpha = (0.28f * panelAlpha).coerceIn(0.08f, 0.38f)),
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = (0.35f * panelAlpha).coerceIn(0.10f, 0.45f)),
+                                    Color.White.copy(alpha = (0.12f * panelAlpha).coerceIn(0.04f, 0.18f)),
+                                )
+                            ),
                             RoundedCornerShape(capsuleRadius)
                         )
                 ) {
