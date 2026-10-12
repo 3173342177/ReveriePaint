@@ -83,6 +83,7 @@ fun FloatingLayoutConfigDialog(
     var toolPos by remember { mutableStateOf(vm.floatingUiConfig.toolRailPosition) }
     var sliderPos by remember { mutableStateOf(vm.floatingUiConfig.sliderRailPosition) }
     var marginDp by remember { mutableFloatStateOf(vm.floatingUiConfig.marginDp.toFloat()) }
+    var floatingScale by remember { mutableFloatStateOf(vm.floatingUiConfig.scale) }
 
     var draggingPanel by remember { mutableStateOf(DragTargetPanel.NONE) }
     var dragGlobalPos by remember { mutableStateOf<Offset?>(null) }
@@ -317,6 +318,42 @@ fun FloatingLayoutConfigDialog(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
+
+                    Spacer(Modifier.height(14.dp))
+
+                    // Scale Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.panel_dock_scale_title),
+                            color = colors.text,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "${(floatingScale * 100).roundToInt()}%",
+                            color = colors.accent,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.panel_dock_scale_desc),
+                        color = colors.subText,
+                        fontSize = 11.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    ReSlider(
+                        value = ((floatingScale - 0.70f) / (1.40f - 0.70f)).coerceIn(0f, 1f),
+                        onValue = { frac ->
+                            floatingScale = 0.70f + frac * 0.70f
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -343,6 +380,7 @@ fun FloatingLayoutConfigDialog(
                                 sliderRailPosition = sliderPos,
                             )
                             vm.updateFloatingUiMargin(marginDp.roundToInt())
+                            vm.updateFloatingUiScale(floatingScale)
                             onDismiss()
                         },
                     )

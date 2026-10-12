@@ -908,12 +908,52 @@ fun PaintingPage(
                     val toolPos = config.toolRailPosition
                     val sliderPos = config.sliderRailPosition
 
-                    // Group panels by PanelPosition to prevent overlapping if assigned to identical slot
-                    val positionGroups = listOf<Pair<String, com.reverie.paint.model.PanelPosition>>(
+                    val floatingScale = config.scale * 1.13f
+                    val floatingDensity = androidx.compose.ui.unit.Density(
+                        density = currentDensity.density * floatingScale,
+                        fontScale = currentDensity.fontScale * floatingScale,
+                    )
+
+                    // Helper to detect if a panel occupies a corner
+                    // Corners: TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT
+                    // A panel occupies a corner if:
+                    // TOP+START -> TOP_LEFT; TOP+END -> TOP_RIGHT
+                    // BOTTOM+START -> BOTTOM_LEFT; BOTTOM+END -> BOTTOM_RIGHT
+                    // LEFT+START -> TOP_LEFT; LEFT+END -> BOTTOM_LEFT
+                    // RIGHT+START -> TOP_RIGHT; RIGHT+END -> BOTTOM_RIGHT
+                    fun getPanelCorner(pos: com.reverie.paint.model.PanelPosition): String? {
+                        return when (pos.edge) {
+                            com.reverie.paint.model.PanelEdge.TOP -> when (pos.alignment) {
+                                com.reverie.paint.model.PanelAlignment.START -> "TOP_LEFT"
+                                com.reverie.paint.model.PanelAlignment.END -> "TOP_RIGHT"
+                                com.reverie.paint.model.PanelAlignment.CENTER -> null
+                            }
+                            com.reverie.paint.model.PanelEdge.BOTTOM -> when (pos.alignment) {
+                                com.reverie.paint.model.PanelAlignment.START -> "BOTTOM_LEFT"
+                                com.reverie.paint.model.PanelAlignment.END -> "BOTTOM_RIGHT"
+                                com.reverie.paint.model.PanelAlignment.CENTER -> null
+                            }
+                            com.reverie.paint.model.PanelEdge.LEFT -> when (pos.alignment) {
+                                com.reverie.paint.model.PanelAlignment.START -> "TOP_LEFT"
+                                com.reverie.paint.model.PanelAlignment.END -> "BOTTOM_LEFT"
+                                com.reverie.paint.model.PanelAlignment.CENTER -> null
+                            }
+                            com.reverie.paint.model.PanelEdge.RIGHT -> when (pos.alignment) {
+                                com.reverie.paint.model.PanelAlignment.START -> "TOP_RIGHT"
+                                com.reverie.paint.model.PanelAlignment.END -> "BOTTOM_RIGHT"
+                                com.reverie.paint.model.PanelAlignment.CENTER -> null
+                            }
+                        }
+                    }
+
+                    val allPanels = listOf(
                         "TOPBAR" to topPos,
                         "TOOLRAIL" to toolPos,
                         "SLIDERRAIL" to sliderPos,
-                    ).groupBy({ it.second }, { it.first })
+                    )
+
+                    // Group panels by PanelPosition to prevent overlapping if assigned to identical slot
+                    val positionGroups = allPanels.groupBy({ it.second }, { it.first })
 
                     fun resolveFloatingModifier(
                         panelId: String,
@@ -924,6 +964,18 @@ fun PaintingPage(
                         val sharingPanels = positionGroups[pos] ?: listOf(panelId)
                         val panelIdx = sharingPanels.indexOf(panelId).coerceAtLeast(0)
                         val overlapOffset = (panelIdx * 48).dp // Offset to avoid overlapping if multiple panels share same slot
+
+                        // Perpendicular corner avoidance:
+                        // Vertical panels stay against the edge.
+                        // Horizontal panels (or panels on perpendicular edge) yield and shift inward by 36dp (panel short edge) + 8dp spacing = 44dp
+                        val myCorner = getPanelCorner(pos)
+                        val hasPerpendicularNeighborInCorner = if (myCorner != null && edge.isHorizontal) {
+                            allPanels.any { (otherId, otherPos) ->
+                                otherId != panelId && otherPos.edge.isVertical && getPanelCorner(otherPos) == myCorner
+                            }
+                        } else false
+
+                        val cornerInwardShift = if (hasPerpendicularNeighborInCorner) 44.dp else 0.dp
 
                         val baseAlignment = when (edge) {
                             com.reverie.paint.model.PanelEdge.TOP -> {
@@ -959,16 +1011,16 @@ fun PaintingPage(
                         val paddingModifier = when (edge) {
                             com.reverie.paint.model.PanelEdge.TOP -> {
                                 when (align) {
-                                    com.reverie.paint.model.PanelAlignment.START -> Modifier.padding(start = margin + overlapOffset, top = margin)
+                                    com.reverie.paint.model.PanelAlignment.START -> Modifier.padding(start = margin + overlapOffset, top = margin + cornerInwardShift)
                                     com.reverie.paint.model.PanelAlignment.CENTER -> Modifier.offset(x = overlapOffset).padding(top = margin)
-                                    com.reverie.paint.model.PanelAlignment.END -> Modifier.padding(end = margin + overlapOffset, top = margin)
+                                    com.reverie.paint.model.PanelAlignment.END -> Modifier.padding(end = margin + overlapOffset, top = margin + cornerInwardShift)
                                 }
                             }
                             com.reverie.paint.model.PanelEdge.BOTTOM -> {
                                 when (align) {
-                                    com.reverie.paint.model.PanelAlignment.START -> Modifier.padding(start = margin + overlapOffset, bottom = margin)
+                                    com.reverie.paint.model.PanelAlignment.START -> Modifier.padding(start = margin + overlapOffset, bottom = margin + cornerInwardShift)
                                     com.reverie.paint.model.PanelAlignment.CENTER -> Modifier.offset(x = overlapOffset).padding(bottom = margin)
-                                    com.reverie.paint.model.PanelAlignment.END -> Modifier.padding(end = margin + overlapOffset, bottom = margin)
+                                    com.reverie.paint.model.PanelAlignment.END -> Modifier.padding(end = margin + overlapOffset, bottom = margin + cornerInwardShift)
                                 }
                             }
                             com.reverie.paint.model.PanelEdge.LEFT -> {
@@ -990,9 +1042,12 @@ fun PaintingPage(
                         return Modifier.align(baseAlignment).then(paddingModifier)
                     }
 
-                    // 1. Floating TopBar
-                    TopBar(
-                        modifier = resolveFloatingModifier("TOPBAR", topPos).zIndex(50f),
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        androidx.compose.ui.platform.LocalDensity provides floatingDensity
+                    ) {
+                        // 1. Floating TopBar
+                        TopBar(
+                            modifier = resolveFloatingModifier("TOPBAR", topPos).zIndex(50f),
                         vm = vm,
                         opacity = vm.uiOpacity,
                         hazeState = hazeState,
@@ -1187,8 +1242,9 @@ fun PaintingPage(
                         },
                         isHorizontal = sliderPos.edge.isHorizontal,
                     )
-                } else {
-                    // ---- Default Attached Top bar ----
+                }
+            } else {
+                // ---- Default Attached Top bar ----
                     TopBar(
                         modifier = Modifier.align(if (vm.leftHandMode) Alignment.TopStart else Alignment.TopEnd).zIndex(50f),
                         vm = vm,

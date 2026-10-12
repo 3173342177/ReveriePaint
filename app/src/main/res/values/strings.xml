@@ -1981,6 +1981,8 @@
     <string name="panel_align_end">靠右 / 靠下</string>
     <string name="panel_dock_margin_title">悬浮边距</string>
     <string name="panel_dock_margin_desc">调整所有悬浮胶囊距离屏幕边缘的内边距</string>
+    <string name="panel_dock_scale_title">悬浮面板大小</string>
+    <string name="panel_dock_scale_desc">独立调整悬浮胶囊的缩放尺寸，不受全局界面大小影响</string>
     <string name="panel_dock_dialog_title">悬浮面板布局调整</string>
     <string name="panel_dock_dialog_tip">拖拽面板胶囊到目标虚线槽位即可完成停靠</string>
     <string name="panel_dock_reset">恢复默认停靠</string>

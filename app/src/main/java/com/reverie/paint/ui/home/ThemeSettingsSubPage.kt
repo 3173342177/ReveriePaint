@@ -491,15 +491,29 @@ internal fun ThemeSettingsSubPage(
                             icon = Icons.AutoMirrored.Rounded.ViewSidebar,
                             title = stringResource(R.string.panel_dock_dialog_title),
                             summary = stringResource(R.string.panel_dock_dialog_tip),
-                            shape = settingGroupShape(2, 4),
+                            shape = settingGroupShape(2, 5),
                             onClick = { showFloatingLayoutDialog = true },
+                        )
+
+                        // 独立大小调整
+                        SettingSliderGroupItem(
+                            icon = Icons.Rounded.AspectRatio,
+                            title = stringResource(R.string.panel_dock_scale_title),
+                            summary = stringResource(R.string.panel_dock_scale_desc),
+                            valueText = "${(vm.floatingUiConfig.scale * 100).roundToInt()}%",
+                            sliderFraction = ((vm.floatingUiConfig.scale - 0.70f) / (1.40f - 0.70f)).coerceIn(0f, 1f),
+                            shape = settingGroupShape(3, 5),
+                            onValueChange = { fraction ->
+                                val newScale = 0.70f + fraction * 0.70f
+                                vm.updateFloatingUiScale(newScale)
+                            },
                         )
 
                         // 一键恢复默认停靠
                         SettingNavGroupItem(
                             icon = R.drawable.ic_undo,
                             title = stringResource(R.string.panel_dock_reset),
-                            shape = settingGroupShape(3, 4),
+                            shape = settingGroupShape(4, 5),
                             onClick = { vm.resetFloatingUiEdges() },
                         )
                     }

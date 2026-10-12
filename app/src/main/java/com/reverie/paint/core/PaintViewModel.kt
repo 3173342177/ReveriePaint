@@ -2925,12 +2925,18 @@ class PaintViewModel : ViewModel() {
         persistFloatingUiConfig()
     }
 
+    fun updateFloatingUiScale(scale: Float) {
+        floatingUiConfig = floatingUiConfig.copy(scale = scale.coerceIn(0.70f, 1.40f))
+        persistFloatingUiConfig()
+    }
+
     fun resetFloatingUiEdges() {
         floatingUiConfig = floatingUiConfig.copy(
             topBarPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.TOP, com.reverie.paint.model.PanelAlignment.CENTER),
             toolRailPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.LEFT, com.reverie.paint.model.PanelAlignment.START),
             sliderRailPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.LEFT, com.reverie.paint.model.PanelAlignment.END),
             marginDp = 12,
+            scale = 1.0f,
         )
         persistFloatingUiConfig()
     }
@@ -2948,6 +2954,7 @@ class PaintViewModel : ViewModel() {
                 .putString("floatingUi_sliderRailEdge", floatingUiConfig.sliderRailPosition.edge.name)
                 .putString("floatingUi_sliderRailAlign", floatingUiConfig.sliderRailPosition.alignment.name)
                 .putInt("floatingUi_marginDp", floatingUiConfig.marginDp)
+                .putFloat("floatingUi_scale", floatingUiConfig.scale)
                 .apply()
         }
     }
@@ -3227,7 +3234,7 @@ class PaintViewModel : ViewModel() {
             layerHeaderInheritAlpha = prefs.getBoolean("layerHeaderInheritAlpha", false)
             leftHandMode = prefs.getBoolean("leftHandMode", false)
             val isTabletDevice = DeviceUtils.isTablet(appContext)
-            val floatingSavedEnabled = prefs.getBoolean("floatingUi_enabled", false)
+            val floatingSavedEnabled = prefs.getBoolean("floatingUi_enabled", isTabletDevice)
             val topBarEdgeName = prefs.getString("floatingUi_topBarEdge", "TOP") ?: "TOP"
             val topBarAlignName = prefs.getString("floatingUi_topBarAlign", "CENTER") ?: "CENTER"
             val toolRailEdgeName = prefs.getString("floatingUi_toolRailEdge", "LEFT") ?: "LEFT"
@@ -3235,6 +3242,7 @@ class PaintViewModel : ViewModel() {
             val sliderRailEdgeName = prefs.getString("floatingUi_sliderRailEdge", "LEFT") ?: "LEFT"
             val sliderRailAlignName = prefs.getString("floatingUi_sliderRailAlign", "END") ?: "END"
             val marginDp = prefs.getInt("floatingUi_marginDp", 12).coerceIn(8, 48)
+            val floatingScale = prefs.getFloat("floatingUi_scale", 1.0f).coerceIn(0.70f, 1.40f)
             floatingUiConfig = com.reverie.paint.model.FloatingUiConfig(
                 enabled = isTabletDevice && floatingSavedEnabled,
                 topBarPosition = com.reverie.paint.model.PanelPosition(
@@ -3250,6 +3258,7 @@ class PaintViewModel : ViewModel() {
                     alignment = runCatching { com.reverie.paint.model.PanelAlignment.valueOf(sliderRailAlignName) }.getOrDefault(com.reverie.paint.model.PanelAlignment.END),
                 ),
                 marginDp = marginDp,
+                scale = floatingScale,
             )
             selectionMaskColorHex = prefs.getString("selection_mask_color", "#141416") ?: "#141416"
             selectionMaskOpacity = prefs.getFloat("selection_mask_opacity", 0.47f).coerceIn(0.10f, 0.90f)
