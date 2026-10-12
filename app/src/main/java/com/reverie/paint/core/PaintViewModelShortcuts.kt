@@ -417,7 +417,7 @@ fun keyEventToString(event: KeyEvent): String {
  * Global Hardware Keyboard Event Dispatcher
  */
 internal fun PaintViewModel.handleKeyEvent(event: KeyEvent): Boolean {
-    // 0. 画布调整模式下截获 Esc (取消) 与 Enter (应用)
+    // 0. 画布调整模式下截获 Esc (取消) 与 Enter (应用) 并屏蔽其余画板快捷键 (防止 Backspace 误删图层等)
     if (isCanvasAdjustActive) {
         if (event.type == KeyEventType.KeyDown) {
             if (event.key == Key.Escape) {
@@ -428,6 +428,9 @@ internal fun PaintViewModel.handleKeyEvent(event: KeyEvent): Boolean {
                 return true
             }
         }
+        // 处于画布调整模式时，未被 Esc/Enter 消费的按键直接拦截（不进入画板工具/图层删除/撤销等全局快捷键）
+        // 允许文本框等输入组件自行消费按键事件（如 Backspace/数字键）
+        return false
     }
 
     // 1. 空格键按住临时平移画布 (Spacebar Hold-to-Pan)

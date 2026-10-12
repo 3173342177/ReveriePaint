@@ -63,10 +63,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -82,6 +84,7 @@ import com.reverie.paint.model.ResampleFilter
 import com.reverie.paint.ui.components.PanelCloseButton
 import com.reverie.paint.ui.components.ReIconButton
 import com.reverie.paint.ui.components.ReTextButton
+import com.reverie.paint.ui.painting.TextInputGuard
 import com.reverie.paint.ui.theme.Glass
 import com.reverie.paint.ui.theme.Morandi
 import com.reverie.paint.ui.theme.glassBorder
@@ -113,6 +116,7 @@ fun CanvasAdjustPanel(
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
 ) {
+    TextInputGuard(vm)
     val state = vm.canvasAdjustState
     val focusManager = LocalFocusManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -535,7 +539,21 @@ private fun DimensionInputField(
     onValueCommitted: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var text by remember(value) { mutableStateOf(value.toString()) }
+    var isFocused by remember { mutableStateOf(false) }
+    var textFieldValue by remember {
+        mutableStateOf(TextFieldValue(text = value.toString()))
+    }
+
+    // 当非编辑状态且外部 value 改变时，同步更新内部显示
+    LaunchedEffect(value) {
+        if (!isFocused) {
+            val currentParsed = textFieldValue.text.toIntOrNull()
+            if (currentParsed != value) {
+                textFieldValue = TextFieldValue(text = value.toString())
+            }
+        }
+    }
+
     val focusManager = LocalFocusManager.current
 
     Row(
@@ -556,11 +574,19 @@ private fun DimensionInputField(
             modifier = Modifier.padding(end = 3.dp),
         )
         BasicTextField(
-            value = text,
+            value = textFieldValue,
             onValueChange = { input ->
-                val filtered = input.filter { it.isDigit() }
-                if (filtered.length <= 5) {
-                    text = filtered
+                val filteredDigits = input.text.filter { it.isDigit() }
+                if (filteredDigits.length <= 5) {
+                    if (filteredDigits == input.text) {
+                        textFieldValue = input
+                    } else {
+                        // 包含非数字字符被过滤，光标重置到末尾
+                        textFieldValue = TextFieldValue(
+                            text = filteredDigits,
+                            selection = TextRange(filteredDigits.length),
+                        )
+                    }
                 }
             },
             singleLine = true,
@@ -577,19 +603,29 @@ private fun DimensionInputField(
             ),
             keyboardActions = KeyboardActions(
                 onDone = {
-                    val parsed = text.toIntOrNull() ?: value
+                    val parsed = textFieldValue.text.toIntOrNull() ?: value
                     onValueCommitted(parsed)
                     focusManager.clearFocus()
                 },
             ),
             modifier = Modifier
                 .weight(1f)
-                // 失焦即提交, 避免输入值丢失
                 .onFocusChanged { fs ->
-                    if (!fs.isFocused) {
-                        val parsed = text.toIntOrNull()
-                        if (parsed != null && parsed != value) {
-                            onValueCommitted(parsed)
+                    isFocused = fs.isFocused
+                    if (fs.isFocused) {
+                        // 聚焦时全选文本，便于直接输入新数字覆盖
+                        textFieldValue = textFieldValue.copy(
+                            selection = TextRange(0, textFieldValue.text.length),
+                        )
+                    } else {
+                        // 失焦时提交；若文本为空或非法则回退为原有值
+                        val parsed = textFieldValue.text.toIntOrNull()
+                        if (parsed != null && parsed > 0) {
+                            if (parsed != value) {
+                                onValueCommitted(parsed)
+                            }
+                        } else {
+                            textFieldValue = TextFieldValue(text = value.toString())
                         }
                     }
                 }
