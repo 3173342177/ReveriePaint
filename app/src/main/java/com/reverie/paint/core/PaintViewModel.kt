@@ -3488,6 +3488,7 @@ class PaintViewModel : ViewModel() {
 
             // 快捷操作浮窗持久化恢复
             quickActionWindowOpen = prefs.getBoolean("quick_action_open", false)
+            quickActionWindowWasOpen = quickActionWindowOpen
             quickActionWindowX = prefs.getFloat("quick_action_x", -1f)
             quickActionWindowY = prefs.getFloat("quick_action_y", -1f)
             if (quickActionWindowX == 60f && quickActionWindowY == 200f) {
@@ -3511,6 +3512,7 @@ class PaintViewModel : ViewModel() {
 
             // 快捷笔刷浮窗持久化恢复
             quickBrushWindowOpen = prefs.getBoolean("quick_brush_open", false)
+            quickBrushWindowWasOpen = quickBrushWindowOpen
             quickBrushWindowX = prefs.getFloat("quick_brush_x", -1f)
             quickBrushWindowY = prefs.getFloat("quick_brush_y", -1f)
             if (quickBrushWindowX == 60f && quickBrushWindowY == 280f) {
@@ -3527,6 +3529,7 @@ class PaintViewModel : ViewModel() {
 
             // 快捷颜色浮窗持久化恢复
             quickColorWindowOpen = prefs.getBoolean("quick_color_open", false)
+            quickColorWindowWasOpen = quickColorWindowOpen
             quickColorWindowX = prefs.getFloat("quick_color_x", -1f)
             quickColorWindowY = prefs.getFloat("quick_color_y", -1f)
             quickColorCollapsed = prefs.getBoolean("quick_color_collapsed", false)
@@ -3534,6 +3537,7 @@ class PaintViewModel : ViewModel() {
 
             // 快捷图层浮窗持久化恢复
             quickLayerWindowOpen = prefs.getBoolean("quick_layer_open", false)
+            quickLayerWindowWasOpen = quickLayerWindowOpen
             quickLayerWindowX = prefs.getFloat("quick_layer_x", -1f)
             quickLayerWindowY = prefs.getFloat("quick_layer_y", -1f)
             quickLayerCollapsed = prefs.getBoolean("quick_layer_collapsed", false)

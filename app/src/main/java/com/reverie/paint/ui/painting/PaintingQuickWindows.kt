@@ -57,6 +57,7 @@ internal fun BoxScope.PaintingQuickWindows(
             val panelH = if (vm.quickActionWindowHeight > 0f) vm.quickActionWindowHeight else with(density) { 160.dp.toPx() }
             vm.quickActionWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
             vm.quickActionWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+            vm.persistQuickActionsState()
         }
         vm.quickActionWindowWasOpen = vm.quickActionWindowOpen
     }
@@ -69,6 +70,7 @@ internal fun BoxScope.PaintingQuickWindows(
             val panelH = if (vm.quickBrushWindowHeight > 0f) vm.quickBrushWindowHeight else with(density) { 54.dp.toPx() }
             vm.quickBrushWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
             vm.quickBrushWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+            vm.persistQuickBrushState()
         }
         vm.quickBrushWindowWasOpen = vm.quickBrushWindowOpen
     }
@@ -81,6 +83,7 @@ internal fun BoxScope.PaintingQuickWindows(
             val panelH = if (vm.quickColorWindowHeight > 0f) vm.quickColorWindowHeight else with(density) { 272.dp.toPx() }
             vm.quickColorWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
             vm.quickColorWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+            vm.persistQuickColorState()
         }
         vm.quickColorWindowWasOpen = vm.quickColorWindowOpen
     }
@@ -93,6 +96,7 @@ internal fun BoxScope.PaintingQuickWindows(
             val panelH = if (vm.quickLayerWindowHeight > 0f) vm.quickLayerWindowHeight else with(density) { 290.dp.toPx() }
             vm.quickLayerWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
             vm.quickLayerWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+            vm.persistQuickLayerState()
         }
         vm.quickLayerWindowWasOpen = vm.quickLayerWindowOpen
     }
