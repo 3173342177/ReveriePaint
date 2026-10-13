@@ -1498,6 +1498,29 @@ fun PaintingPage(
             }
         }
 
+        // ---- Dynamic top padding for top-docked tool panels & pills (avoid overlapping with floating panels docked at TOP + CENTER) ----
+        val topDockPadding = remember(vm.floatingUiConfig) {
+            if (vm.floatingUiConfig.enabled) {
+                val topCenterPanels = listOf(
+                    vm.floatingUiConfig.topBarPosition,
+                    vm.floatingUiConfig.toolRailPosition,
+                    vm.floatingUiConfig.sliderRailPosition,
+                ).filter { it.edge == com.reverie.paint.model.PanelEdge.TOP && it.alignment == com.reverie.paint.model.PanelAlignment.CENTER }
+                if (topCenterPanels.isNotEmpty()) {
+                    val margin = vm.floatingUiConfig.marginDp.dp
+                    val floatingScale = vm.floatingUiConfig.scale * 1.13f
+                    // 悬浮栏缩放后实际高度约 36dp * floatingScale + 堆叠位移 (每栏 48dp * floatingScale) + 20dp 呼吸间隙
+                    val panelHeight = 36.dp * floatingScale
+                    val stackOffset = ((topCenterPanels.size - 1) * 48).dp * floatingScale
+                    margin + panelHeight + stackOffset + 20.dp
+                } else {
+                    56.dp
+                }
+            } else {
+                56.dp
+            }
+        }
+
         // ---- Filter Fullscreen HUD (Top Pill & Bottom Dock) ----
         if (filterController != null) {
             FilterTopPillHUD(
@@ -1862,7 +1885,7 @@ fun PaintingPage(
             visible = vm.hasSelection && tool !in selectionTools,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 52.dp),
+                .padding(top = topDockPadding),
             enter = androidx.compose.animation.fadeIn(Motion.enterSpring()) +
                 androidx.compose.animation.slideInVertically(Motion.enterSpring()) { -it / 2 },
             exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(150)) +
@@ -1957,7 +1980,7 @@ fun PaintingPage(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 56.dp)
+                    .padding(top = topDockPadding)
                     .zIndex(25f),
         ) {
             val msg = vm.actionToastMessage ?: ""
@@ -2020,7 +2043,7 @@ fun PaintingPage(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 48.dp)
+                    .padding(top = (topDockPadding - 8.dp).coerceAtLeast(16.dp))
                     .zIndex(20f),
         ) {
             val zoomPct = (zoom * fitScale * 100).toInt()
@@ -2096,7 +2119,7 @@ fun PaintingPage(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 56.dp)
+                    .padding(top = topDockPadding)
                     .zIndex(23f),
         )
 
@@ -2611,6 +2634,7 @@ fun PaintingPage(
             com.reverie.paint.ui.painting.canvas.QuickShapeEditor(
                 vm, zoomState, rotationState, panXState, panYState, fitScale,
                 onViewTransform = { z, r, px, py -> canvasTouchView?.applyViewTransform(z, r, px, py) },
+                topPadding = (topDockPadding - 8.dp).coerceAtLeast(16.dp),
                 modifier = Modifier.fillMaxSize().zIndex(2000f),
             )
         }

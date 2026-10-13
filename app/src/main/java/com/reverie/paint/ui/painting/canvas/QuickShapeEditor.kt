@@ -37,6 +37,7 @@ internal fun QuickShapeEditor(
     zoom: State<Float>, rotation: State<Float>, panX: State<Float>, panY: State<Float>,
     fitScale: Float,
     onViewTransform: (zoom: Float, rotation: Float, panX: Float, panY: Float) -> Unit = { _, _, _, _ -> },
+    topPadding: androidx.compose.ui.unit.Dp = 48.dp,
     modifier: Modifier = Modifier,
 ) {
     val shape = vm.activeQuickShape ?: return
@@ -165,7 +166,7 @@ internal fun QuickShapeEditor(
                 }
             }
         }
-        QuickShapeTopBar(vm, Modifier.align(Alignment.TopCenter).padding(top = 48.dp, start = 12.dp, end = 12.dp),
+        QuickShapeTopBar(vm, Modifier.align(Alignment.TopCenter).padding(top = topPadding, start = 12.dp, end = 12.dp),
             reshapeHeld = reshapePointer != null, onReshapePointer = { reshapePointer = it })
     }
 }
