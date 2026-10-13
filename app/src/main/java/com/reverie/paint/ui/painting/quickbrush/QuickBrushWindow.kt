@@ -123,24 +123,6 @@ fun QuickBrushWindow(
         else 54.dp.toPx()
     }
 
-    LaunchedEffect(screenWidthPx, screenHeightPx, windowSize, isCollapsed, isVertical) {
-        val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-        val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-        val minX = marginPx
-        val maxX = (screenWidthPx - curEffectiveW - marginPx).coerceAtLeast(minX)
-        val minY = marginPx
-        val maxY = (screenHeightPx - curEffectiveH - marginPx).coerceAtLeast(minY)
-        if (vm.quickBrushWindowX >= 0f && vm.quickBrushWindowY >= 0f) {
-            val clampedX = vm.quickBrushWindowX.coerceIn(minX, maxX)
-            val clampedY = vm.quickBrushWindowY.coerceIn(minY, maxY)
-            if (clampedX != vm.quickBrushWindowX || clampedY != vm.quickBrushWindowY) {
-                vm.quickBrushWindowX = clampedX
-                vm.quickBrushWindowY = clampedY
-                vm.persistQuickBrushState()
-            }
-        }
-    }
-
     val windowShape = remember(isCollapsed) {
         if (isCollapsed) RoundedCornerShape(22.dp) else RoundedCornerShape(22.dp)
     }
@@ -155,21 +137,17 @@ fun QuickBrushWindow(
     Box(
         modifier = modifier
             .offset {
-                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                val minX = marginPx
-                val maxX = (screenWidthPx - curEffectiveW - marginPx).coerceAtLeast(minX)
-                val minY = marginPx
-                val maxY = (screenHeightPx - curEffectiveH - marginPx).coerceAtLeast(minY)
                 val x = if (vm.quickBrushWindowX >= 0f) {
-                    vm.quickBrushWindowX.coerceIn(minX, maxX).roundToInt()
+                    vm.quickBrushWindowX.roundToInt()
                 } else {
-                    ((screenWidthPx - curEffectiveW) / 2f).coerceIn(minX, maxX).roundToInt()
+                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                    ((screenWidthPx - curW) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 val y = if (vm.quickBrushWindowY >= 0f) {
-                    vm.quickBrushWindowY.coerceIn(minY, maxY).roundToInt()
+                    vm.quickBrushWindowY.roundToInt()
                 } else {
-                    ((screenHeightPx - curEffectiveH) / 2f).coerceIn(minY, maxY).roundToInt()
+                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                    ((screenHeightPx - curH) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 IntOffset(x, y)
             }
@@ -181,25 +159,6 @@ fun QuickBrushWindow(
                     windowSize = size
                     vm.quickBrushWindowWidth = size.width.toFloat()
                     vm.quickBrushWindowHeight = size.height.toFloat()
-                    if (size.width > 0 && size.height > 0) {
-                        val minX = marginPx
-                        val maxX = (screenWidthPx - size.width - marginPx).coerceAtLeast(minX)
-                        val minY = marginPx
-                        val maxY = (screenHeightPx - size.height - marginPx).coerceAtLeast(minY)
-                        if (vm.quickBrushWindowX < 0f || vm.quickBrushWindowY < 0f) {
-                            vm.quickBrushWindowX = (maxX / 2f).coerceIn(minX, maxX)
-                            vm.quickBrushWindowY = (maxY / 2f).coerceIn(minY, maxY)
-                            vm.persistQuickBrushState()
-                        } else {
-                            val clampedX = vm.quickBrushWindowX.coerceIn(minX, maxX)
-                            val clampedY = vm.quickBrushWindowY.coerceIn(minY, maxY)
-                            if (clampedX != vm.quickBrushWindowX || clampedY != vm.quickBrushWindowY) {
-                                vm.quickBrushWindowX = clampedX
-                                vm.quickBrushWindowY = clampedY
-                                vm.persistQuickBrushState()
-                            }
-                        }
-                    }
                 }
                 .shadow(12.dp, windowShape)
                 .systemHoverIcon(context)
@@ -221,20 +180,14 @@ fun QuickBrushWindow(
                 Row(
                     modifier = Modifier
                         .wrapContentSize()
-                        .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
+                        .pointerInput(Unit) {
                             detectDragGestures(
                                 onDragEnd = { vm.persistQuickBrushState() },
                                 onDragCancel = { vm.persistQuickBrushState() },
                             ) { change, dragAmount ->
                                 change.consume()
-                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                                val curMinX = marginPx
-                                val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
-                                val curMinY = marginPx
-                                val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
-                                vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
-                                vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
+                                vm.quickBrushWindowX += dragAmount.x
+                                vm.quickBrushWindowY += dragAmount.y
                             }
                         }
                         .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -298,20 +251,14 @@ fun QuickBrushWindow(
                             modifier = Modifier
                                 .width(42.dp)
                                 .height(20.dp)
-                                .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
+                                .pointerInput(Unit) {
                                     detectDragGestures(
                                         onDragEnd = { vm.persistQuickBrushState() },
                                         onDragCancel = { vm.persistQuickBrushState() },
                                     ) { change, dragAmount ->
                                         change.consume()
-                                        val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                        val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                                        val curMinX = marginPx
-                                        val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
-                                        val curMinY = marginPx
-                                        val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
-                                        vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
-                                        vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
+                                        vm.quickBrushWindowX += dragAmount.x
+                                        vm.quickBrushWindowY += dragAmount.y
                                     }
                                 }
                                 .clickable {
@@ -434,20 +381,14 @@ fun QuickBrushWindow(
                             modifier = Modifier
                                 .width(14.dp)
                                 .height(28.dp)
-                                .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
+                                .pointerInput(Unit) {
                                     detectDragGestures(
                                         onDragEnd = { vm.persistQuickBrushState() },
                                         onDragCancel = { vm.persistQuickBrushState() },
                                     ) { change, dragAmount ->
                                         change.consume()
-                                        val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                        val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                                        val curMinX = marginPx
-                                        val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
-                                        val curMinY = marginPx
-                                        val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
-                                        vm.quickBrushWindowX = (vm.quickBrushWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
-                                        vm.quickBrushWindowY = (vm.quickBrushWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
+                                        vm.quickBrushWindowX += dragAmount.x
+                                        vm.quickBrushWindowY += dragAmount.y
                                     }
                                 }
                                 .padding(horizontal = 2.dp),

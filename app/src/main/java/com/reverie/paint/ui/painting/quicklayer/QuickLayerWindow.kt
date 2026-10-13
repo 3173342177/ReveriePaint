@@ -118,25 +118,6 @@ fun QuickLayerWindow(
     val defaultW = with(density) { if (isCollapsed) 48.dp.toPx() else 156.dp.toPx() }
     val defaultH = with(density) { if (isCollapsed) 48.dp.toPx() else 290.dp.toPx() }
 
-    // 屏幕尺寸变化时的出界夹紧
-    LaunchedEffect(screenWidthPx, screenHeightPx, windowSize, isCollapsed) {
-        val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-        val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-        val minX = marginPx
-        val maxX = (screenWidthPx - curEffectiveW - marginPx).coerceAtLeast(minX)
-        val minY = marginPx
-        val maxY = (screenHeightPx - curEffectiveH - marginPx).coerceAtLeast(minY)
-        if (vm.quickLayerWindowX >= 0f && vm.quickLayerWindowY >= 0f) {
-            val clampedX = vm.quickLayerWindowX.coerceIn(minX, maxX)
-            val clampedY = vm.quickLayerWindowY.coerceIn(minY, maxY)
-            if (clampedX != vm.quickLayerWindowX || clampedY != vm.quickLayerWindowY) {
-                vm.quickLayerWindowX = clampedX
-                vm.quickLayerWindowY = clampedY
-                vm.persistQuickLayerState()
-            }
-        }
-    }
-
     val windowShape = remember(isCollapsed) {
         if (isCollapsed) CircleShape else RoundedCornerShape(16.dp)
     }
@@ -188,21 +169,17 @@ fun QuickLayerWindow(
     Box(
         modifier = modifier
             .offset {
-                val curEffectiveW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                val curEffectiveH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                val minX = marginPx
-                val maxX = (screenWidthPx - curEffectiveW - marginPx).coerceAtLeast(minX)
-                val minY = marginPx
-                val maxY = (screenHeightPx - curEffectiveH - marginPx).coerceAtLeast(minY)
                 val x = if (vm.quickLayerWindowX >= 0f) {
-                    vm.quickLayerWindowX.coerceIn(minX, maxX).roundToInt()
+                    vm.quickLayerWindowX.roundToInt()
                 } else {
-                    ((screenWidthPx - curEffectiveW) - marginPx * 2f).coerceIn(minX, maxX).roundToInt()
+                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                    ((screenWidthPx - curW) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 val y = if (vm.quickLayerWindowY >= 0f) {
-                    vm.quickLayerWindowY.coerceIn(minY, maxY).roundToInt()
+                    vm.quickLayerWindowY.roundToInt()
                 } else {
-                    ((screenHeightPx - curEffectiveH) / 2f).coerceIn(minY, maxY).roundToInt()
+                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                    ((screenHeightPx - curH) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 IntOffset(x, y)
             }
@@ -213,25 +190,6 @@ fun QuickLayerWindow(
                     windowSize = size
                     vm.quickLayerWindowWidth = size.width.toFloat()
                     vm.quickLayerWindowHeight = size.height.toFloat()
-                    if (size.width > 0 && size.height > 0) {
-                        val minX = marginPx
-                        val maxX = (screenWidthPx - size.width - marginPx).coerceAtLeast(minX)
-                        val minY = marginPx
-                        val maxY = (screenHeightPx - size.height - marginPx).coerceAtLeast(minY)
-                        if (vm.quickLayerWindowX < 0f || vm.quickLayerWindowY < 0f) {
-                            vm.quickLayerWindowX = (maxX - marginPx * 2f).coerceIn(minX, maxX)
-                            vm.quickLayerWindowY = (maxY / 2f).coerceIn(minY, maxY)
-                            vm.persistQuickLayerState()
-                        } else {
-                            val clampedX = vm.quickLayerWindowX.coerceIn(minX, maxX)
-                            val clampedY = vm.quickLayerWindowY.coerceIn(minY, maxY)
-                            if (clampedX != vm.quickLayerWindowX || clampedY != vm.quickLayerWindowY) {
-                                vm.quickLayerWindowX = clampedX
-                                vm.quickLayerWindowY = clampedY
-                                vm.persistQuickLayerState()
-                            }
-                        }
-                    }
                 }
                 .shadow(14.dp, windowShape)
                 .systemHoverIcon(context)
@@ -254,20 +212,14 @@ fun QuickLayerWindow(
                 Box(
                     modifier = Modifier
                         .size(46.dp)
-                        .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
+                        .pointerInput(Unit) {
                             detectDragGestures(
                                 onDragEnd = { vm.persistQuickLayerState() },
                                 onDragCancel = { vm.persistQuickLayerState() },
                             ) { change, dragAmount ->
                                 change.consume()
-                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                                val curMinX = marginPx
-                                val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
-                                val curMinY = marginPx
-                                val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
-                                vm.quickLayerWindowX = (vm.quickLayerWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
-                                vm.quickLayerWindowY = (vm.quickLayerWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
+                                vm.quickLayerWindowX += dragAmount.x
+                                vm.quickLayerWindowY += dragAmount.y
                             }
                         }
                         .clickable {
@@ -320,20 +272,14 @@ fun QuickLayerWindow(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(38.dp)
-                            .pointerInput(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
+                            .pointerInput(Unit) {
                                 detectDragGestures(
                                     onDragEnd = { vm.persistQuickLayerState() },
                                     onDragCancel = { vm.persistQuickLayerState() },
                                 ) { change, dragAmount ->
                                     change.consume()
-                                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                                    val curMinX = marginPx
-                                    val curMaxX = (screenWidthPx - curW - marginPx).coerceAtLeast(curMinX)
-                                    val curMinY = marginPx
-                                    val curMaxY = (screenHeightPx - curH - marginPx).coerceAtLeast(curMinY)
-                                    vm.quickLayerWindowX = (vm.quickLayerWindowX + dragAmount.x).coerceIn(curMinX, curMaxX)
-                                    vm.quickLayerWindowY = (vm.quickLayerWindowY + dragAmount.y).coerceIn(curMinY, curMaxY)
+                                    vm.quickLayerWindowX += dragAmount.x
+                                    vm.quickLayerWindowY += dragAmount.y
                                 }
                             }
                             .padding(horizontal = 8.dp),

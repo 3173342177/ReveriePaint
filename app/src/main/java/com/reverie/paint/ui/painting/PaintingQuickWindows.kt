@@ -49,6 +49,54 @@ internal fun BoxScope.PaintingQuickWindows(
         vm.referenceWindowWasOpen = vm.referenceWindowOpen
     }
 
+    LaunchedEffect(vm.quickActionWindowOpen) {
+        if (vm.quickActionWindowOpen && !vm.quickActionWindowWasOpen) {
+            val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
+            val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
+            val panelW = if (vm.quickActionWindowWidth > 0f) vm.quickActionWindowWidth else with(density) { 200.dp.toPx() }
+            val panelH = if (vm.quickActionWindowHeight > 0f) vm.quickActionWindowHeight else with(density) { 160.dp.toPx() }
+            vm.quickActionWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+            vm.quickActionWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+        }
+        vm.quickActionWindowWasOpen = vm.quickActionWindowOpen
+    }
+
+    LaunchedEffect(vm.quickBrushWindowOpen) {
+        if (vm.quickBrushWindowOpen && !vm.quickBrushWindowWasOpen) {
+            val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
+            val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
+            val panelW = if (vm.quickBrushWindowWidth > 0f) vm.quickBrushWindowWidth else with(density) { 240.dp.toPx() }
+            val panelH = if (vm.quickBrushWindowHeight > 0f) vm.quickBrushWindowHeight else with(density) { 54.dp.toPx() }
+            vm.quickBrushWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+            vm.quickBrushWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+        }
+        vm.quickBrushWindowWasOpen = vm.quickBrushWindowOpen
+    }
+
+    LaunchedEffect(vm.quickColorWindowOpen) {
+        if (vm.quickColorWindowOpen && !vm.quickColorWindowWasOpen) {
+            val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
+            val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
+            val panelW = if (vm.quickColorWindowWidth > 0f) vm.quickColorWindowWidth else with(density) { 212.dp.toPx() }
+            val panelH = if (vm.quickColorWindowHeight > 0f) vm.quickColorWindowHeight else with(density) { 272.dp.toPx() }
+            vm.quickColorWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+            vm.quickColorWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+        }
+        vm.quickColorWindowWasOpen = vm.quickColorWindowOpen
+    }
+
+    LaunchedEffect(vm.quickLayerWindowOpen) {
+        if (vm.quickLayerWindowOpen && !vm.quickLayerWindowWasOpen) {
+            val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
+            val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
+            val panelW = if (vm.quickLayerWindowWidth > 0f) vm.quickLayerWindowWidth else with(density) { 156.dp.toPx() }
+            val panelH = if (vm.quickLayerWindowHeight > 0f) vm.quickLayerWindowHeight else with(density) { 290.dp.toPx() }
+            vm.quickLayerWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+            vm.quickLayerWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+        }
+        vm.quickLayerWindowWasOpen = vm.quickLayerWindowOpen
+    }
+
     // ---- Persistent Floating Reference Window (常态固定显示参考窗口) ----
     AnimatedVisibility(
         visible = vm.referenceWindowOpen,

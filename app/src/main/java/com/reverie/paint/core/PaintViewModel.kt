@@ -903,6 +903,7 @@ class PaintViewModel : ViewModel() {
 
     // Quick Actions Tool Window State (快捷操作浮窗)
     var quickActionWindowOpen by mutableStateOf(false)
+    var quickActionWindowWasOpen = false
     var quickActionsConfig by mutableStateOf(com.reverie.paint.model.QuickActionsConfig())
     var quickActionWindowX by mutableFloatStateOf(-1f)
     var quickActionWindowY by mutableFloatStateOf(-1f)
@@ -928,6 +929,7 @@ class PaintViewModel : ViewModel() {
 
     // Quick Brush Tool Window State (快捷笔刷浮窗)
     var quickBrushWindowOpen by mutableStateOf(false)
+    var quickBrushWindowWasOpen = false
     var quickBrushWindowX by mutableFloatStateOf(-1f)
     var quickBrushWindowY by mutableFloatStateOf(-1f)
     var quickBrushWindowWidth by mutableFloatStateOf(0f)
@@ -957,6 +959,7 @@ class PaintViewModel : ViewModel() {
 
     // Quick Color Tool Window State (快捷颜色浮窗)
     var quickColorWindowOpen by mutableStateOf(false)
+    var quickColorWindowWasOpen = false
     var quickColorWindowX by mutableFloatStateOf(-1f)
     var quickColorWindowY by mutableFloatStateOf(-1f)
     var quickColorWindowWidth by mutableFloatStateOf(0f)
@@ -1001,6 +1004,7 @@ class PaintViewModel : ViewModel() {
 
     // Quick Layer Tool Window State (快捷图层浮窗)
     var quickLayerWindowOpen by mutableStateOf(false)
+    var quickLayerWindowWasOpen = false
     var quickLayerWindowX by mutableFloatStateOf(-1f)
     var quickLayerWindowY by mutableFloatStateOf(-1f)
     var quickLayerWindowWidth by mutableFloatStateOf(0f)
