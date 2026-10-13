@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import com.reverie.paint.BuildConfig
+import com.reverie.paint.model.AbiMatcher
 import com.reverie.paint.model.DownloadStatus
 import com.reverie.paint.model.MarkdownParser
 import com.reverie.paint.model.ReleaseAsset
@@ -202,7 +203,7 @@ object UpdateManager {
             val publishedAt = json.optString("published_at", "")
 
             val assetsJson = json.optJSONArray("assets")
-            var apkAsset: ReleaseAsset? = null
+            val candidateAssets = mutableListOf<ReleaseAsset>()
             if (assetsJson != null) {
                 for (i in 0 until assetsJson.length()) {
                     val assetObj = assetsJson.optJSONObject(i) ?: continue
@@ -212,16 +213,19 @@ object UpdateManager {
                     val contentType = assetObj.optString("content_type", "")
 
                     if (assetName.endsWith(".apk", ignoreCase = true)) {
-                        apkAsset = ReleaseAsset(
-                            name = assetName,
-                            downloadUrl = downloadUrl,
-                            size = size,
-                            contentType = contentType,
+                        candidateAssets.add(
+                            ReleaseAsset(
+                                name = assetName,
+                                downloadUrl = downloadUrl,
+                                size = size,
+                                contentType = contentType,
+                            )
                         )
-                        break
                     }
                 }
             }
+
+            val apkAsset = AbiMatcher.selectBestApk(candidateAssets, Build.SUPPORTED_ABIS)
 
             return ReleaseInfo(
                 tagName = tagName,
@@ -294,8 +298,7 @@ object UpdateManager {
             } else {
                 HtmlCompat.fromHtml(contentHtml, HtmlCompat.FROM_HTML_MODE_COMPACT).toString().trim()
             }
-            val apkName = "ReveriePaint-$tagName.apk"
-            val downloadUrl = "https://github.com/LanRhyme/ReveriePaint/releases/download/$tagName/$apkName"
+            val apkAsset = AbiMatcher.buildFallbackApkAsset(tagName, Build.SUPPORTED_ABIS)
 
             return ReleaseInfo(
                 tagName = tagName,
@@ -303,12 +306,7 @@ object UpdateManager {
                 body = finalBody,
                 htmlUrl = htmlUrl.ifBlank { "https://github.com/LanRhyme/ReveriePaint/releases/tag/$tagName" },
                 publishedAt = updated,
-                apkAsset = ReleaseAsset(
-                    name = apkName,
-                    downloadUrl = downloadUrl,
-                    size = 0L,
-                    contentType = "application/vnd.android.package-archive",
-                ),
+                apkAsset = apkAsset,
             )
         } catch (_: Exception) {
             return null

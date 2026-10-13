@@ -15,6 +15,86 @@ data class ReleaseAsset(
 )
 
 /**
+ * 针对当前运行环境的 ABI 匹配与 APK 附件过滤策略
+ */
+object AbiMatcher {
+
+    /**
+     * 判断设备的主流架构（64 位 vs 32 位）
+     */
+    fun is64Bit(supportedAbis: Array<String>): Boolean {
+        return supportedAbis.any { it.contains("64") }
+    }
+
+    /**
+     * 判断某文件名是否明确属于 32 位 (armeabi-v7a 或 armv7)
+     */
+    fun isArm32Asset(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.contains("armeabi-v7a") || lower.contains("armv7") || lower.contains("-v7a")
+    }
+
+    /**
+     * 判断某文件名是否明确属于 64 位 (arm64-v8a 或 arm64)
+     */
+    fun isArm64Asset(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.contains("arm64-v8a") || lower.contains("arm64") || lower.contains("-v8a")
+    }
+
+    /**
+     * 从候选的 APK 附件列表中，根据系统支持的 ABI 列表挑选最匹配的 APK。
+     *
+     * 优先级规则:
+     * 1. 如果当前设备为 64 位 (支持 arm64-v8a):
+     *    a. 优先选用包含 "arm64-v8a" 或 "arm64" 的安装包
+     *    b. 其次选用通用/无架构后缀的安装包 (如 ReveriePaint-v1.4.10.apk)
+     *    c. 兜底选用 32 位安装包 (64 位 ARM 处理器通常兼容 32 位运行)
+     * 2. 如果当前设备为 32 位 (不支持 64 位):
+     *    a. 优先选用明确包含 "armeabi-v7a" 或 "armv7" 的安装包
+     *    b. 其次选用通用/无架构后缀的安装包 (若存在 universal 构建)
+     *    c. 绝不选择明确包含 arm64 的安装包 (安装时会报 INSTALL_FAILED_NO_MATCHING_ABIS)
+     */
+    fun selectBestApk(assets: List<ReleaseAsset>, supportedAbis: Array<String>): ReleaseAsset? {
+        val apkAssets = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+        if (apkAssets.isEmpty()) return null
+
+        val deviceIs64Bit = is64Bit(supportedAbis)
+
+        if (deviceIs64Bit) {
+            // 64 位设备: arm64 > universal/default > arm32
+            return apkAssets.firstOrNull { isArm64Asset(it.name) }
+                ?: apkAssets.firstOrNull { !isArm32Asset(it.name) }
+                ?: apkAssets.firstOrNull()
+        } else {
+            // 32 位设备: arm32 > universal/default (排除 arm64)
+            return apkAssets.firstOrNull { isArm32Asset(it.name) }
+                ?: apkAssets.firstOrNull { !isArm64Asset(it.name) }
+        }
+    }
+
+    /**
+     * 为 Atom 订阅源等无附件列表的场景，构建回退的 APK 下载链接与文件名
+     */
+    fun buildFallbackApkAsset(tagName: String, supportedAbis: Array<String>): ReleaseAsset {
+        val is64 = is64Bit(supportedAbis)
+        // 64 位默认下载通用/arm64-v8a 包；32 位下载 -armeabi-v7a 包
+        val apkName = if (is64) {
+            "ReveriePaint-$tagName.apk"
+        } else {
+            "ReveriePaint-$tagName-armeabi-v7a.apk"
+        }
+        val downloadUrl = "https://github.com/LanRhyme/ReveriePaint/releases/download/$tagName/$apkName"
+        return ReleaseAsset(
+            name = apkName,
+            downloadUrl = downloadUrl,
+            size = 0L,
+            contentType = "application/vnd.android.package-archive",
+        )
+    }
+}
+
+/**
  * GitHub Release 详情信息
  */
 data class ReleaseInfo(

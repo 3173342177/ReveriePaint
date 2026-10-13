@@ -56,4 +56,57 @@ class UpdateVersionTest {
         assertEquals("preview", v2.prereleaseType)
         assertEquals(6, v2.prereleaseNum)
     }
+
+    @Test
+    fun `abi matcher correctly detects 64-bit and 32-bit devices`() {
+        val arm64Device = arrayOf("arm64-v8a", "armeabi-v7a", "armeabi")
+        val arm32Device = arrayOf("armeabi-v7a", "armeabi")
+
+        assertTrue(AbiMatcher.is64Bit(arm64Device))
+        assertFalse(AbiMatcher.is64Bit(arm32Device))
+    }
+
+    @Test
+    fun `abi matcher selects 64-bit apk on 64-bit device`() {
+        val assets = listOf(
+            ReleaseAsset("ReveriePaint-v1.4.11-armeabi-v7a.apk", "http://v7a", 100L, ""),
+            ReleaseAsset("ReveriePaint-v1.4.11-arm64-v8a.apk", "http://v8a", 100L, ""),
+        )
+        val arm64Device = arrayOf("arm64-v8a", "armeabi-v7a")
+        val matched = AbiMatcher.selectBestApk(assets, arm64Device)
+        assertEquals("ReveriePaint-v1.4.11-arm64-v8a.apk", matched?.name)
+    }
+
+    @Test
+    fun `abi matcher selects 32-bit apk on 32-bit device`() {
+        val assets = listOf(
+            ReleaseAsset("ReveriePaint-v1.4.11-armeabi-v7a.apk", "http://v7a", 100L, ""),
+            ReleaseAsset("ReveriePaint-v1.4.11-arm64-v8a.apk", "http://v8a", 100L, ""),
+        )
+        val arm32Device = arrayOf("armeabi-v7a", "armeabi")
+        val matched = AbiMatcher.selectBestApk(assets, arm32Device)
+        assertEquals("ReveriePaint-v1.4.11-armeabi-v7a.apk", matched?.name)
+    }
+
+    @Test
+    fun `abi matcher fallbacks to generic apk when split not found`() {
+        val assets = listOf(
+            ReleaseAsset("ReveriePaint-v1.4.10.apk", "http://generic", 100L, ""),
+        )
+        val arm64Device = arrayOf("arm64-v8a", "armeabi-v7a")
+        val arm32Device = arrayOf("armeabi-v7a", "armeabi")
+
+        assertEquals("ReveriePaint-v1.4.10.apk", AbiMatcher.selectBestApk(assets, arm64Device)?.name)
+        assertEquals("ReveriePaint-v1.4.10.apk", AbiMatcher.selectBestApk(assets, arm32Device)?.name)
+    }
+
+    @Test
+    fun `abi matcher avoids 64-bit only apk on 32-bit device`() {
+        val assets = listOf(
+            ReleaseAsset("ReveriePaint-v1.4.11-arm64-v8a.apk", "http://v8a", 100L, ""),
+        )
+        val arm32Device = arrayOf("armeabi-v7a")
+        val matched = AbiMatcher.selectBestApk(assets, arm32Device)
+        assertEquals(null, matched)
+    }
 }
