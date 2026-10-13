@@ -36,6 +36,10 @@ cp -f "$DEPS"/lib/libbz2.so "$DEST/" 2>/dev/null || true
 cp -f "$DEPS"/lib/libpng16.so "$DEST/" 2>/dev/null || true
 cp -f "$DEPS"/lib/libquazip1-qt6.so "$DEST/" 2>/dev/null || true
 cp -f "$DEPS"/lib/libintl.so "$DEST/" 2>/dev/null || true
+cp -f "$DEPS"/lib/libgsl.so "$DEST/" 2>/dev/null || true
+cp -f "$DEPS"/lib/libgslcblas.so "$DEST/" 2>/dev/null || true
+cp -f "$DEPS"/lib/liblzma.so "$DEST/" 2>/dev/null || true
+cp -f "$DEPS"/lib/libzstd.so "$DEST/" 2>/dev/null || true
 
 # 5. libc++_shared.so
 cp -f "$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/libc++_shared.so" "$DEST/"

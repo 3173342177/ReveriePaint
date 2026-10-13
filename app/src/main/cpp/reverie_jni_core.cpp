@@ -148,7 +148,20 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *)
     // dlopen without RTLD_NOLOAD: if the dependency chain hasn't loaded
     // libQt6Core yet (unlikely, but possible with lazy binding), this loads
     // it so the dlsym below can find initJNI.
+#if defined(__arm__)
+    void *qtCore = dlopen("libQt6Core_armeabi-v7a.so", RTLD_NOW);
+#elif defined(__aarch64__)
     void *qtCore = dlopen("libQt6Core_arm64-v8a.so", RTLD_NOW);
+#elif defined(__i386__)
+    void *qtCore = dlopen("libQt6Core_x86.so", RTLD_NOW);
+#elif defined(__x86_64__)
+    void *qtCore = dlopen("libQt6Core_x86_64.so", RTLD_NOW);
+#else
+    void *qtCore = dlopen("libQt6Core.so", RTLD_NOW);
+#endif
+    if (!qtCore) {
+        qtCore = dlopen("libQt6Core.so", RTLD_NOW);
+    }
     if (!qtCore) {
         __android_log_print(ANDROID_LOG_ERROR, "RP-JNI", "dlopen Qt6Core failed: %s", dlerror());
     }
