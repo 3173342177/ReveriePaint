@@ -713,18 +713,17 @@ import kotlinx.coroutines.withContext
                 brushSize = saved.size
                 brushOpacity = saved.opacity
                 brushFlow = saved.flow
+                val d = ReverieCoreBridge.brushPresetDefaults(index)
+                val rawSp = d.getOrNull(3) ?: 0.1
                 brushSpacing = if (saved.spacingCustomized) {
                     saved.spacing
                 } else {
-                    val d = ReverieCoreBridge.brushPresetDefaults(index)
-                    val rawSp = d.getOrNull(3) ?: 0.1
-                    if (rawSp >= 0.75) 0.1 else rawSp.coerceIn(0.01, 2.5)
+                    rawSp.coerceIn(0.01, 2.5)
                 }
                 brushAngle = saved.angle
                 brushScatter = if (saved.dynamicsCustomized) {
                     saved.scatter.coerceIn(0.0, 1.0)
                 } else {
-                    val d = ReverieCoreBridge.brushPresetDefaults(index)
                     val rawSc = d.getOrNull(9) ?: 0.0
                     if (rawSc >= 2.0) 0.0 else rawSc.coerceIn(0.0, 1.0)
                 }
@@ -807,7 +806,7 @@ import kotlinx.coroutines.withContext
                     brushOpacity = d[1].coerceIn(0.0, 1.0)
                     brushFlow = d[2].coerceIn(0.0, 1.0)
                     val rawSp = d[3]
-                    brushSpacing = if (rawSp >= 0.75) 0.1 else rawSp.coerceIn(0.01, 2.5)
+                    brushSpacing = rawSp.coerceIn(0.01, 2.5)
                     brushAirbrush = d[4] > 0.5
                     val defaultRate = d[5]
                     brushAirbrushRate = if (defaultRate >= 5.0) defaultRate else 30.0
