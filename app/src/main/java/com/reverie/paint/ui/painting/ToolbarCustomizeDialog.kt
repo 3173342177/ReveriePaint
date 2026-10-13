@@ -83,9 +83,9 @@ fun ToolbarCustomizeDialog(
     vm: PaintViewModel,
     onClose: () -> Unit
 ) {
-    val initialPinned = vm.pinnedTools
-    val initialRest = Tool.entries.filter { it !in initialPinned }
-    val orderedTools = remember { mutableStateListOf(*(initialPinned + initialRest).toTypedArray()) }
+    val initialPinned = remember(vm.pinnedTools) { vm.pinnedTools.distinct() }
+    val initialRest = remember(initialPinned) { Tool.entries.filter { it !in initialPinned } }
+    val orderedTools = remember { mutableStateListOf(*(initialPinned + initialRest).distinctBy { it.id }.toTypedArray()) }
     var enabledTools by remember { mutableStateOf(initialPinned.toSet()) }
 
     var draggingToolId by remember { mutableStateOf<String?>(null) }

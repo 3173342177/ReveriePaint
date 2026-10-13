@@ -322,7 +322,10 @@ import kotlinx.coroutines.withContext
         try {
             val pinned = prefs().getString("pinned_tools", null) ?: return
             val ids = pinned.split(",").filter { it.isNotEmpty() }
-            pinnedTools = ids.mapNotNull { com.reverie.paint.model.Tool.fromId(it) }
+            val loaded = ids.mapNotNull { com.reverie.paint.model.Tool.fromIdOrNull(it) }.distinct()
+            if (loaded.isNotEmpty()) {
+                pinnedTools = loaded
+            }
         } catch (_: Exception) {
         }
     }

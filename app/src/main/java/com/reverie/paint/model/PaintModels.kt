@@ -73,6 +73,7 @@ enum class Tool(
 
     companion object {
         fun fromId(id: String): Tool = entries.find { it.id == id } ?: BRUSH
+        fun fromIdOrNull(id: String): Tool? = entries.find { it.id == id }
     }
 }
 
