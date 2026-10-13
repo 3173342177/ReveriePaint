@@ -482,7 +482,7 @@ internal fun PaintViewModel.touchMove(
     queueStrokeMove(effX, effY, effP, inputEventTimeMs, safeTiltX, safeTiltY, safeRotation)
 }
 
-internal fun PaintViewModel.touchEnd(render: Boolean = true) {
+internal fun PaintViewModel.touchEnd(render: Boolean = true, deferOverrideRestore: Boolean = false) {
     stopAirbrush()
     disarmStrokeStartKick()
     lastStrokeEndElapsedMs = android.os.SystemClock.elapsedRealtime()
@@ -572,7 +572,9 @@ internal fun PaintViewModel.touchEnd(render: Boolean = true) {
     val origOp = activeStrokeOriginalCompositeOp
     val origMode = activeStrokeOriginalToolMode
     val origIsEraser = (currentToolId == "eraser")
-    activeStrokeToolOverride = null
+    if (!deferOverrideRestore) {
+        activeStrokeToolOverride = null
+    }
 
     resetRenderedFrontier()
     if (render) {
@@ -581,7 +583,7 @@ internal fun PaintViewModel.touchEnd(render: Boolean = true) {
             refreshLayerThumbs()
         }) {
             ReverieCoreBridge.touchStrokeEnd()
-            if (hadOverride) {
+            if (hadOverride && !deferOverrideRestore) {
                 if (origPreset >= 0 && origPreset != brushPresetIndex) {
                     ReverieCoreBridge.loadBrushPreset(origPreset)
                 }
@@ -596,7 +598,7 @@ internal fun PaintViewModel.touchEnd(render: Boolean = true) {
     } else {
         runCore(render = false) {
             ReverieCoreBridge.touchStrokeEnd()
-            if (hadOverride) {
+            if (hadOverride && !deferOverrideRestore) {
                 if (origPreset >= 0 && origPreset != brushPresetIndex) {
                     ReverieCoreBridge.loadBrushPreset(origPreset)
                 }
@@ -657,15 +659,50 @@ internal fun PaintViewModel.replaySymmetricBranches(
     mirroredSizes: IntArray,
     branchCount: Int = mirroredSamples.size,
     isEraser: Boolean = false,
+    overrideTool: String? = null,
     onComplete: (() -> Unit)? = null,
 ) {
+    val hadOverride = (overrideTool != null || activeStrokeToolOverride != null)
+    val origPreset = activeStrokeOriginalPresetIndex
+    val origSize = activeStrokeOriginalSize
+    val origOpacity = activeStrokeOriginalOpacity
+    val origFlow = activeStrokeOriginalFlow
+    val origOp = activeStrokeOriginalCompositeOp
+    val origMode = activeStrokeOriginalToolMode
+    val origIsEraser = (currentToolId == "eraser")
+    activeStrokeToolOverride = null
+
+    val restoreOverrideNative = {
+        if (hadOverride) {
+            if (origPreset >= 0 && origPreset != brushPresetIndex) {
+                ReverieCoreBridge.loadBrushPreset(origPreset)
+            }
+            ReverieCoreBridge.setPresetIsEraser(origIsEraser)
+            ReverieCoreBridge.setBrushCompositeOp(origOp)
+            ReverieCoreBridge.setBrushSize(origSize)
+            ReverieCoreBridge.setBrushOpacity(origOpacity)
+            ReverieCoreBridge.setBrushFlow(origFlow)
+            ReverieCoreBridge.setToolMode(origMode)
+        }
+    }
+
     if (branchCount <= 0) {
-        runCore(render = false) { ReverieCoreBridge.endUndoMacro() }
+        runCore(render = false) {
+            try {
+                ReverieCoreBridge.endUndoMacro()
+            } catch (_: Throwable) {}
+            restoreOverrideNative()
+        }
         onComplete?.invoke()
         return
     }
     val h = renderHandler ?: run {
-        runCore(render = false) { ReverieCoreBridge.endUndoMacro() }
+        runCore(render = false) {
+            try {
+                ReverieCoreBridge.endUndoMacro()
+            } catch (_: Throwable) {}
+            restoreOverrideNative()
+        }
         onComplete?.invoke()
         return
     }
@@ -686,7 +723,12 @@ internal fun PaintViewModel.replaySymmetricBranches(
         }
     }
     if (totalActive == 0) {
-        runCore(render = false) { ReverieCoreBridge.endUndoMacro() }
+        runCore(render = false) {
+            try {
+                ReverieCoreBridge.endUndoMacro()
+            } catch (_: Throwable) {}
+            restoreOverrideNative()
+        }
         onComplete?.invoke()
         return
     }
@@ -764,6 +806,10 @@ internal fun PaintViewModel.replaySymmetricBranches(
                 val startY = buf[1]
                 if (!startX.isFinite() || !startY.isFinite()) continue
                 ReverieCoreBridge.setToolMode(mode)
+                if (isEraser) {
+                    ReverieCoreBridge.setPresetIsEraser(true)
+                    ReverieCoreBridge.setBrushCompositeOp("erase")
+                }
                 val startP = buf[2].toDouble().coerceIn(0.0, 1.0)
                 ReverieCoreBridge.touchStrokeStart(startX.toDouble(), startY.toDouble(), startP)
 
@@ -799,6 +845,7 @@ internal fun PaintViewModel.replaySymmetricBranches(
             try {
                 ReverieCoreBridge.endUndoMacro()
             } catch (_: Throwable) {}
+            restoreOverrideNative()
             scheduleRender(immediate = true)
             mainHandler.post {
                 refreshLayerThumbs()

@@ -1534,14 +1534,16 @@ class CanvasTouchView(context: Context) : View(context) {
     private var fingerCount = 0
 
     // ---- 对称与透视绘图辅助 (Drawing Assist) ----
-    // 镜像笔迹采样缓冲: 每个分支一段扁平的 [x, y, pressure] 三元组, 容量按需翻倍。
-    // 上游 1.3.3 用 List<List<SymStrokeSample>> (每个采样点一个对象); 这里保留本分支的
-    // 零分配版 —— 对称绘制最多 8 个分支, 逐点 new 等于每帧几十次分配加列表扩容。
+    // 对称绘制采样缓冲: 主笔画分支 (primary) 与镜像分支 (mirrored), 扁平存 [x, y, pressure]
+    private var primarySamples = FloatArray(48)
+    private var primarySampleSize = 0
     private val mirroredSamples = ArrayList<FloatArray>(MAX_MIRROR_BRANCHES)
     private val mirroredSizes = IntArray(MAX_MIRROR_BRANCHES)
+    @Volatile private var isSymmetryReplaying = false
 
     /** 是否有任一分支已累积采样点 (绘制 / 回放 / 局部失效判定的共同前提) */
     private fun mirrorBranchHasSamples(): Boolean {
+        if (primarySampleSize > 0) return true
         for (i in 0 until mirroredSamples.size) {
             if (mirroredSizes[i] > 0) return true
         }
@@ -1549,7 +1551,9 @@ class CanvasTouchView(context: Context) : View(context) {
     }
 
     private fun resetMirrorBranches() {
+        primarySampleSize = 0
         for (i in 0 until mirroredSamples.size) mirroredSizes[i] = 0
+        isSymmetryReplaying = false
     }
 
     /** 按当前分支数准备缓冲; 多余的数组保留复用, 下一笔不再重新分配 */
@@ -1561,6 +1565,22 @@ class CanvasTouchView(context: Context) : View(context) {
             mirroredSamples.add(FloatArray(0))
         }
         resetMirrorBranches()
+    }
+
+    /** 追加主落笔采样点 (零分配热路径) */
+    private fun appendPrimarySample(x: Float, y: Float, pressure: Double) {
+        val used = primarySampleSize
+        val need = (used + 1) * 3
+        if (primarySamples.size < need) {
+            val grown = FloatArray(maxOf(need, primarySamples.size * 2, 48))
+            System.arraycopy(primarySamples, 0, grown, 0, used * 3)
+            primarySamples = grown
+        }
+        val base = used * 3
+        primarySamples[base] = x
+        primarySamples[base + 1] = y
+        primarySamples[base + 2] = pressure.toFloat()
+        primarySampleSize = used + 1
     }
 
     /**
@@ -1623,7 +1643,17 @@ class CanvasTouchView(context: Context) : View(context) {
         lastLutGlobalCurvePoints = currentGlobal
 
         for (k in 0..128) {
-            val frac = v.computeStrokePressureFraction(k / 128.0)
+            val effP = (k / 128.0).toFloat()
+            val bridgeFrac = pressureFractionCached(effP)
+            val frac = if (currentEnabled) {
+                if (bridgeFrac > 0f && bridgeFrac < 1.0f) {
+                    (1.0f - currentSize.toFloat()) + currentSize.toFloat() * bridgeFrac
+                } else {
+                    (1.0f - currentSize.toFloat()) + currentSize.toFloat() * effP
+                }
+            } else {
+                1.0f
+            }
             symmetryPressureLut[k] = frac.coerceIn(0.01f, 1f)
         }
     }
@@ -2646,25 +2676,65 @@ class CanvasTouchView(context: Context) : View(context) {
         // =========================================================================
         // 2. 绘画中实时镜像笔迹绘制 (120Hz 零延迟 GPU Canvas 渲染)
         // =========================================================================
-        if (v.drawingGuide.mode == GuideMode.SYMMETRY && v.drawingGuide.assistedDrawing && localIsTouching && mirrorBranchHasSamples()) {
+        if (v.drawingGuide.mode == GuideMode.SYMMETRY && v.drawingGuide.assistedDrawing && (localIsTouching || isSymmetryReplaying) && mirrorBranchHasSamples()) {
             try {
                 ensureViewTransform()
                 updateSymmetryPressureLut(v)
                 // 工具/颜色口径取上游 1.3.3: 橡皮与涂抹用固定灰, 其余按笔刷色 × 不透明度
                 when (effTool()) {
-                    Tool.ERASER -> mirroredDrawPaint.color = android.graphics.Color.argb(140, 240, 240, 245)
-                    Tool.SMUDGE -> mirroredDrawPaint.color = android.graphics.Color.argb(100, 180, 180, 190)
+                    Tool.ERASER -> {
+                        mirroredDrawPaint.color = android.graphics.Color.argb(160, 240, 240, 245)
+                    }
+                    Tool.SMUDGE -> {
+                        mirroredDrawPaint.color = android.graphics.Color.argb(120, 180, 180, 190)
+                    }
                     else -> {
                         val baseColor = resolveBrushColorCached(v.brushColor)
-                        val alpha = (v.brushOpacity.coerceIn(0.0, 1.0) * 255.0).toInt().coerceIn(1, 255)
+                        val flowFactor = if (v.brushFlow > 0.0) v.brushFlow.coerceIn(0.05, 1.0) else 1.0
+                        val alpha = (v.brushOpacity.coerceIn(0.0, 1.0) * flowFactor * 255.0).toInt().coerceIn(1, 255)
                         mirroredDrawPaint.color = (baseColor and 0x00FFFFFF) or (alpha shl 24)
                     }
                 }
                 mirroredPointPaint.color = mirroredDrawPaint.color
-                // 宽口径取上游 1.3.3 的压感查找表(对称笔迹跟随压感), 数据仍走本分支的
-                // 零分配扁平缓冲: 一个分支一段 [x, y, pressure], 逐段只读不分配。
+                // 宽口径取对应工具的真实有效尺寸与压感查找表，数据仍走零分配扁平缓冲
+                val effBrushSize = when {
+                    effTool() == Tool.ERASER && tool != Tool.ERASER -> v.getToolEffectiveSize("eraser").toFloat()
+                    else -> v.brushSize.toFloat()
+                }
                 val baseStrokeWidth =
-                    (v.brushSize.toFloat() * viewTransform.currentScale).coerceAtLeast(1.5f)
+                    (effBrushSize * viewTransform.currentScale).coerceAtLeast(1.5f)
+
+                // 2.1 绘制主笔画分支 (绘制面实时轨迹)
+                if (primarySampleSize > 0) {
+                    val buf = primarySamples
+                    val n = primarySampleSize
+                    viewTransform.docToScreen(buf[0], buf[1], pointScratch)
+                    if (n == 1) {
+                        val lutIdx = (buf[2].coerceIn(0f, 1f) * 128f + 0.5f).toInt().coerceIn(0, 128)
+                        val r = (baseStrokeWidth * symmetryPressureLut[lutIdx] * 0.5f)
+                            .coerceAtLeast(0.75f)
+                        canvas.drawCircle(pointScratch[0], pointScratch[1], r, mirroredPointPaint)
+                    } else {
+                        var prevX = pointScratch[0]
+                        var prevY = pointScratch[1]
+                        var prevP = buf[2]
+                        for (i in 1 until n) {
+                            val base = i * 3
+                            viewTransform.docToScreen(buf[base], buf[base + 1], pointScratch)
+                            val curP = buf[base + 2]
+                            val avgP = (prevP + curP) * 0.5f
+                            val lutIdx = (avgP.coerceIn(0f, 1f) * 128f + 0.5f).toInt().coerceIn(0, 128)
+                            mirroredDrawPaint.strokeWidth =
+                                (baseStrokeWidth * symmetryPressureLut[lutIdx]).coerceAtLeast(1.5f)
+                            canvas.drawLine(prevX, prevY, pointScratch[0], pointScratch[1], mirroredDrawPaint)
+                            prevX = pointScratch[0]
+                            prevY = pointScratch[1]
+                            prevP = curP
+                        }
+                    }
+                }
+
+                // 2.2 绘制对称镜像分支 (对称面实时轨迹)
                 for (b in 0 until mirroredSamples.size) {
                     val buf = mirroredSamples[b]
                     val n = mirroredSizes[b]
@@ -4566,6 +4636,7 @@ class CanvasTouchView(context: Context) : View(context) {
 
                 if (hasSymmetry) {
                     updateSymmetryPressureLut(v)
+                    appendPrimarySample(v.smoothedStrokeX, v.smoothedStrokeY, v.smoothedStrokePressure)
                     val symPts = computeAllSymmetricPoints(Point2D(v.smoothedStrokeX, v.smoothedStrokeY))
                     ensureMirrorBranches(symPts.size)
                     for (idx in symPts.indices) {
@@ -4865,6 +4936,7 @@ class CanvasTouchView(context: Context) : View(context) {
                         lastSoundTimeMs = 0L
                         if (hasSymmetry) {
                             updateSymmetryPressureLut(v)
+                            appendPrimarySample(v.smoothedStrokeX, v.smoothedStrokeY, v.smoothedStrokePressure)
                             val symPts = computeAllSymmetricPoints(Point2D(v.smoothedStrokeX, v.smoothedStrokeY))
                             ensureMirrorBranches(symPts.size)
                             for (idx in symPts.indices) {
@@ -4900,6 +4972,7 @@ class CanvasTouchView(context: Context) : View(context) {
                     updateStylusSensors(event, pointerIndex, isStylus, historyPos = i)
                     v.touchMove(hAssisted.x, hAssisted.y, hP.toDouble(), hTime, touchTiltX, touchTiltY, touchRotation)
                     if (hasSymmetry) {
+                        appendPrimarySample(v.smoothedStrokeX, v.smoothedStrokeY, v.smoothedStrokePressure)
                         val symPts = computeAllSymmetricPoints(Point2D(v.smoothedStrokeX, v.smoothedStrokeY))
                         for (idx in symPts.indices) {
                             appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, v.smoothedStrokePressure)
@@ -4922,6 +4995,7 @@ class CanvasTouchView(context: Context) : View(context) {
                 lastSoundTimeMs = event.eventTime
 
                 if (hasSymmetry) {
+                    appendPrimarySample(v.smoothedStrokeX, v.smoothedStrokeY, v.smoothedStrokePressure)
                     val symPts = computeAllSymmetricPoints(Point2D(v.smoothedStrokeX, v.smoothedStrokeY))
                     for (idx in symPts.indices) {
                         appendMirrorSample(idx, symPts[idx].x, symPts[idx].y, v.smoothedStrokePressure)
@@ -5994,15 +6068,18 @@ class CanvasTouchView(context: Context) : View(context) {
                         safeEndSymmetryUndoMacro()
                     } else {
                         val hasBranchesToReplay = hasSymmetry && mirrorBranchHasSamples()
-                        // 仅当没有镜像分支重放时主笔才立即全量渲染；有分支则在镜像分支执行完毕后统一渲染
-                        v.touchEnd(render = !hasBranchesToReplay)
+                        val isEraserStroke = (effTool() == Tool.ERASER)
+                        val overrideTool = if (effTool() == Tool.ERASER && tool != Tool.ERASER) "eraser" else null
+                        // 仅当没有镜像分支重放时主笔才立即全量渲染且立即还原覆盖状态；有分支则在镜像分支执行完毕后统一渲染与还原
+                        v.touchEnd(render = !hasBranchesToReplay, deferOverrideRestore = hasBranchesToReplay)
                         if (hasBranchesToReplay) {
-                            val isEraserStroke = (effTool() == Tool.ERASER)
+                            isSymmetryReplaying = true
                             v.replaySymmetricBranches(
                                 mirroredSamples,
                                 mirroredSizes,
                                 mirroredSamples.size,
                                 isEraser = isEraserStroke,
+                                overrideTool = overrideTool,
                                 onComplete = {
                                     resetMirrorBranches()
                                     isSymmetryUndoMacroOpen = false
