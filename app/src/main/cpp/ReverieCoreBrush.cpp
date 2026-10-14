@@ -1701,7 +1701,9 @@ bool ReverieCore::scratchpadStrokeStart(qreal x, qreal y, qreal pressure, qreal 
     }
 
     m_scratchpadPainter = new KisPainter(m_scratchpadDev);
-    KisNodeSP node = (!m_layers.isEmpty() && m_layers.first().node) ? KisNodeSP(m_layers.first().node) : KisNodeSP();
+    m_scratchpadPainter->setRunnableStrokeJobsInterface(&m_fakeExecutor);
+
+    KisNodeSP node = new KisPaintLayer(m_document, QStringLiteral("ScratchPad"), OPACITY_OPAQUE_U8, m_scratchpadDev);
     m_scratchpadPainter->setPaintOpPreset(m_brushPreset, node, m_document);
 
     const KoColorSpace *cs = m_scratchpadDev->colorSpace();
@@ -1725,6 +1727,20 @@ bool ReverieCore::scratchpadStrokeStart(qreal x, qreal y, qreal pressure, qreal 
     KisPaintInformation pi(pt, pressure, tiltX, tiltY, rotation);
     m_scratchpadPainter->paintAt(pi, m_scratchpadDistInfo);
 
+    if (KisPaintOp *op = m_scratchpadPainter->paintOp()) {
+        while (true) {
+            QVector<KisRunnableStrokeJobData *> jobs;
+            auto result = op->doAsynchronousUpdate(jobs);
+            for (auto *j : jobs) {
+                j->run();
+                delete j;
+            }
+            if (jobs.isEmpty() || !result.second) {
+                break;
+            }
+        }
+    }
+
     m_scratchpadLastSample = StrokeSample{pt, pressure, tiltX, tiltY, rotation, 0.0};
     m_scratchpadStrokeActive = true;
     return true;
@@ -1737,6 +1753,21 @@ bool ReverieCore::scratchpadStrokeMove(qreal x, qreal y, qreal pressure, qreal t
     KisPaintInformation pi1(m_scratchpadLastSample.imgPos, m_scratchpadLastSample.pressure, m_scratchpadLastSample.tiltX, m_scratchpadLastSample.tiltY, m_scratchpadLastSample.rotation);
     KisPaintInformation pi2(pt, pressure, tiltX, tiltY, rotation);
     m_scratchpadPainter->paintLine(pi1, pi2, m_scratchpadDistInfo);
+
+    if (KisPaintOp *op = m_scratchpadPainter->paintOp()) {
+        while (true) {
+            QVector<KisRunnableStrokeJobData *> jobs;
+            auto result = op->doAsynchronousUpdate(jobs);
+            for (auto *j : jobs) {
+                j->run();
+                delete j;
+            }
+            if (jobs.isEmpty() || !result.second) {
+                break;
+            }
+        }
+    }
+
     m_scratchpadLastSample = StrokeSample{pt, pressure, tiltX, tiltY, rotation, 0.0};
     return true;
 }
@@ -1744,6 +1775,19 @@ bool ReverieCore::scratchpadStrokeMove(qreal x, qreal y, qreal pressure, qreal t
 void ReverieCore::scratchpadStrokeEnd()
 {
     if (m_scratchpadPainter) {
+        if (KisPaintOp *op = m_scratchpadPainter->paintOp()) {
+            while (true) {
+                QVector<KisRunnableStrokeJobData *> jobs;
+                auto result = op->doAsynchronousUpdate(jobs);
+                for (auto *j : jobs) {
+                    j->run();
+                    delete j;
+                }
+                if (jobs.isEmpty() || !result.second) {
+                    break;
+                }
+            }
+        }
         m_scratchpadPainter->end();
         delete m_scratchpadPainter;
         m_scratchpadPainter = nullptr;
