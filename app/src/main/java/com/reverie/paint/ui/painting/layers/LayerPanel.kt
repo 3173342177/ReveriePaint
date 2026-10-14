@@ -441,7 +441,7 @@ fun LayerPanel(
 
             val (baseAlign, basePaddingModifier) = if (vm.floatingUiConfig.enabled) {
                 val hostPos = vm.floatingUiConfig.topBarPosition
-                val mDp = (vm.floatingUiConfig.marginDp + 44).dp
+                val mDp = vm.floatingUiConfig.popupInwardMarginDp(hostPos).dp
                 when (hostPos.edge) {
                     com.reverie.paint.model.PanelEdge.TOP -> {
                         when (hostPos.alignment) {

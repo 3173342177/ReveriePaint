@@ -263,7 +263,7 @@ fun ColorPanel(
         ) {
             val (baseAlign, basePaddingModifier) = if (vm.floatingUiConfig.enabled) {
                 val hostPos = vm.floatingUiConfig.sliderRailPosition
-                val mDp = (vm.floatingUiConfig.marginDp + 44).dp
+                val mDp = vm.floatingUiConfig.popupInwardMarginDp(hostPos).dp
                 when (hostPos.edge) {
                     com.reverie.paint.model.PanelEdge.LEFT -> {
                         when (hostPos.alignment) {

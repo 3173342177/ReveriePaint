@@ -53,7 +53,19 @@ data class FloatingUiConfig(
     val topBarActions: List<QuickAction> = emptyList(),
     val panelOrder: List<String> = DEFAULT_PANEL_ORDER,
 ) {
+    /**
+     * 计算依附于宿主槽位弹出二级子面板时的向内边距 (dp 纯数值)
+     * 动态避让同槽位中向内堆叠的所有并列主面板，杜绝弹窗遮挡主面板
+     */
+    fun popupInwardMarginDp(hostPos: PanelPosition): Int {
+        val sharingCount = listOf(topBarPosition, toolRailPosition, sliderRailPosition).count { it == hostPos }
+        val maxLayer = (sharingCount - 1).coerceAtLeast(0)
+        val step = if (hostPos.edge.isHorizontal) 46 else 48
+        return marginDp + maxLayer * step + 44
+    }
+
     companion object {
         val DEFAULT_PANEL_ORDER = listOf("TOOLRAIL", "SLIDERRAIL", "TOPBAR")
     }
 }
+
