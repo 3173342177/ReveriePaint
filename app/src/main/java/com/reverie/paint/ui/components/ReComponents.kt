@@ -702,12 +702,12 @@ fun ReVerticalSlider(
 
                 // Dynamic Indicator Line (Spring animations with momentum stretch & squash)
                 val indicatorHeight by animateDpAsState(
-                    targetValue = if (isDragging) (4.5f + dynamicStretch).dp else 3.dp,
+                    targetValue = if (isDragging) (5.8f + dynamicStretch).dp else 3.dp,
                     animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_h"
                 )
                 val indicatorWidth by animateDpAsState(
-                    targetValue = if (isDragging) ((trackWidth + 2f) - dynamicStretch * 0.6f).dp else trackWidth.dp,
+                    targetValue = if (isDragging) ((trackWidth - 0.5f) - dynamicStretch * 0.5f).dp else (trackWidth - 2f).dp,
                     animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_w"
                 )
@@ -717,7 +717,7 @@ fun ReVerticalSlider(
                     label = "ind_alpha"
                 )
 
-                val travelPx = with(density) { (trackHeight - 4).dp.toPx() }
+                val travelPx = with(density) { (trackHeight - 2.5).dp.toPx() }
                 val indicatorColor = androidx.compose.ui.graphics.lerp(colors.text, colors.accent, 0.45f)
 
                 Box(
@@ -1001,12 +1001,12 @@ fun ReHorizontalSlider(
 
                 // Dynamic Indicator Line (Spring animations with momentum stretch & squash)
                 val indicatorWidth by animateDpAsState(
-                    targetValue = if (isDragging) (4.5f + dynamicStretch).dp else 3.dp,
+                    targetValue = if (isDragging) (5.8f + dynamicStretch).dp else 3.dp,
                     animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_w_h"
                 )
                 val indicatorHeight by animateDpAsState(
-                    targetValue = if (isDragging) ((trackHeight + 2f) - dynamicStretch * 0.6f).dp else trackHeight.dp,
+                    targetValue = if (isDragging) ((trackHeight - 0.5f) - dynamicStretch * 0.5f).dp else (trackHeight - 2f).dp,
                     animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_h_h"
                 )
@@ -1016,7 +1016,7 @@ fun ReHorizontalSlider(
                     label = "ind_alpha_h"
                 )
 
-                val travelPx = with(density) { (trackWidth - 4).dp.toPx() }
+                val travelPx = with(density) { (trackWidth - 2.5).dp.toPx() }
                 val indicatorColor = androidx.compose.ui.graphics.lerp(colors.text, colors.accent, 0.45f)
 
                 Box(
