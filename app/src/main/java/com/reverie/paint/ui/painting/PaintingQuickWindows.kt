@@ -44,18 +44,9 @@ internal fun BoxScope.PaintingQuickWindows(
     val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
 
-    var lastScreenW by remember { mutableFloatStateOf(screenW) }
-    var lastScreenH by remember { mutableFloatStateOf(screenH) }
-
-    // 仅在横竖屏切换/屏幕旋转的一瞬间，若小窗坐标已超出当前屏幕可视区域，才将其推回边界内
+    // 横竖屏切换或屏幕尺寸变动时，若小窗坐标已超出当前可视区域，将其推回边界内
     LaunchedEffect(screenW, screenH) {
         if (screenW <= 0f || screenH <= 0f) return@LaunchedEffect
-        val isScreenRotated = lastScreenW > 0f && lastScreenH > 0f &&
-            (lastScreenW != screenW || lastScreenH != screenH)
-        lastScreenW = screenW
-        lastScreenH = screenH
-
-        if (!isScreenRotated) return@LaunchedEffect
 
         // 1. Reference Window
         if (vm.referenceWindowOpen && vm.referenceWindowX > 0f) {

@@ -92,6 +92,10 @@ fun ReferenceWindow(
     opacity: Float = 0.96f,
 ) {
     val density = LocalDensity.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+
     var showSettingsPopup by remember { mutableStateOf(false) }
     var showAlbumPicker by remember { mutableStateOf(false) }
 
@@ -134,10 +138,21 @@ fun ReferenceWindow(
     Box(
         modifier = modifier
             .offset {
-                IntOffset(
-                    vm.referenceWindowX.roundToInt(),
-                    vm.referenceWindowY.roundToInt()
-                )
+                val panelWPx = with(density) { vm.referenceWindowWidth.dp.toPx() }
+                val panelHPx = with(density) { vm.referenceWindowHeight.dp.toPx() }
+                val maxX = (screenWidthPx - panelWPx).coerceAtLeast(0f)
+                val maxY = (screenHeightPx - panelHPx).coerceAtLeast(0f)
+                val x = if (vm.referenceWindowX >= 0f) {
+                    vm.referenceWindowX.coerceAtMost(maxX).roundToInt()
+                } else {
+                    ((screenWidthPx - panelWPx) / 2f).coerceAtLeast(0f).roundToInt()
+                }
+                val y = if (vm.referenceWindowY >= 0f) {
+                    vm.referenceWindowY.coerceAtMost(maxY).roundToInt()
+                } else {
+                    ((screenHeightPx - panelHPx) / 2f).coerceAtLeast(0f).roundToInt()
+                }
+                IntOffset(x, y)
             }
             .size(vm.referenceWindowWidth.dp, vm.referenceWindowHeight.dp)
             .shadow(14.dp, windowShape)
