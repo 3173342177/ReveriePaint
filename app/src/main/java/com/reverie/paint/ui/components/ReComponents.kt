@@ -685,12 +685,13 @@ fun ReVerticalSlider(
                     label = "ind_w"
                 )
                 val indicatorAlpha by animateFloatAsState(
-                    targetValue = if (isDragging) 0.85f else 1.0f,
+                    targetValue = if (isDragging) 0.62f else 0.78f,
                     animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
                     label = "ind_alpha"
                 )
 
                 val travelPx = with(density) { (trackHeight - 4).dp.toPx() }
+                val indicatorColor = androidx.compose.ui.graphics.lerp(colors.text, colors.accent, 0.45f)
 
                 Box(
                     modifier = Modifier
@@ -701,12 +702,12 @@ fun ReVerticalSlider(
                         .width(indicatorWidth)
                         .height(indicatorHeight)
                         .shadow(
-                            elevation = if (isDragging) 6.dp else 2.dp,
+                            elevation = if (isDragging) 4.dp else 1.5.dp,
                             shape = RoundedCornerShape(indicatorHeight / 2),
-                            spotColor = Color.Black.copy(alpha = 0.4f),
+                            spotColor = Color.Black.copy(alpha = 0.25f),
                         )
                         .clip(RoundedCornerShape(indicatorHeight / 2))
-                        .background(colors.text.copy(alpha = indicatorAlpha))
+                        .background(indicatorColor.copy(alpha = indicatorAlpha))
                 )
 
                 // Live floating tooltip (Fixed cleanly at Center-Start/Center-End of the slider, no jumping/jittering)
@@ -954,12 +955,13 @@ fun ReHorizontalSlider(
                     label = "ind_h_h"
                 )
                 val indicatorAlpha by animateFloatAsState(
-                    targetValue = if (isDragging) 0.85f else 1.0f,
+                    targetValue = if (isDragging) 0.62f else 0.78f,
                     animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
                     label = "ind_alpha_h"
                 )
 
                 val travelPx = with(density) { (trackWidth - 4).dp.toPx() }
+                val indicatorColor = androidx.compose.ui.graphics.lerp(colors.text, colors.accent, 0.45f)
 
                 Box(
                     modifier = Modifier
@@ -970,12 +972,12 @@ fun ReHorizontalSlider(
                         .width(indicatorWidth)
                         .height(indicatorHeight)
                         .shadow(
-                            elevation = if (isDragging) 6.dp else 2.dp,
+                            elevation = if (isDragging) 4.dp else 1.5.dp,
                             shape = RoundedCornerShape(indicatorWidth / 2),
-                            spotColor = Color.Black.copy(alpha = 0.4f),
+                            spotColor = Color.Black.copy(alpha = 0.25f),
                         )
                         .clip(RoundedCornerShape(indicatorWidth / 2))
-                        .background(colors.text.copy(alpha = indicatorAlpha))
+                        .background(indicatorColor.copy(alpha = indicatorAlpha))
                 )
 
                 if (isDragging) {
