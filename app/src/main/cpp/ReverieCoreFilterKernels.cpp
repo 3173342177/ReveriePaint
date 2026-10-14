@@ -238,13 +238,61 @@ void reverieApplyScalarKernel(QImage &img, int filterType, double p1, double p2,
         });
         break;
     }
-    case 8: { // Find Edges (Sobel): p1 = strength (0.5..10), p2 = mode (0: 白底黑线线稿, 1: 黑底彩色边缘, 2: 透明线稿)
+    case 8: { // Find Edges (Anti-Aliased Scharr): p1 = strength (0.5..10), p2 = mode (0: 白底黑线线稿, 1: 黑底彩色边缘, 2: 透明线稿)
         const double strength = (p1 > 0.0) ? qBound(0.5, p1, 10.0) : 2.0;
         const int mode = int(p2 + 0.5);
         QImage tmp = img.copy();
+        QImage sm(w, h, img.format());
+
+        // 步骤 1: 预乘 Alpha 并执行水平抗锯齿平滑 [1, 2, 1] / 4
         filterParallelFor(0, h, [&](int startY, int endY) {
-            const int kx[3][3] = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
-            const int ky[3][3] = {{-1, -2, -1}, {0, 0, 0}, {1, 2, 1}};
+            for (int y = startY; y < endY; ++y) {
+                const quint8 *src = tmp.constScanLine(y);
+                quint8 *dst = sm.scanLine(y);
+                for (int x = 0; x < w; ++x) {
+                    int x0 = (x > 0) ? (x - 1) : 0;
+                    int x2 = (x < w - 1) ? (x + 1) : (w - 1);
+                    const quint8 *p0 = src + x0 * 4;
+                    const quint8 *p1 = src + x * 4;
+                    const quint8 *p2 = src + x2 * 4;
+
+                    int a0 = p0[3], a1 = p1[3], a2 = p2[3];
+                    for (int c = 0; c < 3; ++c) {
+                        int v0 = (p0[c] * a0) / 255;
+                        int v1 = (p1[c] * a1) / 255;
+                        int v2 = (p2[c] * a2) / 255;
+                        dst[x * 4 + c] = quint8((v0 + 2 * v1 + v2 + 2) >> 2);
+                    }
+                    dst[x * 4 + 3] = quint8((a0 + 2 * a1 + a2 + 2) >> 2);
+                }
+            }
+        });
+
+        // 步骤 2: 垂直抗锯齿平滑 [1, 2, 1] / 4 回写 tmp
+        filterParallelFor(0, h, [&](int startY, int endY) {
+            for (int y = startY; y < endY; ++y) {
+                int y0 = (y > 0) ? (y - 1) : 0;
+                int y2 = (y < h - 1) ? (y + 1) : (h - 1);
+                const quint8 *r0 = sm.constScanLine(y0);
+                const quint8 *r1 = sm.constScanLine(y);
+                const quint8 *r2 = sm.constScanLine(y2);
+                quint8 *dst = tmp.scanLine(y);
+                for (int x = 0; x < w; ++x) {
+                    int idx = x * 4;
+                    dst[idx]     = quint8((r0[idx]     + 2 * r1[idx]     + r2[idx]     + 2) >> 2);
+                    dst[idx + 1] = quint8((r0[idx + 1] + 2 * r1[idx + 1] + r2[idx + 1] + 2) >> 2);
+                    dst[idx + 2] = quint8((r0[idx + 2] + 2 * r1[idx + 2] + r2[idx + 2] + 2) >> 2);
+                    dst[idx + 3] = quint8((r0[idx + 3] + 2 * r1[idx + 3] + r2[idx + 3] + 2) >> 2);
+                }
+            }
+        });
+
+        // 步骤 3: 各向同性 Scharr 算子与归一化梯度提取 (消除对角线锯齿)
+        const int kx[3][3] = {{-3, 0, 3}, {-10, 0, 10}, {-3, 0, 3}};
+        const int ky[3][3] = {{-3, -10, -3}, {0, 0, 0}, {3, 10, 3}};
+        const double invNormStrength = strength / 16.0;
+
+        filterParallelFor(0, h, [&](int startY, int endY) {
             for (int y = startY; y < endY; ++y) {
                 quint8 *dst = img.scanLine(y);
                 for (int x = 0; x < w; ++x) {
@@ -257,35 +305,35 @@ void reverieApplyScalarKernel(QImage &img, int filterType, double p1, double p2,
                             const quint8 *p = row + nx * 4;
                             int k_x = kx[dy + 1][dx + 1];
                             int k_y = ky[dy + 1][dx + 1];
-                            grx += p[2] * k_x; gry += p[2] * k_y;
+                            grx += p[0] * k_x; gry += p[0] * k_y;
                             ggx += p[1] * k_x; ggy += p[1] * k_y;
-                            gbx += p[0] * k_x; gby += p[0] * k_y;
+                            gbx += p[2] * k_x; gby += p[2] * k_y;
                             gax += p[3] * k_x; gay += p[3] * k_y;
                         }
                     }
-                    int magR = qBound(0, int(sqrt(grx * grx + gry * gry) * strength), 255);
-                    int magG = qBound(0, int(sqrt(ggx * ggx + ggy * ggy) * strength), 255);
-                    int magB = qBound(0, int(sqrt(gbx * gbx + gby * gby) * strength), 255);
-                    int magA = qBound(0, int(sqrt(gax * gax + gay * gay) * strength), 255);
+                    int magR = qBound(0, int(sqrt(grx * grx + gry * gry) * invNormStrength + 0.5), 255);
+                    int magG = qBound(0, int(sqrt(ggx * ggx + ggy * ggy) * invNormStrength + 0.5), 255);
+                    int magB = qBound(0, int(sqrt(gbx * gbx + gby * gby) * invNormStrength + 0.5), 255);
+                    int magA = qBound(0, int(sqrt(gax * gax + gay * gay) * invNormStrength + 0.5), 255);
                     int mag = (magR * 299 + magG * 587 + magB * 114) / 1000;
                     mag = qMax(mag, magA);
 
                     quint8 *px = dst + x * 4;
                     if (mode == 0) { // 白底黑线 (线稿)
                         int lineVal = qBound(0, 255 - mag, 255);
-                        px[2] = quint8(lineVal);
-                        px[1] = quint8(lineVal);
                         px[0] = quint8(lineVal);
+                        px[1] = quint8(lineVal);
+                        px[2] = quint8(lineVal);
                         px[3] = 255;
                     } else if (mode == 1) { // 黑底彩色边缘 (轮廓高亮)
-                        px[2] = quint8(magR);
+                        px[0] = quint8(magR);
                         px[1] = quint8(magG);
-                        px[0] = quint8(magB);
+                        px[2] = quint8(magB);
                         px[3] = 255;
                     } else { // 透明背景黑线 (提取透明线稿)
-                        px[2] = 0;
-                        px[1] = 0;
                         px[0] = 0;
+                        px[1] = 0;
+                        px[2] = 0;
                         px[3] = quint8(qBound(0, mag, 255));
                     }
                 }
