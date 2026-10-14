@@ -1992,6 +1992,8 @@
     <string name="panel_dock_reset">Reset</string>
     <string name="panel_dock_dialog_tip">Drag panel capsules to dashed slots to dock them</string>
     <string name="panel_dock_drag_tip">Drag capsule or tap slot to place</string>
+    <string name="floating_tab_layout">Layout &amp; Size</string>
+    <string name="floating_tab_shortcuts">Top Bar Shortcuts</string>
     <string name="floating_topbar_shortcuts_title">Top Bar Shortcuts</string>
     <string name="floating_topbar_shortcuts_desc">Add quick action buttons to the floating top bar capsule</string>
     <string name="floating_topbar_shortcuts_btn">Configure Shortcuts</string>
