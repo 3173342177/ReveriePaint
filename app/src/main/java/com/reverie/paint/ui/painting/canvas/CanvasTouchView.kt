@@ -3809,6 +3809,7 @@ class CanvasTouchView(context: Context) : View(context) {
             }
 
             val canEyedrop = v.longPressEyedropperEnabled &&
+                (!v.penOnlyMode || v.penModeStylusEyedropperEnabled) &&
                 (tool == Tool.BRUSH || tool == Tool.ERASER || tool == Tool.SMUDGE || tool == Tool.LIQUIFY)
 
             when (event.actionMasked) {

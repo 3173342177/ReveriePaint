@@ -898,6 +898,8 @@
     <string name="settings_eyedropper_speed_highest">Instant</string>
     <string name="settings_eyedropper_offset_title">Eyedropper Offset</string>
     <string name="settings_eyedropper_offset_desc">Offset pick point above finger to prevent blocking view</string>
+    <string name="settings_eyedropper_stylus_in_pen_mode_title">Allow Stylus Long Press to Pick Color in Pen Mode</string>
+    <string name="settings_eyedropper_stylus_in_pen_mode_desc">When disabled, only finger long press picks color in pen mode, stylus long press will not trigger color picking</string>
     <string name="settings_eyedropper_footer_desc">Note: Higher sensitivity triggers faster. Movement tolerance is fixed at 1dp. Seamlessly switches to stylus when stylus mode is active</string>
     <string name="settings_shortcut_dialog_title">Set Shortcut</string>
     <string name="settings_shortcut_press_key">Press a shortcut key...</string>

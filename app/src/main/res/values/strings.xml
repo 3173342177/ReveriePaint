@@ -898,6 +898,8 @@
     <string name="settings_eyedropper_speed_highest">极速</string>
     <string name="settings_eyedropper_offset_title">取色点偏移</string>
     <string name="settings_eyedropper_offset_desc">取色位置偏移到手指上方，避免手指遮挡中心点</string>
+    <string name="settings_eyedropper_stylus_in_pen_mode_title">笔模式下允许手写笔长按取色</string>
+    <string name="settings_eyedropper_stylus_in_pen_mode_desc">关闭后在笔模式下仅允许手指长按取色，手写笔长按不触发取色</string>
     <string name="settings_eyedropper_footer_desc">说明：灵敏度越高，长按触发时间越短；移动容差固定为 1dp（移动超过即不触发），笔模式开启时，长按取色由手指触控无缝转换为手写笔长按</string>
     <string name="settings_shortcut_dialog_title">设置快捷键</string>
     <string name="settings_shortcut_press_key">请按下快捷键...</string>

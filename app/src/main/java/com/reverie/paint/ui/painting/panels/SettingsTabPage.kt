@@ -833,6 +833,29 @@ internal fun SettingsTabPage(
                                     onChecked = { vm.updateEyedropperOffsetEnabled(it) },
                                 )
                             }
+
+                            SettingsInnerDivider()
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(stringResource(R.string.settings_eyedropper_stylus_in_pen_mode_title), color = Morandi.text, fontSize = 13.sp)
+                                    Text(
+                                        stringResource(R.string.settings_eyedropper_stylus_in_pen_mode_desc),
+                                        color = Morandi.subText,
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                                ReSwitch(
+                                    checked = vm.penModeStylusEyedropperEnabled,
+                                    onChecked = { vm.updatePenModeStylusEyedropperEnabled(it) },
+                                )
+                            }
                         }
                     }
 

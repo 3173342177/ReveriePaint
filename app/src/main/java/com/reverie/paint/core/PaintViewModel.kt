@@ -2114,6 +2114,19 @@ class PaintViewModel : ViewModel() {
         }
     }
 
+    var penModeStylusEyedropperEnabled by mutableStateOf(true)
+
+    fun updatePenModeStylusEyedropperEnabled(enable: Boolean) {
+        penModeStylusEyedropperEnabled = enable
+        if (::appContext.isInitialized) {
+            appContext
+                .getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("penModeStylusEyedropperEnabled", enable)
+                .apply()
+        }
+    }
+
     fun updatePenOnlyMode(enable: Boolean) {
         penOnlyMode = enable
         if (::appContext.isInitialized) {
@@ -3412,6 +3425,7 @@ class PaintViewModel : ViewModel() {
             longPressEyedropperEnabled = prefs.getBoolean("longPressEyedropperEnabled", true)
             eyedropperSensitivity = prefs.getInt("eyedropperSensitivity", 3).coerceIn(1, 5)
             eyedropperOffsetEnabled = prefs.getBoolean("eyedropperOffsetEnabled", true)
+            penModeStylusEyedropperEnabled = prefs.getBoolean("penModeStylusEyedropperEnabled", true)
             brushCursorMode = prefs.getInt("brushCursorMode", 3)
             eraserCursorMode = prefs.getInt("eraserCursorMode", 3)
             cursorStyleMode = prefs.getInt("cursorStyleMode", 5)

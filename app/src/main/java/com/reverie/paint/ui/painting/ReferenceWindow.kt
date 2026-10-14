@@ -177,7 +177,9 @@ fun ReferenceWindow(
                         val downTime = System.currentTimeMillis()
                         var maxMovement = 0f
 
-                        val canEyedrop = vm.longPressEyedropperEnabled && (
+                        val isStylus = down.type == androidx.compose.ui.input.pointer.PointerType.Stylus
+                        val canEyedrop = vm.longPressEyedropperEnabled &&
+                            (!vm.penOnlyMode || !isStylus || vm.penModeStylusEyedropperEnabled) && (
                             if (vm.referenceActiveTab == 0) vm.referenceImages.isNotEmpty()
                             else (vm.displayBitmap != null)
                         )
