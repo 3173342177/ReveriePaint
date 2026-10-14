@@ -702,7 +702,7 @@ fun ReVerticalSlider(
 
                 // Dynamic Indicator Line (Spring animations with momentum stretch & squash)
                 val indicatorHeight by animateDpAsState(
-                    targetValue = if (isDragging) (5.8f + dynamicStretch).dp else 3.dp,
+                    targetValue = if (isDragging) (8.0f + dynamicStretch).dp else 3.dp,
                     animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_h"
                 )
@@ -717,11 +717,12 @@ fun ReVerticalSlider(
                     label = "ind_alpha"
                 )
 
-                val travelPx = with(density) { (trackHeight - 2.5).dp.toPx() }
+                val travelPx = with(density) { (trackHeight.dp - indicatorHeight - 2.dp).toPx() }
                 val indicatorColor = androidx.compose.ui.graphics.lerp(colors.text, colors.accent, 0.45f)
 
                 Box(
                     modifier = Modifier
+                        .padding(bottom = 1.dp)
                         .align(Alignment.BottomCenter)
                         .graphicsLayer {
                             translationY = -(localFraction.coerceIn(0f, 1f) * travelPx)
@@ -1001,7 +1002,7 @@ fun ReHorizontalSlider(
 
                 // Dynamic Indicator Line (Spring animations with momentum stretch & squash)
                 val indicatorWidth by animateDpAsState(
-                    targetValue = if (isDragging) (5.8f + dynamicStretch).dp else 3.dp,
+                    targetValue = if (isDragging) (8.0f + dynamicStretch).dp else 3.dp,
                     animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_w_h"
                 )
@@ -1016,11 +1017,12 @@ fun ReHorizontalSlider(
                     label = "ind_alpha_h"
                 )
 
-                val travelPx = with(density) { (trackWidth - 2.5).dp.toPx() }
+                val travelPx = with(density) { (trackWidth.dp - indicatorWidth - 2.dp).toPx() }
                 val indicatorColor = androidx.compose.ui.graphics.lerp(colors.text, colors.accent, 0.45f)
 
                 Box(
                     modifier = Modifier
+                        .padding(start = 1.dp)
                         .align(Alignment.CenterStart)
                         .graphicsLayer {
                             translationX = localFraction.coerceIn(0f, 1f) * travelPx
