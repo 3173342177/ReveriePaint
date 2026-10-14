@@ -127,12 +127,6 @@ fun QuickBrushWindow(
         if (isCollapsed) RoundedCornerShape(22.dp) else RoundedCornerShape(22.dp)
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            vm.quickBrushWindowWidth = 0f
-            vm.quickBrushWindowHeight = 0f
-        }
-    }
 
     Box(
         modifier = modifier
@@ -184,6 +178,16 @@ fun QuickBrushWindow(
                         .wrapContentSize()
                         .pointerInput(Unit) {
                             detectDragGestures(
+                                onDragStart = {
+                                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                    if (vm.quickBrushWindowX < 0f) {
+                                        vm.quickBrushWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                    }
+                                    if (vm.quickBrushWindowY < 0f) {
+                                        vm.quickBrushWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                    }
+                                },
                                 onDragEnd = { vm.persistQuickBrushState() },
                                 onDragCancel = { vm.persistQuickBrushState() },
                             ) { change, dragAmount ->
@@ -255,6 +259,16 @@ fun QuickBrushWindow(
                                 .height(20.dp)
                                 .pointerInput(Unit) {
                                     detectDragGestures(
+                                        onDragStart = {
+                                            val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                            val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                            if (vm.quickBrushWindowX < 0f) {
+                                                vm.quickBrushWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                            }
+                                            if (vm.quickBrushWindowY < 0f) {
+                                                vm.quickBrushWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                            }
+                                        },
                                         onDragEnd = { vm.persistQuickBrushState() },
                                         onDragCancel = { vm.persistQuickBrushState() },
                                     ) { change, dragAmount ->
@@ -385,6 +399,16 @@ fun QuickBrushWindow(
                                 .height(28.dp)
                                 .pointerInput(Unit) {
                                     detectDragGestures(
+                                        onDragStart = {
+                                            val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                            val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                            if (vm.quickBrushWindowX < 0f) {
+                                                vm.quickBrushWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                            }
+                                            if (vm.quickBrushWindowY < 0f) {
+                                                vm.quickBrushWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                            }
+                                        },
                                         onDragEnd = { vm.persistQuickBrushState() },
                                         onDragCancel = { vm.persistQuickBrushState() },
                                     ) { change, dragAmount ->

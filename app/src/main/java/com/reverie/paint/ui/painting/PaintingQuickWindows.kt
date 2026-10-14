@@ -44,91 +44,14 @@ internal fun BoxScope.PaintingQuickWindows(
     val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
 
-    // 横竖屏切换或屏幕尺寸变动时，若小窗坐标已超出当前可视区域，将其推回边界内
+    // 横竖屏切换或屏幕尺寸变动时，将小窗坐标约束在安全区内
     LaunchedEffect(screenW, screenH) {
         if (screenW <= 0f || screenH <= 0f) return@LaunchedEffect
-
-        // 1. Reference Window
-        if (vm.referenceWindowOpen && vm.referenceWindowX > 0f) {
-            val panelW = with(density) { vm.referenceWindowWidth.dp.toPx() }
-            val panelH = with(density) { vm.referenceWindowHeight.dp.toPx() }
-            val maxX = (screenW - panelW).coerceAtLeast(0f)
-            val maxY = (screenH - panelH).coerceAtLeast(0f)
-            if (vm.referenceWindowX > maxX) vm.referenceWindowX = maxX
-            if (vm.referenceWindowY > maxY) vm.referenceWindowY = maxY
-        }
-
-        // 2. Quick Action Window
-        if (vm.quickActionWindowOpen && vm.quickActionWindowX > 0f) {
-            val panelW = if (vm.quickActionWindowWidth > 0f) vm.quickActionWindowWidth else with(density) { 200.dp.toPx() }
-            val panelH = if (vm.quickActionWindowHeight > 0f) vm.quickActionWindowHeight else with(density) { 160.dp.toPx() }
-            val maxX = (screenW - panelW).coerceAtLeast(0f)
-            val maxY = (screenH - panelH).coerceAtLeast(0f)
-            var changed = false
-            if (vm.quickActionWindowX > maxX) {
-                vm.quickActionWindowX = maxX
-                changed = true
-            }
-            if (vm.quickActionWindowY > maxY) {
-                vm.quickActionWindowY = maxY
-                changed = true
-            }
-            if (changed) vm.persistQuickActionsState()
-        }
-
-        // 3. Quick Brush Window
-        if (vm.quickBrushWindowOpen && vm.quickBrushWindowX > 0f) {
-            val panelW = if (vm.quickBrushWindowWidth > 0f) vm.quickBrushWindowWidth else with(density) { 240.dp.toPx() }
-            val panelH = if (vm.quickBrushWindowHeight > 0f) vm.quickBrushWindowHeight else with(density) { 54.dp.toPx() }
-            val maxX = (screenW - panelW).coerceAtLeast(0f)
-            val maxY = (screenH - panelH).coerceAtLeast(0f)
-            var changed = false
-            if (vm.quickBrushWindowX > maxX) {
-                vm.quickBrushWindowX = maxX
-                changed = true
-            }
-            if (vm.quickBrushWindowY > maxY) {
-                vm.quickBrushWindowY = maxY
-                changed = true
-            }
-            if (changed) vm.persistQuickBrushState()
-        }
-
-        // 4. Quick Color Window
-        if (vm.quickColorWindowOpen && vm.quickColorWindowX > 0f) {
-            val panelW = if (vm.quickColorWindowWidth > 0f) vm.quickColorWindowWidth else with(density) { 212.dp.toPx() }
-            val panelH = if (vm.quickColorWindowHeight > 0f) vm.quickColorWindowHeight else with(density) { 272.dp.toPx() }
-            val maxX = (screenW - panelW).coerceAtLeast(0f)
-            val maxY = (screenH - panelH).coerceAtLeast(0f)
-            var changed = false
-            if (vm.quickColorWindowX > maxX) {
-                vm.quickColorWindowX = maxX
-                changed = true
-            }
-            if (vm.quickColorWindowY > maxY) {
-                vm.quickColorWindowY = maxY
-                changed = true
-            }
-            if (changed) vm.persistQuickColorState()
-        }
-
-        // 5. Quick Layer Window
-        if (vm.quickLayerWindowOpen && vm.quickLayerWindowX > 0f) {
-            val panelW = if (vm.quickLayerWindowWidth > 0f) vm.quickLayerWindowWidth else with(density) { 156.dp.toPx() }
-            val panelH = if (vm.quickLayerWindowHeight > 0f) vm.quickLayerWindowHeight else with(density) { 290.dp.toPx() }
-            val maxX = (screenW - panelW).coerceAtLeast(0f)
-            val maxY = (screenH - panelH).coerceAtLeast(0f)
-            var changed = false
-            if (vm.quickLayerWindowX > maxX) {
-                vm.quickLayerWindowX = maxX
-                changed = true
-            }
-            if (vm.quickLayerWindowY > maxY) {
-                vm.quickLayerWindowY = maxY
-                changed = true
-            }
-            if (changed) vm.persistQuickLayerState()
-        }
+        vm.clampQuickWindowsToSafeArea(
+            screenWidthPx = screenW,
+            screenHeightPx = screenH,
+            density = density.density,
+        )
     }
 
     LaunchedEffect(vm.referenceWindowOpen) {

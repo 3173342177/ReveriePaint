@@ -139,12 +139,6 @@ fun QuickActionWindow(
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            vm.quickActionWindowWidth = 0f
-            vm.quickActionWindowHeight = 0f
-        }
-    }
 
     Box(
         modifier = modifier
@@ -196,6 +190,16 @@ fun QuickActionWindow(
                     .wrapContentSize()
                     .pointerInput(Unit) {
                         detectDragGestures(
+                            onDragStart = {
+                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                if (vm.quickActionWindowX < 0f) {
+                                    vm.quickActionWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                }
+                                if (vm.quickActionWindowY < 0f) {
+                                    vm.quickActionWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                }
+                            },
                             onDragEnd = { vm.persistQuickActionsState() },
                             onDragCancel = { vm.persistQuickActionsState() },
                         ) { change, dragAmount ->
@@ -274,6 +278,16 @@ fun QuickActionWindow(
                         .height(24.dp)
                         .pointerInput(Unit) {
                             detectDragGestures(
+                                onDragStart = {
+                                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                    if (vm.quickActionWindowX < 0f) {
+                                        vm.quickActionWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                    }
+                                    if (vm.quickActionWindowY < 0f) {
+                                        vm.quickActionWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                    }
+                                },
                                 onDragEnd = { vm.persistQuickActionsState() },
                                 onDragCancel = { vm.persistQuickActionsState() },
                             ) { change, dragAmount ->

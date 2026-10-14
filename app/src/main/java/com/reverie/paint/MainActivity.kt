@@ -418,6 +418,15 @@ class MainActivity : ComponentActivity() {
             if (vm.immersiveMode) {
                 applyImmersive(true, vm.extendToCutout)
             }
+            val dm = resources.displayMetrics
+            val density = dm.density
+            val screenW = if (newConfig.screenWidthDp > 0) newConfig.screenWidthDp * density else dm.widthPixels.toFloat()
+            val screenH = if (newConfig.screenHeightDp > 0) newConfig.screenHeightDp * density else dm.heightPixels.toFloat()
+            vm.clampQuickWindowsToSafeArea(
+                screenWidthPx = screenW,
+                screenHeightPx = screenH,
+                density = density
+            )
         }
     }
 

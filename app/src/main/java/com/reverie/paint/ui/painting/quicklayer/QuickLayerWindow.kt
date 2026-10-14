@@ -122,12 +122,6 @@ fun QuickLayerWindow(
         if (isCollapsed) CircleShape else RoundedCornerShape(16.dp)
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            vm.quickLayerWindowWidth = 0f
-            vm.quickLayerWindowHeight = 0f
-        }
-    }
 
     // 层次排序逻辑 (倒序排列保持树形完整，顶层在最上方)
     val displayLayers = remember(vm.layers, vm.collapsedGroupNames) {
@@ -216,6 +210,16 @@ fun QuickLayerWindow(
                         .size(46.dp)
                         .pointerInput(Unit) {
                             detectDragGestures(
+                                onDragStart = {
+                                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                    if (vm.quickLayerWindowX < 0f) {
+                                        vm.quickLayerWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                    }
+                                    if (vm.quickLayerWindowY < 0f) {
+                                        vm.quickLayerWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                    }
+                                },
                                 onDragEnd = { vm.persistQuickLayerState() },
                                 onDragCancel = { vm.persistQuickLayerState() },
                             ) { change, dragAmount ->
@@ -276,6 +280,16 @@ fun QuickLayerWindow(
                             .height(38.dp)
                             .pointerInput(Unit) {
                                 detectDragGestures(
+                                    onDragStart = {
+                                        val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                        val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                        if (vm.quickLayerWindowX < 0f) {
+                                            vm.quickLayerWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                        }
+                                        if (vm.quickLayerWindowY < 0f) {
+                                            vm.quickLayerWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                        }
+                                    },
                                     onDragEnd = { vm.persistQuickLayerState() },
                                     onDragCancel = { vm.persistQuickLayerState() },
                                 ) { change, dragAmount ->

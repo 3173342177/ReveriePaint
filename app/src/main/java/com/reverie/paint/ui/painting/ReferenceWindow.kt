@@ -476,6 +476,16 @@ fun ReferenceWindow(
                     .height(28.dp)
                     .pointerInput(Unit) {
                         detectDragGestures(
+                            onDragStart = {
+                                val panelWPx = with(density) { vm.referenceWindowWidth.dp.toPx() }
+                                val panelHPx = with(density) { vm.referenceWindowHeight.dp.toPx() }
+                                if (vm.referenceWindowX < 0f) {
+                                    vm.referenceWindowX = ((screenWidthPx - panelWPx) / 2f).coerceAtLeast(0f)
+                                }
+                                if (vm.referenceWindowY < 0f) {
+                                    vm.referenceWindowY = ((screenHeightPx - panelHPx) / 2f).coerceAtLeast(0f)
+                                }
+                            },
                             onDragEnd = { vm.persistReferenceState() }
                         ) { change, dragAmount ->
                             change.consume()
@@ -512,6 +522,14 @@ fun ReferenceWindow(
                 },
                 onOpenAlbum = { showAlbumPicker = true },
                 onDrag = { dx, dy ->
+                    val panelWPx = with(density) { vm.referenceWindowWidth.dp.toPx() }
+                    val panelHPx = with(density) { vm.referenceWindowHeight.dp.toPx() }
+                    if (vm.referenceWindowX < 0f) {
+                        vm.referenceWindowX = ((screenWidthPx - panelWPx) / 2f).coerceAtLeast(0f)
+                    }
+                    if (vm.referenceWindowY < 0f) {
+                        vm.referenceWindowY = ((screenHeightPx - panelHPx) / 2f).coerceAtLeast(0f)
+                    }
                     vm.referenceWindowX += dx
                     vm.referenceWindowY += dy
                     vm.persistReferenceState()

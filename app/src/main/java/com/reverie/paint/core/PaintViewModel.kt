@@ -1030,6 +1030,122 @@ class PaintViewModel : ViewModel() {
         persistQuickLayerState()
     }
 
+    fun clampQuickWindowsToSafeArea(
+        screenWidthPx: Float,
+        screenHeightPx: Float,
+        density: Float,
+    ) {
+        if (screenWidthPx <= 0f || screenHeightPx <= 0f) return
+        val margin = 16f * density
+
+        // 1. Reference Window
+        if (referenceWindowX >= 0f) {
+            val w = referenceWindowWidth * density
+            val h = referenceWindowHeight * density
+            val minX = margin
+            val minY = margin
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            var changed = false
+            if (referenceWindowX > maxX) { referenceWindowX = maxX; changed = true }
+            if (referenceWindowX < minX) { referenceWindowX = minX; changed = true }
+            if (referenceWindowY > maxY) { referenceWindowY = maxY; changed = true }
+            if (referenceWindowY < minY) { referenceWindowY = minY; changed = true }
+            if (changed) persistReferenceState()
+        }
+
+        // 2. Quick Action Window
+        if (quickActionWindowX >= 0f) {
+            val fallbackW = when {
+                quickActionCollapsed -> 64f * density
+                quickActionsConfig.layoutMode == com.reverie.paint.model.QuickActionLayoutMode.COLUMN -> 56f * density
+                quickActionsConfig.layoutMode == com.reverie.paint.model.QuickActionLayoutMode.ROW -> 240f * density
+                quickActionsConfig.layoutMode == com.reverie.paint.model.QuickActionLayoutMode.GRID_2 -> 110f * density
+                else -> 160f * density
+            }
+            val fallbackH = when {
+                quickActionCollapsed -> 44f * density
+                quickActionsConfig.layoutMode == com.reverie.paint.model.QuickActionLayoutMode.COLUMN -> 280f * density
+                quickActionsConfig.layoutMode == com.reverie.paint.model.QuickActionLayoutMode.ROW -> 76f * density
+                else -> 160f * density
+            }
+            val w = if (quickActionWindowWidth > 0f) quickActionWindowWidth else fallbackW
+            val h = if (quickActionWindowHeight > 0f) quickActionWindowHeight else fallbackH
+            val minX = margin
+            val minY = margin
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            var changed = false
+            if (quickActionWindowX > maxX) { quickActionWindowX = maxX; changed = true }
+            if (quickActionWindowX < minX) { quickActionWindowX = minX; changed = true }
+            if (quickActionWindowY > maxY) { quickActionWindowY = maxY; changed = true }
+            if (quickActionWindowY < minY) { quickActionWindowY = minY; changed = true }
+            if (changed) persistQuickActionsState()
+        }
+
+        // 3. Quick Brush Window
+        if (quickBrushWindowX >= 0f) {
+            val fallbackW = when {
+                quickBrushCollapsed -> 64f * density
+                quickBrushOrientation == "vertical" -> 54f * density
+                else -> (quickBrushMaxLength * 43f - 1f).coerceAtLeast(42f) * density
+            }
+            val fallbackH = when {
+                quickBrushCollapsed -> 44f * density
+                quickBrushOrientation == "vertical" -> 260f * density
+                else -> 54f * density
+            }
+            val w = if (quickBrushWindowWidth > 0f) quickBrushWindowWidth else fallbackW
+            val h = if (quickBrushWindowHeight > 0f) quickBrushWindowHeight else fallbackH
+            val minX = margin
+            val minY = margin
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            var changed = false
+            if (quickBrushWindowX > maxX) { quickBrushWindowX = maxX; changed = true }
+            if (quickBrushWindowX < minX) { quickBrushWindowX = minX; changed = true }
+            if (quickBrushWindowY > maxY) { quickBrushWindowY = maxY; changed = true }
+            if (quickBrushWindowY < minY) { quickBrushWindowY = minY; changed = true }
+            if (changed) persistQuickBrushState()
+        }
+
+        // 4. Quick Color Window
+        if (quickColorWindowX >= 0f) {
+            val fallbackW = if (quickColorCollapsed) 48f * density else 212f * density
+            val fallbackH = if (quickColorCollapsed) 48f * density else 272f * density
+            val w = if (quickColorWindowWidth > 0f) quickColorWindowWidth else fallbackW
+            val h = if (quickColorWindowHeight > 0f) quickColorWindowHeight else fallbackH
+            val minX = margin
+            val minY = margin
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            var changed = false
+            if (quickColorWindowX > maxX) { quickColorWindowX = maxX; changed = true }
+            if (quickColorWindowX < minX) { quickColorWindowX = minX; changed = true }
+            if (quickColorWindowY > maxY) { quickColorWindowY = maxY; changed = true }
+            if (quickColorWindowY < minY) { quickColorWindowY = minY; changed = true }
+            if (changed) persistQuickColorState()
+        }
+
+        // 5. Quick Layer Window
+        if (quickLayerWindowX >= 0f) {
+            val fallbackW = if (quickLayerCollapsed) 48f * density else 156f * density
+            val fallbackH = if (quickLayerCollapsed) 48f * density else 290f * density
+            val w = if (quickLayerWindowWidth > 0f) quickLayerWindowWidth else fallbackW
+            val h = if (quickLayerWindowHeight > 0f) quickLayerWindowHeight else fallbackH
+            val minX = margin
+            val minY = margin
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            var changed = false
+            if (quickLayerWindowX > maxX) { quickLayerWindowX = maxX; changed = true }
+            if (quickLayerWindowX < minX) { quickLayerWindowX = minX; changed = true }
+            if (quickLayerWindowY > maxY) { quickLayerWindowY = maxY; changed = true }
+            if (quickLayerWindowY < minY) { quickLayerWindowY = minY; changed = true }
+            if (changed) persistQuickLayerState()
+        }
+    }
+
     fun getOrderedFavoriteBrushes(): List<BrushPresetInfo> {
         val favs = brushPresets.filter { isFavoriteBrush(it.name) }
         if (quickBrushOrder.isEmpty()) return favs

@@ -150,12 +150,6 @@ fun QuickColorWindow(
         if (isCollapsed) CircleShape else RoundedCornerShape(16.dp)
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            vm.quickColorWindowWidth = 0f
-            vm.quickColorWindowHeight = 0f
-        }
-    }
 
     val parsedCurrentColor = remember(vm.brushColor) {
         try {
@@ -223,6 +217,16 @@ fun QuickColorWindow(
                         .size(46.dp)
                         .pointerInput(Unit) {
                             detectDragGestures(
+                                onDragStart = {
+                                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                    if (vm.quickColorWindowX < 0f) {
+                                        vm.quickColorWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                    }
+                                    if (vm.quickColorWindowY < 0f) {
+                                        vm.quickColorWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                    }
+                                },
                                 onDragEnd = { vm.persistQuickColorState() },
                                 onDragCancel = { vm.persistQuickColorState() },
                             ) { change, dragAmount ->
@@ -261,6 +265,14 @@ fun QuickColorWindow(
                     ) {
                         DragPillHandle(
                             onDrag = { dragAmount ->
+                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                if (vm.quickColorWindowX < 0f) {
+                                    vm.quickColorWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                }
+                                if (vm.quickColorWindowY < 0f) {
+                                    vm.quickColorWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                }
                                 vm.quickColorWindowX += dragAmount.x
                                 vm.quickColorWindowY += dragAmount.y
                                 vm.persistQuickColorState()
