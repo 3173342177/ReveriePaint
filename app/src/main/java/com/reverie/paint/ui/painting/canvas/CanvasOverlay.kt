@@ -632,16 +632,16 @@ internal fun CanvasOverlay(
                         )
                     }
 
+                    val isBoxShape = shapeState.type == ShapeType.RECT ||
+                        shapeState.type == ShapeType.ROUNDED_RECT ||
+                        shapeState.type == ShapeType.ELLIPSE
+
                     val p1Canvas = bx(shapeState.p1)
-                    val p2Raw = if (shapeState.keepAspect) {
+                    val p2Raw = if (shapeState.keepAspect && isBoxShape) {
                         val pt = ShapeGeometry.constrainAspect(Point2D(shapeState.p1.x, shapeState.p1.y), Point2D(shapeState.p2.x, shapeState.p2.y))
                         Offset(pt.x, pt.y)
                     } else shapeState.p2
                     val p2Canvas = bx(p2Raw)
-
-                    val isBoxShape = shapeState.type == ShapeType.RECT ||
-                        shapeState.type == ShapeType.ROUNDED_RECT ||
-                        shapeState.type == ShapeType.ELLIPSE
 
                     val shapePath = androidx.compose.ui.graphics.Path()
 
