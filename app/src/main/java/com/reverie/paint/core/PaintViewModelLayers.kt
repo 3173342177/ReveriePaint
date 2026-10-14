@@ -404,19 +404,51 @@ internal fun PaintViewModel.setLayerBlendMode(
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_BLEND, i, opId)
     }
-    runCore(after = ::notifyLayerChanged) {
+    runCore(after = { notifyLayerChanged(forceThumbs = false) }) {
         ReverieCoreBridge.setLayerBlendMode(i, opId)
     }
 }
 
 internal fun PaintViewModel.toggleLayerVisible(i: Int) {
-    // Record the TARGET visibility so replay sets it directly (toggling the
-    // live value instead cascades wrong once any earlier op drifts indices).
-    val target = !ReverieCoreBridge.layerVisible(i)
+    if (i !in layers.indices) return
+    val current = layers[i].visible
+    val target = !current
+
+    // 1. 立即乐观更新 UI 状态 (主线程即时响应，眼睛图标无延迟翻转)
+    layers = layers.mapIndexed { idx, item ->
+        if (idx == i) item.copy(visible = target) else item
+    }
+
+    // Record the TARGET visibility so replay sets it directly
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_VISIBLE, i, if (target) "1" else "0")
     }
-    runCore(after = ::notifyLayerChanged) {
+
+    // 2. 异步在渲染线程调用 C++ 引擎切换显隐并重组投影 (runCore 完成后自动触发 scheduleRender)
+    val isSolo = ReverieCoreBridge.soloActive()
+    runCore(render = true, after = {
+        isModified = true
+        hasPendingMajorOp = true
+        onPaintingActivity()
+        if (isSolo) {
+            // 独显模式下显隐联动可能影响多行，做全量同步
+            syncLayersFromNative()
+            soloRawMode = ReverieCoreBridge.layerSoloRawMode()
+        } else {
+            // 局部校验：若底层执行失败或与预期不一致，回滚为真实状态
+            val actual = ReverieCoreBridge.layerVisible(i)
+            if (i in layers.indices && layers[i].visible != actual) {
+                layers = layers.mapIndexed { idx, item ->
+                    if (idx == i) item.copy(visible = actual) else item
+                }
+            }
+        }
+        layerRevision++
+        if (anim.enabled) {
+            anim.thumbRevision++
+            syncAnimationFromNativeAfter()
+        }
+    }) {
         ReverieCoreBridge.setLayerVisible(i, target)
     }
 }
@@ -510,7 +542,7 @@ internal fun PaintViewModel.renameLayer(
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_RENAME, i, name.trim())
     }
-    runCore(after = ::notifyLayerChanged) {
+    runCore(after = { notifyLayerChanged(forceThumbs = false, immediateRender = false) }) {
         ReverieCoreBridge.setLayerName(i, name.trim())
     }
 }
@@ -534,7 +566,7 @@ internal fun PaintViewModel.setLayerOpacity(
         if (recorder.recording) {
             recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_OPACITY, i, v.toString())
         }
-        runCore(after = ::notifyLayerChanged) {
+        runCore(after = { notifyLayerChanged(forceThumbs = false) }) {
             ReverieCoreBridge.setLayerOpacity(i, v)
         }
     }
@@ -549,7 +581,7 @@ internal fun PaintViewModel.setLayerLocked(
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_LOCKED, i, if (locked) "1" else "0")
     }
-    runCore(after = ::notifyLayerChanged) {
+    runCore(after = { notifyLayerChanged(forceThumbs = false, immediateRender = false) }) {
         ReverieCoreBridge.setLayerLocked(i, locked)
     }
 }
@@ -563,7 +595,7 @@ internal fun PaintViewModel.setLayerAlphaLocked(
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_ALPHA_LOCKED, i, if (locked) "1" else "0")
     }
-    runCore(after = ::notifyLayerChanged) {
+    runCore(after = { notifyLayerChanged(forceThumbs = false, immediateRender = false) }) {
         ReverieCoreBridge.setLayerAlphaLocked(i, locked)
     }
 }
@@ -577,7 +609,7 @@ internal fun PaintViewModel.setLayerColorLabel(
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_COLOR_LABEL, i, label.toString())
     }
-    runCore(after = ::notifyLayerChanged) {
+    runCore(after = { notifyLayerChanged(forceThumbs = false, immediateRender = false) }) {
         ReverieCoreBridge.setLayerColorLabel(i, label)
     }
 }
@@ -597,7 +629,7 @@ internal fun PaintViewModel.setLayerClipped(
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_CLIPPED, i, if (clipped) "1" else "0")
     }
-    runCore(after = ::notifyLayerChanged) {
+    runCore(after = { notifyLayerChanged(forceThumbs = false) }) {
         ReverieCoreBridge.setLayerClipped(i, clipped)
     }
 }
@@ -611,7 +643,7 @@ internal fun PaintViewModel.setLayerAlphaInherited(
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_ALPHA_INHERITED, i, if (enable) "1" else "0")
     }
-    runCore(after = ::notifyLayerChanged) {
+    runCore(after = { notifyLayerChanged(forceThumbs = false) }) {
         ReverieCoreBridge.setLayerAlphaInherited(i, enable)
     }
 }
