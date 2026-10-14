@@ -343,7 +343,6 @@ fun CanvasView(
                     touchView.drawingGuidePanelOpen = drawingGuidePanelOpen
                     touchView.invalidate()
                 }
-                touchView.updateSystemGestureExclusion()
                 touchView.liquifyMode = liquifyMode
             },
         )

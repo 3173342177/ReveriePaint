@@ -54,8 +54,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -195,25 +198,8 @@ fun PaintingPage(
     var canvasEditMenuCustomizeOpen by remember { mutableStateOf(false) }
 
     // Popup panels
-    var showIndicator by remember { mutableStateOf(false) }
-    var indicatorTick by remember { mutableStateOf(0) }
-
-    // Plain holder (no snapshot writes) gating indicator ticks during pinch:
-    // each tick restarts the auto-hide LaunchedEffect below.
-    val indicatorGate = remember { LongArray(1) }
-
-    fun flashIndicator() {
-        showIndicator = true
-        indicatorTick++
-    }
-
-    // Auto-hide the transform indicator 1.2s after the last flash
-    LaunchedEffect(indicatorTick) {
-        if (indicatorTick > 0) {
-            kotlinx.coroutines.delay(1200)
-            showIndicator = false
-        }
-    }
+    val indicatorState = remember { TransformIndicatorState() }
+    val flashIndicator: () -> Unit = { indicatorState.flash() }
 
     // Auto-hide action toast 1.0s after trigger
     LaunchedEffect(vm.actionToastRevision) {
@@ -689,16 +675,7 @@ fun PaintingPage(
                     rotation = r
                     panX = px
                     panY = py
-                    if (!showIndicator) {
-                        showIndicator = true
-                    }
-                    // Throttle tick writes: each one restarts the indicator
-                    // LaunchedEffect, and pinch fires hundreds of events.
-                    val now = android.os.SystemClock.uptimeMillis()
-                    if (now - indicatorGate[0] >= 120) {
-                        indicatorGate[0] = now
-                        indicatorTick++
-                    }
+                    indicatorState.onPinch()
                 },
                 onTouchViewReady = { canvasTouchView = it },
                 onTextRequested = { x, y ->
@@ -1212,7 +1189,7 @@ fun PaintingPage(
                         hazeState = hazeState,
                         opacity = vm.uiOpacity.toDouble(),
                         brushSize = vm.brushSize,
-                        canvasScale = (zoom * fitScale).coerceAtLeast(0.001f),
+                        canvasScale = { (zoomState.floatValue * fitScale).coerceAtLeast(0.001f) },
                         onBrushSize = { size, commit -> vm.updateBrushSize(size, commit) },
                         brushOpacity = vm.brushOpacity,
                         onOpacity = { op, commit -> vm.updateBrushOpacity(op, commit) },
@@ -1392,7 +1369,7 @@ fun PaintingPage(
                             moreToolsOpen = !moreToolsOpen
                         },
                         brushSize = vm.brushSize,
-                        canvasScale = (zoom * fitScale).coerceAtLeast(0.001f),
+                        canvasScale = { (zoomState.floatValue * fitScale).coerceAtLeast(0.001f) },
                         onBrushSize = { size, commit -> vm.updateBrushSize(size, commit) },
                         popupOpacity = vm.popupPanelOpacity,
                         brushOpacity = vm.brushOpacity,
@@ -2021,100 +1998,24 @@ fun PaintingPage(
         }
 
         // ---- Transform indicator (top-center, animated pill) ----
-        androidx.compose.animation.AnimatedVisibility(
-            visible = showIndicator && !vm.isFilterAdjustActive && (vm.actionToastMessage == null),
-            enter =
-                androidx.compose.animation.fadeIn(
-                    androidx.compose.animation.core
-                        .spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow),
-                ) +
-                    androidx.compose.animation.slideInVertically(
-                        androidx.compose.animation.core
-                            .spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow),
-                    ) {
-                        -it
-                    },
-            exit =
-                androidx.compose.animation.fadeOut(
-                    androidx.compose.animation.core
-                        .tween(250),
-                ) +
-                    androidx.compose.animation.slideOutVertically(
-                        androidx.compose.animation.core
-                            .tween(250),
-                    ) { -it },
+        TransformIndicatorHud(
+            indicatorState = indicatorState,
+            isFilterAdjustActive = vm.isFilterAdjustActive,
+            hasActionToast = vm.actionToastMessage != null,
+            zoomState = zoomState,
+            rotationState = rotationState,
+            fitScale = fitScale,
+            isViewTransformLocked = vm.isViewTransformLocked,
+            onToggleLock = {
+                vm.toggleViewTransformLocked()
+                indicatorState.flash()
+            },
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = (topDockPadding - 8.dp).coerceAtLeast(16.dp))
                     .zIndex(20f),
-        ) {
-            val zoomPct = (zoom * fitScale * 100).toInt()
-            val rotDeg = ((rotation % 360 + 360) % 360).toInt()
-            // 当前角度是否已磁性吸附在 90° 倍数附近 (0/90/180/270/360): 用强调色轻微提示
-            val rotSnapped =
-                kotlin.math.abs(RotationSnap.shortestDelta(RotationSnap.nearestMultiple(rotation), rotation)) < 0.35f
-            Box(
-                modifier =
-                    Modifier
-                        .shadow(8.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.3f))
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Morandi.panelHi.copy(alpha = 0.94f))
-                        .glassBorder(RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 4.5.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        stringResource(R.string.canvas_zoom_format, zoomPct),
-                        color = Morandi.text,
-                        fontSize = 11.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                    )
-                    Box(
-                        Modifier
-                            .size(2.5.dp)
-                            .background(Morandi.border, CircleShape),
-                    )
-                    Text(
-                        stringResource(R.string.canvas_rotation_format, rotDeg),
-                        color = if (rotSnapped) Morandi.accent else Morandi.text,
-                        fontSize = 11.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                    )
-                    Box(
-                        Modifier
-                            .size(2.5.dp)
-                            .background(Morandi.border, CircleShape),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(18.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (vm.isViewTransformLocked) Morandi.accent.copy(alpha = 0.2f) else Color.Transparent)
-                            .clickable {
-                                vm.toggleViewTransformLocked()
-                                flashIndicator()
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter = painterResource(
-                                if (vm.isViewTransformLocked) R.drawable.ic_lock else R.drawable.ic_lock_open
-                            ),
-                            contentDescription = stringResource(
-                                if (vm.isViewTransformLocked) R.string.canvas_view_unlock else R.string.canvas_view_lock
-                            ),
-                            tint = if (vm.isViewTransformLocked) Morandi.accent else Morandi.subText,
-                            modifier = Modifier.size(11.dp),
-                        )
-                    }
-                }
-            }
-        }
+        )
 
         // ---- Shift & Trace 对位悬浮胶囊 (透光台临时偏移动画对齐) ----
         ShiftTraceCapsule(
@@ -2643,4 +2544,133 @@ fun PaintingPage(
         }
     }
 }
+}
+
+@Stable
+private class TransformIndicatorState {
+    var visible by mutableStateOf(false)
+    var tick by mutableIntStateOf(0)
+    private val gate = LongArray(1)
+
+    fun flash() {
+        visible = true
+        tick++
+    }
+
+    fun onPinch() {
+        if (!visible) {
+            visible = true
+        }
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - gate[0] >= 120) {
+            gate[0] = now
+            tick++
+        }
+    }
+}
+
+@Composable
+private fun TransformIndicatorHud(
+    indicatorState: TransformIndicatorState,
+    isFilterAdjustActive: Boolean,
+    hasActionToast: Boolean,
+    zoomState: State<Float>,
+    rotationState: State<Float>,
+    fitScale: Float,
+    isViewTransformLocked: Boolean,
+    onToggleLock: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // 变换指示器最后一次触发 1.2s 后自动隐藏
+    LaunchedEffect(indicatorState.tick) {
+        if (indicatorState.tick > 0) {
+            kotlinx.coroutines.delay(1200)
+            indicatorState.visible = false
+        }
+    }
+
+    AnimatedVisibility(
+        visible = indicatorState.visible && !isFilterAdjustActive && !hasActionToast,
+        enter =
+            fadeIn(
+                spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow),
+            ) +
+                slideInVertically(
+                    spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow),
+                ) {
+                    -it
+                },
+        exit =
+            fadeOut(
+                tween(250),
+            ) +
+                slideOutVertically(
+                    tween(250),
+                ) { -it },
+        modifier = modifier,
+    ) {
+        val zoomPct = (zoomState.value * fitScale * 100).toInt()
+        val rotation = rotationState.value
+        val rotDeg = ((rotation % 360 + 360) % 360).toInt()
+        // 当前角度是否已磁性吸附在 90° 倍数附近 (0/90/180/270/360): 用强调色轻微提示
+        val rotSnapped =
+            kotlin.math.abs(RotationSnap.shortestDelta(RotationSnap.nearestMultiple(rotation), rotation)) < 0.35f
+        Box(
+            modifier =
+                Modifier
+                    .shadow(8.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.3f))
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Morandi.panelHi.copy(alpha = 0.94f))
+                    .glassBorder(RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.5.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.canvas_zoom_format, zoomPct),
+                    color = Morandi.text,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Box(
+                    Modifier
+                        .size(2.5.dp)
+                        .background(Morandi.border, CircleShape),
+                )
+                Text(
+                    stringResource(R.string.canvas_rotation_format, rotDeg),
+                    color = if (rotSnapped) Morandi.accent else Morandi.text,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Box(
+                    Modifier
+                        .size(2.5.dp)
+                        .background(Morandi.border, CircleShape),
+                )
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (isViewTransformLocked) Morandi.accent.copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable(onClick = onToggleLock),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (isViewTransformLocked) R.drawable.ic_lock else R.drawable.ic_lock_open
+                        ),
+                        contentDescription = stringResource(
+                            if (isViewTransformLocked) R.string.canvas_view_unlock else R.string.canvas_view_lock
+                        ),
+                        tint = if (isViewTransformLocked) Morandi.accent else Morandi.subText,
+                        modifier = Modifier.size(11.dp),
+                    )
+                }
+            }
+        }
+    }
 }

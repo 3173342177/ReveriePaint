@@ -94,7 +94,7 @@ fun ToolRail(
     moreToolsOpen: Boolean = false,
     onToggleMoreTools: () -> Unit = {},
     brushSize: Double,
-    canvasScale: Float = 1f,
+    canvasScale: () -> Float = { 1f },
     onBrushSize: (Double, Boolean) -> Unit,
     opacity: Double,
     popupOpacity: Float = 1f,
@@ -560,7 +560,7 @@ fun SlidersPanelContent(
     hazeState: HazeState? = null,
     opacity: Double = 1.0,
     brushSize: Double,
-    canvasScale: Float = 1f,
+    canvasScale: () -> Float = { 1f },
     onBrushSize: (Double, Boolean) -> Unit,
     brushOpacity: Double,
     onOpacity: (Double, Boolean) -> Unit,
@@ -758,7 +758,7 @@ fun FloatingSliderRailCapsule(
     hazeState: HazeState? = null,
     opacity: Double = 1.0,
     brushSize: Double,
-    canvasScale: Float = 1f,
+    canvasScale: () -> Float = { 1f },
     onBrushSize: (Double, Boolean) -> Unit,
     brushOpacity: Double,
     onOpacity: (Double, Boolean) -> Unit,
@@ -851,7 +851,7 @@ private fun BrushSizeGroup(
     vm: PaintViewModel,
     hazeState: HazeState? = null,
     brushSize: Double,
-    canvasScale: Float = 1f,
+    canvasScale: () -> Float = { 1f },
     isHorizontal: Boolean = false,
     onBrushSize: (Double, Boolean) -> Unit,
 ) {
@@ -871,7 +871,7 @@ private fun BrushSizeGroup(
     val current = brushSize.coerceIn(minL, maxL)
     val frac = ((kotlin.math.ln(current) - logMin) / range).toFloat().coerceIn(0f, 1f)
 
-    val currentScreenRadiusPx = (brushSize * canvasScale * 0.5).toFloat()
+    val currentScreenRadiusPx = (brushSize * canvasScale() * 0.5).toFloat()
 
     if (isHorizontal) {
         ReHorizontalSlider(

@@ -1664,6 +1664,7 @@ class CanvasTouchView(context: Context) : View(context) {
     private val viewTransform = CanvasViewTransform()
     private val pointScratch = FloatArray(2)
     private val boundsScratch = IntArray(4)
+    private var gridLinesBuffer = FloatArray(4096)
     private val renderBoundsScratch = IntArray(4)
     private val pixelScratch = IntArray(1)
     private val frontierPointScratch = FloatArray(2)
@@ -2034,6 +2035,9 @@ class CanvasTouchView(context: Context) : View(context) {
     private val gestureExclusionRects = mutableListOf<android.graphics.Rect>()
     private val leftExclusionRect = android.graphics.Rect()
     private val rightExclusionRect = android.graphics.Rect()
+    private var lastShouldExclude: Boolean? = null
+    private var lastExclusionW: Int = 0
+    private var lastExclusionH: Int = 0
 
     fun updateSystemGestureExclusion() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
@@ -2048,6 +2052,10 @@ class CanvasTouchView(context: Context) : View(context) {
         // 仅在用户关闭边缘侧滑返回、或返回键行为设为无行为且无浮层打开时，
         // 全高度排除左右边缘返回手势以防误触；反之释放排除区，让系统原生侧滑正常响应
         val shouldExclude = (!allowEdgeBack || backKeyAction == BackKeyAction.NONE) && !overlayPanelsOpen
+        if (lastShouldExclude == shouldExclude && lastExclusionW == w && lastExclusionH == h) return
+        lastShouldExclude = shouldExclude
+        lastExclusionW = w
+        lastExclusionH = h
 
         if (shouldExclude) {
             val edgeWidth = (48 * density).toInt() // 覆盖系统边缘手势感应区 (约 48dp)
@@ -2495,23 +2503,44 @@ class CanvasTouchView(context: Context) : View(context) {
                     pixelGridPaint.color =
                         android.graphics.Color.argb((gridAlpha * 255).toInt(), 255, 255, 255)
                     pixelGridPaint.strokeWidth = 1f / scale
-                    // 只画视口内可见的网格线: 整幅遍历在 4x 放大的大画幅上每帧要发
-                    // 上万条 drawLine, 而屏幕上真正看得见的只有几百条 —— 这是高
-                    // 倍率下最贵的一段绘制 (对应"渲染路径分离"的按视口裁剪)。
+                    // 只画视口内可见的网格线: 严格限制在视口边界内，避免高倍率放大下
+                    // 跨越全图的数万像素超长线段加重 GPU 光栅化与裁剪负担
                     ensureViewTransform()
                     visibleBitmapBounds(boundsScratch)
                     val gx0 = boundsScratch[0].coerceIn(0, bmp.width)
                     val gx1 = boundsScratch[2].coerceIn(0, bmp.width)
                     val gy0 = boundsScratch[1].coerceIn(0, bmp.height)
                     val gy1 = boundsScratch[3].coerceIn(0, bmp.height)
+                    val numV = (gx1 - gx0 + 1).coerceAtLeast(0)
+                    val numH = (gy1 - gy0 + 1).coerceAtLeast(0)
+                    val totalLines = numV + numH
                     // 兜底: 视口已经把整幅包进来时线条仍可能过万, 宁可不画网格也不掉帧
-                    if ((gx1 - gx0) + (gy1 - gy0) <= MAX_VISIBLE_GRID_LINES) {
+                    if (totalLines in 1..MAX_VISIBLE_GRID_LINES) {
+                        val neededFloats = totalLines * 4
+                        if (gridLinesBuffer.size < neededFloats) {
+                            gridLinesBuffer = FloatArray(neededFloats)
+                        }
+                        var idx = 0
+                        val y0 = gy0.toFloat() - halfH
+                        val y1 = gy1.toFloat() - halfH
+                        val pts = gridLinesBuffer
                         for (gx in gx0..gx1) {
-                            canvas.drawLine(gx - halfW, -halfH, gx - halfW, halfH, pixelGridPaint)
+                            val x = gx.toFloat() - halfW
+                            pts[idx++] = x
+                            pts[idx++] = y0
+                            pts[idx++] = x
+                            pts[idx++] = y1
                         }
+                        val x0 = gx0.toFloat() - halfW
+                        val x1 = gx1.toFloat() - halfW
                         for (gy in gy0..gy1) {
-                            canvas.drawLine(-halfW, gy - halfH, halfW, gy - halfH, pixelGridPaint)
+                            val y = gy.toFloat() - halfH
+                            pts[idx++] = x0
+                            pts[idx++] = y
+                            pts[idx++] = x1
+                            pts[idx++] = y
                         }
+                        canvas.drawLines(pts, 0, idx, pixelGridPaint)
                     }
                 }
             }
