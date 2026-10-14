@@ -543,6 +543,13 @@ fun ReVerticalSlider(
     var isDragging by remember { mutableStateOf(false) }
     var showPopup by remember { mutableStateOf(false) }
     var lastHapticStep by remember { mutableIntStateOf((fraction * 100).toInt()) }
+    var dragSpeed by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(dragSpeed) {
+        if (dragSpeed > 0.001f) {
+            kotlinx.coroutines.delay(45)
+            dragSpeed = 0f
+        }
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -611,17 +618,26 @@ fun ReVerticalSlider(
                             detectDragGestures(
                                 onDragStart = {
                                     isDragging = true
+                                    dragSpeed = 0f
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 },
                                 onDragEnd = {
                                     isDragging = false
+                                    dragSpeed = 0f
                                     onRelease?.invoke(localFraction)
                                 },
                                 onDragCancel = {
                                     isDragging = false
+                                    dragSpeed = 0f
                                     onRelease?.invoke(localFraction)
                                 }
-                            ) { change, _ ->
+                            ) { change, dragAmount ->
+                                val speed = (kotlin.math.abs(dragAmount.y) / density.density).coerceIn(0f, 15f)
+                                if (speed > dragSpeed) {
+                                    dragSpeed = speed
+                                } else {
+                                    dragSpeed = dragSpeed * 0.6f + speed * 0.4f
+                                }
                                 val value = 1f - (change.position.y / trackPx.toFloat()).coerceIn(0f, 1f)
                                 localFraction = value
                                 onFraction(value)
@@ -636,7 +652,11 @@ fun ReVerticalSlider(
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 val capsuleRadius = (trackWidth / 2).dp
-                val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrow")
+                val capsuleGrow by animateFloatAsState(
+                    targetValue = if (isDragging) 1.04f else 1f,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
+                    label = "capsuleGrow"
+                )
 
                 // Track Background (打孔嵌入式毛玻璃：独立0.6x毛玻璃轨道与下凹雕刻光影)
                 val panelAlpha = vm?.uiOpacity ?: 1f
@@ -647,8 +667,8 @@ fun ReVerticalSlider(
                         .fillMaxHeight()
                         .graphicsLayer {
                             scaleX = capsuleGrow
-                            scaleY = 1f + (capsuleGrow - 1f) * 0.4f
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                            scaleY = 1f
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.5f)
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
                         .background(colors.panel.copy(alpha = grooveAlpha))
@@ -673,20 +693,27 @@ fun ReVerticalSlider(
                     )
                 }
 
-                // Dynamic Indicator Line (Spring animations restored + 0-layout graphicsLayer translation)
+                // 动量微拉伸：拖拽时沿滑动轴微幅伸长 0~1.8dp，横向微压缩保持流体体积感
+                val dynamicStretch by animateFloatAsState(
+                    targetValue = if (isDragging) (dragSpeed * 0.16f).coerceIn(0f, 1.8f) else 0f,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
+                    label = "ind_stretch"
+                )
+
+                // Dynamic Indicator Line (Spring animations with momentum stretch & squash)
                 val indicatorHeight by animateDpAsState(
-                    targetValue = if (isDragging) 6.dp else 3.dp,
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+                    targetValue = if (isDragging) (4.5f + dynamicStretch).dp else 3.dp,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_h"
                 )
                 val indicatorWidth by animateDpAsState(
-                    targetValue = if (isDragging) (trackWidth + 4).dp else trackWidth.dp,
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+                    targetValue = if (isDragging) ((trackWidth + 2f) - dynamicStretch * 0.6f).dp else trackWidth.dp,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_w"
                 )
                 val indicatorAlpha by animateFloatAsState(
-                    targetValue = if (isDragging) 0.62f else 0.78f,
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+                    targetValue = if (isDragging) 0.68f else 0.78f,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_alpha"
                 )
 
@@ -702,9 +729,9 @@ fun ReVerticalSlider(
                         .width(indicatorWidth)
                         .height(indicatorHeight)
                         .shadow(
-                            elevation = if (isDragging) 4.dp else 1.5.dp,
+                            elevation = if (isDragging) 3.5.dp else 1.5.dp,
                             shape = RoundedCornerShape(indicatorHeight / 2),
-                            spotColor = Color.Black.copy(alpha = 0.25f),
+                            spotColor = Color.Black.copy(alpha = 0.22f),
                         )
                         .clip(RoundedCornerShape(indicatorHeight / 2))
                         .background(indicatorColor.copy(alpha = indicatorAlpha))
@@ -826,6 +853,13 @@ fun ReHorizontalSlider(
     var isDragging by remember { mutableStateOf(false) }
     var showPopup by remember { mutableStateOf(false) }
     var lastHapticStep by remember { mutableIntStateOf((fraction * 100).toInt()) }
+    var dragSpeed by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(dragSpeed) {
+        if (dragSpeed > 0.001f) {
+            kotlinx.coroutines.delay(45)
+            dragSpeed = 0f
+        }
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -885,17 +919,26 @@ fun ReHorizontalSlider(
                         detectDragGestures(
                             onDragStart = {
                                 isDragging = true
+                                dragSpeed = 0f
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             },
                             onDragEnd = {
                                 isDragging = false
+                                dragSpeed = 0f
                                 onRelease?.invoke(localFraction)
                             },
                             onDragCancel = {
                                 isDragging = false
+                                dragSpeed = 0f
                                 onRelease?.invoke(localFraction)
                             }
-                        ) { change, _ ->
+                        ) { change, dragAmount ->
+                            val speed = (kotlin.math.abs(dragAmount.x) / density.density).coerceIn(0f, 15f)
+                            if (speed > dragSpeed) {
+                                dragSpeed = speed
+                            } else {
+                                dragSpeed = dragSpeed * 0.6f + speed * 0.4f
+                            }
                             val value = (change.position.x / trackPx.toFloat()).coerceIn(0f, 1f)
                             localFraction = value
                             onFraction(value)
@@ -910,7 +953,11 @@ fun ReHorizontalSlider(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 val capsuleRadius = (trackHeight / 2).dp
-                val capsuleGrow by animateFloatAsState(if (isDragging) 1.08f else 1f, Motion.springSnap, label = "capsuleGrowH")
+                val capsuleGrow by animateFloatAsState(
+                    targetValue = if (isDragging) 1.04f else 1f,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
+                    label = "capsuleGrowH"
+                )
 
                 val panelAlpha = vm?.uiOpacity ?: 1f
                 val grooveAlpha = (panelAlpha * 0.60f).coerceIn(0.08f, 0.90f)
@@ -920,7 +967,8 @@ fun ReHorizontalSlider(
                         .height(trackHeight.dp)
                         .graphicsLayer {
                             scaleY = capsuleGrow
-                            scaleX = 1f + (capsuleGrow - 1f) * 0.4f
+                            scaleX = 1f
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0.5f)
                         }
                         .clip(RoundedCornerShape(capsuleRadius))
                         .background(colors.panel.copy(alpha = grooveAlpha))
@@ -944,19 +992,27 @@ fun ReHorizontalSlider(
                     )
                 }
 
+                // 动量微拉伸：拖拽时沿水平轴微幅伸长 0~1.8dp，纵向微压缩保持流体体积感
+                val dynamicStretch by animateFloatAsState(
+                    targetValue = if (isDragging) (dragSpeed * 0.16f).coerceIn(0f, 1.8f) else 0f,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
+                    label = "ind_stretch_h"
+                )
+
+                // Dynamic Indicator Line (Spring animations with momentum stretch & squash)
                 val indicatorWidth by animateDpAsState(
-                    targetValue = if (isDragging) 6.dp else 3.dp,
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+                    targetValue = if (isDragging) (4.5f + dynamicStretch).dp else 3.dp,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_w_h"
                 )
                 val indicatorHeight by animateDpAsState(
-                    targetValue = if (isDragging) (trackHeight + 4).dp else trackHeight.dp,
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+                    targetValue = if (isDragging) ((trackHeight + 2f) - dynamicStretch * 0.6f).dp else trackHeight.dp,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_h_h"
                 )
                 val indicatorAlpha by animateFloatAsState(
-                    targetValue = if (isDragging) 0.62f else 0.78f,
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+                    targetValue = if (isDragging) 0.68f else 0.78f,
+                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 420f),
                     label = "ind_alpha_h"
                 )
 
@@ -972,9 +1028,9 @@ fun ReHorizontalSlider(
                         .width(indicatorWidth)
                         .height(indicatorHeight)
                         .shadow(
-                            elevation = if (isDragging) 4.dp else 1.5.dp,
+                            elevation = if (isDragging) 3.5.dp else 1.5.dp,
                             shape = RoundedCornerShape(indicatorWidth / 2),
-                            spotColor = Color.Black.copy(alpha = 0.25f),
+                            spotColor = Color.Black.copy(alpha = 0.22f),
                         )
                         .clip(RoundedCornerShape(indicatorWidth / 2))
                         .background(indicatorColor.copy(alpha = indicatorAlpha))
