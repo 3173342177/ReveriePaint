@@ -98,8 +98,8 @@ internal fun GeneralSettingsSubPage(
                 onBack = onBack,
             )
 
-            // Section 0: 语言选择
-            SettingCategoryTitle(stringResource(R.string.settings_language))
+            // Section 1: 基础偏好 (语言 + 项目退出提示)
+            SettingCategoryTitle(stringResource(R.string.settings_category_basic))
             SettingGroup {
                 val currentLang = LanguageManager.currentLanguage
                 val langOptions = listOf(
@@ -116,7 +116,7 @@ internal fun GeneralSettingsSubPage(
                     summary = stringResource(R.string.settings_language_sub),
                     currentText = currentText,
                     options = langOptions.map { it.second },
-                    shape = settingGroupShape(0, 1),
+                    shape = settingGroupShape(0, 2),
                     onSelect = { idx ->
                         val selectedLang = langOptions[idx].first
                         if (selectedLang != currentLang && activity != null) {
@@ -124,11 +124,18 @@ internal fun GeneralSettingsSubPage(
                         }
                     },
                 )
+
+                SettingSwitchGroupItem(
+                    icon = Icons.AutoMirrored.Rounded.ExitToApp,
+                    title = stringResource(R.string.settings_prompt_save_exit),
+                    summary = stringResource(R.string.settings_prompt_save_exit_sub),
+                    checked = vm.promptSaveOnExit,
+                    shape = settingGroupShape(1, 2),
+                    onCheckedChange = { vm.updatePromptSaveOnExit(it) },
+                )
             }
 
-            Spacer(Modifier.height(10.dp))
-
-            // Section 1: 自动保存
+            // Section 2: 自动保存
             SettingCategoryTitle(stringResource(R.string.settings_auto_save))
             SettingGroup {
                 val autoSaveTotal = if (vm.autoSaveEnabled) 5 else 1
@@ -181,16 +188,16 @@ internal fun GeneralSettingsSubPage(
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            if (vm.autoSaveEnabled) {
+                Spacer(Modifier.height(8.dp))
+                SettingInfoCard(
+                    title = stringResource(R.string.settings_auto_save_info_title),
+                    text = stringResource(R.string.settings_auto_save_info_desc),
+                )
+            }
 
-            // 说明卡片
-            SettingInfoCard(
-                title = stringResource(R.string.settings_auto_save_info_title),
-                text = stringResource(R.string.settings_auto_save_info_desc),
-            )
-
-            // Section 2: 历史记录与性能
-            SettingCategoryTitle(stringResource(R.string.settings_history_performance))
+            // Section 3: 存储与撤销性能
+            SettingCategoryTitle(stringResource(R.string.settings_category_storage_perf))
             SettingGroup {
                 SettingDropdownGroupItem(
                     icon = Icons.Rounded.History,
@@ -199,30 +206,20 @@ internal fun GeneralSettingsSubPage(
                     currentText = undoOptions.find { it.first == vm.maxUndoSteps }?.second
                         ?: stringResource(R.string.settings_step_unit, vm.maxUndoSteps),
                     options = undoOptions.map { it.second },
-                    shape = settingGroupShape(0, 1),
+                    shape = settingGroupShape(0, 2),
                     onSelect = { idx ->
                         vm.updateMaxUndoSteps(undoOptions[idx].first)
                     },
                 )
-            }
 
-            // Section 3: 项目管理
-            SettingCategoryTitle(stringResource(R.string.settings_project_manage))
-            SettingGroup {
-                SettingSwitchGroupItem(
-                    icon = Icons.AutoMirrored.Rounded.ExitToApp,
-                    title = stringResource(R.string.settings_prompt_save_exit),
-                    summary = stringResource(R.string.settings_prompt_save_exit_sub),
-                    checked = vm.promptSaveOnExit,
-                    shape = settingGroupShape(0, 1),
-                    onCheckedChange = { vm.updatePromptSaveOnExit(it) },
+                ReferenceCacheSettings(
+                    vm = vm,
+                    shape = settingGroupShape(1, 2),
+                    showTitle = false,
                 )
             }
 
-            ReferenceCacheSettings(vm)
-
-            // Section 4: 诊断 (性能标尺)。debug 构建才有内容, 正式版是空实现 ——
-            // 见 [com.reverie.paint.perf.PerfHud]。
+            // Section 4: 诊断 (性能标尺，Debug 构建专属)
             PerfHud.SettingsSection(vm)
 
             Spacer(Modifier.height(80.dp))

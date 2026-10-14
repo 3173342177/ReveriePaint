@@ -265,6 +265,8 @@
     <string name="settings_lang_en">English</string>
     <string name="settings_general">通用设置</string>
     <string name="settings_general_sub">自动保存策略、撤销历史步数与退出偏好</string>
+    <string name="settings_category_basic">基础偏好</string>
+    <string name="settings_category_storage_perf">存储与性能</string>
     <string name="settings_stylus">手写笔设置</string>
     <string name="settings_nav_stylus_sub">专属手写笔适配、书写震动发声与全局压力曲线</string>
     <string name="settings_author_profile">作者档案</string>
@@ -1668,6 +1670,8 @@
     <!-- Stylus Settings & Hardware -->
     <string name="stylus_settings_desc">手写笔硬件级适配、触感音效与高精度压感映射</string>
     <string name="stylus_touch_and_cursor">触控与光标</string>
+    <string name="stylus_category_touch_prediction">触控与笔画预测</string>
+    <string name="stylus_category_cursor">光标与准星指示</string>
     <string name="stylus_pen_mode_desc">开启后禁止手指绘制，单指可平移画布，双指可缩放与旋转画布</string>
     <string name="stylus_prediction_title">超低延迟笔迹预测</string>
     <string name="stylus_prediction_desc">降低运笔跟手延迟，支持选择硬件厂商 SDK 或软件自研算法</string>
@@ -1932,6 +1936,9 @@
     <!-- Theme Settings -->
     <string name="theme_settings_title">主题设置</string>
     <string name="theme_settings_subtitle">全局莫兰迪调色盘、暗黑模式与界面视觉缩放</string>
+    <string name="theme_category_color_appearance">色彩与主题</string>
+    <string name="theme_category_panels_scale">面板与尺寸</string>
+    <string name="theme_category_workspace_layout">工作区与布局</string>
     <string name="theme_category_color_mode">色彩与主题模式</string>
     <string name="theme_color_mode_title">色彩模式</string>
     <string name="theme_color_mode_summary">深浅色外观切换或跟随系统自动感知</string>

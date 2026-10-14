@@ -265,6 +265,8 @@
     <string name="settings_lang_en">English</string>
     <string name="settings_general">General</string>
     <string name="settings_general_sub">Auto-save strategy, undo history limit, and exit preferences</string>
+    <string name="settings_category_basic">Preferences</string>
+    <string name="settings_category_storage_perf">Storage &amp; Performance</string>
     <string name="settings_stylus">Stylus Settings</string>
     <string name="settings_nav_stylus_sub">Stylus adaptation, haptic feedback, and global pressure curves</string>
     <string name="settings_author_profile">Creator Profile</string>
@@ -1668,6 +1670,8 @@
     <!-- Stylus Settings & Hardware -->
     <string name="stylus_settings_desc">Hardware adaptation, haptic audio and precision pressure mapping</string>
     <string name="stylus_touch_and_cursor">Touch &amp; Cursor</string>
+    <string name="stylus_category_touch_prediction">Touch &amp; Prediction</string>
+    <string name="stylus_category_cursor">Cursor &amp; Crosshair</string>
     <string name="stylus_pen_mode_desc">Disable finger drawing. One finger pans, two fingers zoom and rotate</string>
     <string name="stylus_prediction_title">Ultra-low Latency Prediction</string>
     <string name="stylus_prediction_desc">Reduce stroke latency with OEM hardware SDK or in-app software prediction</string>
@@ -1932,6 +1936,9 @@
     <!-- Theme Settings -->
     <string name="theme_settings_title">Theme Settings</string>
     <string name="theme_settings_subtitle">Global Morandi palette, dark mode, and UI scaling</string>
+    <string name="theme_category_color_appearance">Colors &amp; Theme</string>
+    <string name="theme_category_panels_scale">Panels &amp; Scale</string>
+    <string name="theme_category_workspace_layout">Workspace &amp; Layout</string>
     <string name="theme_category_color_mode">Color &amp; Theme Mode</string>
     <string name="theme_color_mode_title">Color Mode</string>
     <string name="theme_color_mode_summary">Switch between dark/light appearance or follow system</string>

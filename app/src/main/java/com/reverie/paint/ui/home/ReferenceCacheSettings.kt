@@ -22,20 +22,36 @@ import com.reverie.paint.core.refreshReferenceCacheSize
 import com.reverie.paint.ui.theme.Theme
 
 @Composable
-internal fun ReferenceCacheSettings(vm: PaintViewModel) {
+internal fun ReferenceCacheSettings(
+    vm: PaintViewModel,
+    shape: androidx.compose.foundation.shape.RoundedCornerShape = settingGroupShape(0, 1),
+    showTitle: Boolean = true,
+) {
     val colors = Theme.current
     val context = LocalContext.current
     var confirm by remember { mutableStateOf(false) }
     LaunchedEffect(vm) { vm.refreshReferenceCacheSize() }
-    SettingCategoryTitle(stringResource(R.string.reference_cache_title))
-    SettingGroup {
+    if (showTitle) {
+        SettingCategoryTitle(stringResource(R.string.reference_cache_title))
+        SettingGroup {
+            SettingNavGroupItem(
+                icon = Icons.Rounded.DeleteOutline,
+                title = stringResource(if (vm.referenceCacheClearing) R.string.reference_cache_clearing
+                    else R.string.reference_cache_clear),
+                summary = stringResource(R.string.reference_cache_size,
+                    Formatter.formatFileSize(context, vm.referenceCacheBytes)),
+                shape = shape,
+                onClick = { if (!vm.referenceCacheClearing) confirm = true },
+            )
+        }
+    } else {
         SettingNavGroupItem(
             icon = Icons.Rounded.DeleteOutline,
             title = stringResource(if (vm.referenceCacheClearing) R.string.reference_cache_clearing
                 else R.string.reference_cache_clear),
             summary = stringResource(R.string.reference_cache_size,
                 Formatter.formatFileSize(context, vm.referenceCacheBytes)),
-            shape = settingGroupShape(0, 1),
+            shape = shape,
             onClick = { if (!vm.referenceCacheClearing) confirm = true },
         )
     }
