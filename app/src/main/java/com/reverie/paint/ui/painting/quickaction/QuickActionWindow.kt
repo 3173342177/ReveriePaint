@@ -149,16 +149,18 @@ fun QuickActionWindow(
     Box(
         modifier = modifier
             .offset {
+                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                val maxX = (screenWidthPx - curW).coerceAtLeast(0f)
+                val maxY = (screenHeightPx - curH).coerceAtLeast(0f)
                 val x = if (vm.quickActionWindowX >= 0f) {
-                    vm.quickActionWindowX.roundToInt()
+                    vm.quickActionWindowX.coerceIn(0f, maxX).roundToInt()
                 } else {
-                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
                     ((screenWidthPx - curW) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 val y = if (vm.quickActionWindowY >= 0f) {
-                    vm.quickActionWindowY.roundToInt()
+                    vm.quickActionWindowY.coerceIn(0f, maxY).roundToInt()
                 } else {
-                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                     ((screenHeightPx - curH) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 IntOffset(x, y)
@@ -171,6 +173,17 @@ fun QuickActionWindow(
                     windowSize = size
                     vm.quickActionWindowWidth = size.width.toFloat()
                     vm.quickActionWindowHeight = size.height.toFloat()
+                    if (screenWidthPx > 0f && screenHeightPx > 0f) {
+                        val maxX = (screenWidthPx - size.width.toFloat()).coerceAtLeast(0f)
+                        val maxY = (screenHeightPx - size.height.toFloat()).coerceAtLeast(0f)
+                        val clampedX = vm.quickActionWindowX.coerceIn(0f, maxX)
+                        val clampedY = vm.quickActionWindowY.coerceIn(0f, maxY)
+                        if (clampedX != vm.quickActionWindowX || clampedY != vm.quickActionWindowY) {
+                            vm.quickActionWindowX = clampedX
+                            vm.quickActionWindowY = clampedY
+                            vm.persistQuickActionsState()
+                        }
+                    }
                 }
                 .shadow(12.dp, windowShape)
                 .systemHoverIcon(context)
@@ -192,14 +205,18 @@ fun QuickActionWindow(
             Row(
                 modifier = Modifier
                     .wrapContentSize()
-                    .pointerInput(Unit) {
+                    .pointerInput(screenWidthPx, screenHeightPx, windowSize) {
                         detectDragGestures(
                             onDragEnd = { vm.persistQuickActionsState() },
                             onDragCancel = { vm.persistQuickActionsState() },
                         ) { change, dragAmount ->
                             change.consume()
-                            vm.quickActionWindowX += dragAmount.x
-                            vm.quickActionWindowY += dragAmount.y
+                            val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                            val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                            val maxX = (screenWidthPx - curW).coerceAtLeast(0f)
+                            val maxY = (screenHeightPx - curH).coerceAtLeast(0f)
+                            vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(0f, maxX)
+                            vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(0f, maxY)
                         }
                     }
                     .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -270,14 +287,18 @@ fun QuickActionWindow(
                             }
                         )
                         .height(24.dp)
-                        .pointerInput(Unit) {
+                        .pointerInput(screenWidthPx, screenHeightPx, windowSize) {
                             detectDragGestures(
                                 onDragEnd = { vm.persistQuickActionsState() },
                                 onDragCancel = { vm.persistQuickActionsState() },
                             ) { change, dragAmount ->
                                 change.consume()
-                                vm.quickActionWindowX += dragAmount.x
-                                vm.quickActionWindowY += dragAmount.y
+                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                val maxX = (screenWidthPx - curW).coerceAtLeast(0f)
+                                val maxY = (screenHeightPx - curH).coerceAtLeast(0f)
+                                vm.quickActionWindowX = (vm.quickActionWindowX + dragAmount.x).coerceIn(0f, maxX)
+                                vm.quickActionWindowY = (vm.quickActionWindowY + dragAmount.y).coerceIn(0f, maxY)
                             }
                         },
                     verticalAlignment = Alignment.CenterVertically,
