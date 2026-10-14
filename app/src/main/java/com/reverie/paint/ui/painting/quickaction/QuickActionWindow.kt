@@ -579,7 +579,7 @@ private fun QuickActionButton(
     }
 
     val bg = if (isActivated) Morandi.accent else Morandi.panelHi.copy(alpha = 0.65f)
-    val tint = if (isActivated) Color.White else Morandi.text
+    val tint = if (isActivated) Morandi.onAccent else Morandi.icon
 
     if (showLabel) {
         // 图标 + 文字标签
@@ -606,7 +606,7 @@ private fun QuickActionButton(
             Spacer(Modifier.height(3.dp))
             Text(
                 text = stringResource(action.titleRes),
-                color = if (isActivated) Color.White else Morandi.subText,
+                color = if (isActivated) Morandi.onAccent else Morandi.subText,
                 fontSize = 9.sp,
                 maxLines = 1,
                 textAlign = TextAlign.Center,

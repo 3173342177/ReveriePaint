@@ -64,21 +64,21 @@ val MorandiDarkColors =
         error = Color(0xFFD46A6A),
     )
 
-/** Default iOS Light palette - clean light gray background with pure white cards and Morandi misty blue accent. */
+/** Default iOS Light palette - soft Morandi warm studio workspace with balanced contrast. */
 val MorandiLightColors =
     AppColors(
         bg = Color(0xFFF2F2F7), // iOS Grouped Background: refined light gray
-        panel = Color(0xFFFFFFFF), // Pure white foreground cards/panels
-        panelHi = Color(0xFFE5E5EA), // iOS System Gray 5: Inner card surfaces/pills
+        panel = Color(0xFFF7F7F9), // Soft warm off-white panels (eliminates harsh pure white glare)
+        panelHi = Color(0xFFEAEAEE), // Refined raised surface gray
         accent = Color(0xFF5A6E8A), // Morandi signature misty blue
-        accentHi = Color(0xFF4F6179),
+        accentHi = Color(0xFF4A5C75),
         onAccent = Color(0xFFFFFFFF),
-        text = Color(0xFF000000), // Crisp deep black text
-        subText = Color(0xFF8E8E93), // iOS Secondary Label gray
+        text = Color(0xFF242426), // Deep warm graphite text (replaces harsh #000000)
+        subText = Color(0xFF8A8A8E), // Morandi balanced secondary label gray
         canvasBg = Color(0xFFE5E5EA), // Clean neutral workspace backdrop
         border = Color.Transparent, // Borderless studio aesthetic
-        icon = Color(0xFF3C3C43),
-        scrim = Color(0x52000000),
+        icon = Color(0xFF636366), // Balanced medium graphite icon (eliminates excessive contrast)
+        scrim = Color(0x3D000000),
         gridLine = Color(0x1F000000),
         canvasShadow = Color(0x1F000000),
         error = Color(0xFFD04444),
