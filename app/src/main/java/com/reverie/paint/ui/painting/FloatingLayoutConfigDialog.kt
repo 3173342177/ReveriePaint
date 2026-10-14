@@ -513,69 +513,6 @@ fun FloatingLayoutConfigDialog(
                                     .verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                // Presets Card
-                                val isDefaultPreset = topPos == PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER) &&
-                                    toolPos == PanelPosition(PanelEdge.LEFT, PanelAlignment.START) &&
-                                    sliderPos == PanelPosition(PanelEdge.LEFT, PanelAlignment.END)
-                                val isRightHandPreset = topPos == PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER) &&
-                                    toolPos == PanelPosition(PanelEdge.RIGHT, PanelAlignment.START) &&
-                                    sliderPos == PanelPosition(PanelEdge.RIGHT, PanelAlignment.END)
-                                val isBottomPreset = topPos == PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER) &&
-                                    toolPos == PanelPosition(PanelEdge.BOTTOM, PanelAlignment.START) &&
-                                    sliderPos == PanelPosition(PanelEdge.BOTTOM, PanelAlignment.END)
-
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(colors.panelHi.copy(alpha = 0.38f))
-                                        .glassBorder(RoundedCornerShape(14.dp))
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.panel_dock_preset_title),
-                                        color = colors.text,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    ) {
-                                        PresetChip(
-                                            title = stringResource(R.string.panel_dock_preset_default),
-                                            isActive = isDefaultPreset,
-                                            onClick = {
-                                                topPos = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER)
-                                                toolPos = PanelPosition(PanelEdge.LEFT, PanelAlignment.START)
-                                                sliderPos = PanelPosition(PanelEdge.LEFT, PanelAlignment.END)
-                                            },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        PresetChip(
-                                            title = stringResource(R.string.panel_dock_preset_righthand),
-                                            isActive = isRightHandPreset,
-                                            onClick = {
-                                                topPos = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER)
-                                                toolPos = PanelPosition(PanelEdge.RIGHT, PanelAlignment.START)
-                                                sliderPos = PanelPosition(PanelEdge.RIGHT, PanelAlignment.END)
-                                            },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                    PresetChip(
-                                        title = stringResource(R.string.panel_dock_preset_bottom),
-                                        isActive = isBottomPreset,
-                                        onClick = {
-                                            topPos = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER)
-                                            toolPos = PanelPosition(PanelEdge.BOTTOM, PanelAlignment.START)
-                                            sliderPos = PanelPosition(PanelEdge.BOTTOM, PanelAlignment.END)
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-
                                 // Margin Slider Card
                                 Column(
                                     modifier = Modifier
@@ -1082,36 +1019,6 @@ fun FloatingLayoutConfigDialog(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun PresetChip(
-    title: String,
-    isActive: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = Theme.current
-    val bg = if (isActive) colors.accent.copy(alpha = 0.16f) else colors.panel.copy(alpha = 0.75f)
-    val borderCol = if (isActive) colors.accent else colors.border.copy(alpha = 0.28f)
-    val textCol = if (isActive) colors.accent else colors.text
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(bg)
-            .border(1.dp, borderCol, RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 7.dp, horizontal = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = title,
-            color = textCol,
-            fontSize = 11.5.sp,
-            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
-        )
     }
 }
 
