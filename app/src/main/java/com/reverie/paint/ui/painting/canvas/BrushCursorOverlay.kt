@@ -133,7 +133,7 @@ internal fun BrushCursorOverlay(
                                 drawPath(
                                     path = path,
                                     color = Color.Black.copy(alpha = 0.75f),
-                                    style = Stroke(width = 1.2.dp.toPx())
+                                    style = Stroke(width = 0.4.dp.toPx())
                                 )
                             }
                         }
@@ -143,7 +143,7 @@ internal fun BrushCursorOverlay(
                             color = Color.Black.copy(alpha = 0.75f),
                             radius = brushRadiusScreen,
                             center = curPos,
-                            style = Stroke(width = 1.2.dp.toPx())
+                            style = Stroke(width = 0.4.dp.toPx())
                         )
                     }
                 }

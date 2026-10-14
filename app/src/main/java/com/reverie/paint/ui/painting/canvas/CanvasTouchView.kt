@@ -325,7 +325,7 @@ class CanvasTouchView(context: Context) : View(context) {
     private val brushOutlinePath = android.graphics.Path()
     private val brushOutlinePaintBlack = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 1.2f * density
+        strokeWidth = 0.4f * density
         color = android.graphics.Color.argb(190, 0, 0, 0)
     }
 
