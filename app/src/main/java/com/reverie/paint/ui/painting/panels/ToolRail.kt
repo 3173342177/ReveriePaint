@@ -22,9 +22,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -589,6 +591,7 @@ fun SlidersPanelContent(
     if (isHorizontal) {
         Row(
             modifier = contentModifier
+                .onSizeChanged { vm.railSliderPanelWidthPx = it.width.toFloat() }
                 .height(36.dp)
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -718,13 +721,14 @@ fun FloatingToolRailCapsule(
     onToggleMoreTools: () -> Unit = {},
     onOpenBrush: () -> Unit,
     isHorizontal: Boolean = false,
+    maxDimension: androidx.compose.ui.unit.Dp? = null,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val shape = RoundedCornerShape(18.dp)
     val sizeModifier = if (isHorizontal) {
-        Modifier.height(36.dp)
+        if (maxDimension != null) Modifier.height(36.dp).widthIn(max = maxDimension) else Modifier.height(36.dp)
     } else {
-        Modifier.width(36.dp)
+        if (maxDimension != null) Modifier.width(36.dp).heightIn(max = maxDimension) else Modifier.width(36.dp)
     }
 
     Box(

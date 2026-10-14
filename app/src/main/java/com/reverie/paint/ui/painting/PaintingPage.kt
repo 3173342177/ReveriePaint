@@ -1026,7 +1026,8 @@ fun PaintingPage(
                     androidx.compose.runtime.CompositionLocalProvider(
                         androidx.compose.ui.platform.LocalDensity provides floatingDensity
                     ) {
-                        // 1. Floating TopBar
+                        androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                            // 1. Floating TopBar
                         TopBar(
                             modifier = resolveFloatingModifier("TOPBAR", topPos).zIndex(50f),
                         vm = vm,
@@ -1080,12 +1081,93 @@ fun PaintingPage(
                         },
                     )
 
+                    val toolLayer = (positionGroups[toolPos] ?: listOf("TOOLRAIL")).sortedBy { id ->
+                        val idx = config.panelOrder.indexOf(id)
+                        if (idx < 0) 99 else idx
+                    }.indexOf("TOOLRAIL").coerceAtLeast(0)
+
+                    val sliderLayer = (positionGroups[sliderPos] ?: listOf("SLIDERRAIL")).sortedBy { id ->
+                        val idx = config.panelOrder.indexOf(id)
+                        if (idx < 0) 99 else idx
+                    }.indexOf("SLIDERRAIL").coerceAtLeast(0)
+
+                    val topLayer = (positionGroups[topPos] ?: listOf("TOPBAR")).sortedBy { id ->
+                        val idx = config.panelOrder.indexOf(id)
+                        if (idx < 0) 99 else idx
+                    }.indexOf("TOPBAR").coerceAtLeast(0)
+
+                    val sharesEdgeWithSlider = toolPos.edge == sliderPos.edge && toolLayer == sliderLayer
+                    val sharesEdgeWithTopBar = toolPos.edge == topPos.edge && toolLayer == topLayer
+
+                    val adaptiveToolRailMaxDimension: androidx.compose.ui.unit.Dp = if (toolPos.edge.isVertical) {
+                        val totalH = maxHeight
+                        val sliderHeightDp = if (sharesEdgeWithSlider) {
+                            with(floatingDensity) {
+                                if (vm.railSliderPanelHeightPx > 0f) vm.railSliderPanelHeightPx.toDp() else 280.dp
+                            }
+                        } else 0.dp
+                        val topBarHeightDp = if (sharesEdgeWithTopBar) {
+                            if (topPos.edge.isVertical) 200.dp else 44.dp
+                        } else 0.dp
+
+                        val gap = 12.dp
+                        var occupied = margin * 2
+                        if (sharesEdgeWithSlider) occupied += sliderHeightDp + gap
+                        if (sharesEdgeWithTopBar) occupied += topBarHeightDp + gap
+
+                        if (toolPos.alignment == com.reverie.paint.model.PanelAlignment.CENTER && (sharesEdgeWithSlider || sharesEdgeWithTopBar)) {
+                            val oneSideOccupied = maxOf(
+                                if (sharesEdgeWithSlider) sliderHeightDp + gap else 0.dp,
+                                if (sharesEdgeWithTopBar) topBarHeightDp + gap else 0.dp,
+                            )
+                            ((totalH / 2f - margin - oneSideOccupied) * 2f).coerceAtLeast(0.dp)
+                        } else {
+                            totalH - occupied
+                        }
+                    } else {
+                        val totalW = maxWidth
+                        val sliderWidthDp = if (sharesEdgeWithSlider) {
+                            with(floatingDensity) {
+                                if (vm.railSliderPanelWidthPx > 0f) vm.railSliderPanelWidthPx.toDp() else 280.dp
+                            }
+                        } else 0.dp
+                        val topBarWidthDp = if (sharesEdgeWithTopBar) {
+                            if (topPos.edge.isHorizontal) 260.dp else 44.dp
+                        } else 0.dp
+
+                        val gap = 12.dp
+                        var occupied = margin * 2
+                        if (sharesEdgeWithSlider) occupied += sliderWidthDp + gap
+                        if (sharesEdgeWithTopBar) occupied += topBarWidthDp + gap
+
+                        if (toolPos.alignment == com.reverie.paint.model.PanelAlignment.CENTER && (sharesEdgeWithSlider || sharesEdgeWithTopBar)) {
+                            val oneSideOccupied = maxOf(
+                                if (sharesEdgeWithSlider) sliderWidthDp + gap else 0.dp,
+                                if (sharesEdgeWithTopBar) topBarWidthDp + gap else 0.dp,
+                            )
+                            ((totalW / 2f - margin - oneSideOccupied) * 2f).coerceAtLeast(0.dp)
+                        } else {
+                            totalW - occupied
+                        }
+                    }
+
+                    val isSqueezed = (sharesEdgeWithSlider || sharesEdgeWithTopBar) && adaptiveToolRailMaxDimension < 72.dp
+                    androidx.compose.runtime.LaunchedEffect(isSqueezed, vm.toolbarSqueezedWarningDismissed, vm.pinnedTools.size) {
+                        if (isSqueezed && !vm.toolbarSqueezedWarningDismissed && vm.pinnedTools.isNotEmpty()) {
+                            kotlinx.coroutines.delay(300)
+                            if (adaptiveToolRailMaxDimension < 72.dp && !vm.toolbarSqueezedWarningDismissed) {
+                                vm.showToolbarSqueezedDialog = true
+                            }
+                        }
+                    }
+
                     // 2. Floating ToolRail
                     FloatingToolRailCapsule(
                         modifier = resolveFloatingModifier("TOOLRAIL", toolPos).zIndex(50f),
                         vm = vm,
                         hazeState = hazeState,
                         opacity = vm.uiOpacity.toDouble(),
+                        maxDimension = adaptiveToolRailMaxDimension.coerceAtLeast(72.dp),
                         tool = tool,
                         onTool = {
                             when (it) {
@@ -1224,7 +1306,8 @@ fun PaintingPage(
                         isHorizontal = sliderPos.edge.isHorizontal,
                     )
                 }
-            } else {
+            }
+        } else {
                 // ---- Default Attached Top bar ----
                     TopBar(
                         modifier = Modifier.align(if (vm.leftHandMode) Alignment.TopStart else Alignment.TopEnd).zIndex(50f),

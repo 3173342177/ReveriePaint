@@ -1272,8 +1272,9 @@ class PaintViewModel : ViewModel() {
     var selectionMaskColorHex by mutableStateOf("#141416") // 选区蒙版遮罩颜色 (默认深空灰黑)
     var selectionMaskOpacity by mutableFloatStateOf(0.47f) // 选区蒙版遮罩不透明度 (0.10 - 0.90, 默认 0.47)
 
-    /** 左侧工具条滑块面板的实时高度 (px), 由 ToolRail 测量写入; 时间轴"展开至同高"对齐用 */
+    /** 左侧工具条滑块面板的实时高度与宽度 (px), 由 ToolRail 测量写入; 时间轴对齐与悬浮自适应避让用 */
     var railSliderPanelHeightPx by mutableFloatStateOf(0f)
+    var railSliderPanelWidthPx by mutableFloatStateOf(0f)
     var showToolbarSqueezedDialog by mutableStateOf(false)
     var toolbarSqueezedWarningDismissed by mutableStateOf(false)
     var showLowStorageDialog by mutableStateOf(false)
