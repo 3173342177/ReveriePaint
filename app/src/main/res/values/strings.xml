@@ -2001,6 +2001,11 @@
     <string name="floating_topbar_shortcuts_added_title">已添加的快捷动作（上下调整顺序）</string>
     <string name="floating_topbar_shortcuts_clear_all">清空全部</string>
     <string name="floating_topbar_shortcuts_all_added">已添加全部可用动作</string>
+    <string name="floating_shared_slot_title">槽位共享与层级</string>
+    <string name="floating_shared_slot_desc">同位置面板将向画布内侧平行并列排布</string>
+    <string name="floating_shared_slot_outer">外侧（贴边）</string>
+    <string name="floating_shared_slot_inner">内侧（并排）</string>
+    <string name="floating_shared_slot_swap">交换内外顺序</string>
     <string name="theme_category_effects">显示与效果</string>
     <string name="theme_blur_title">背景毛玻璃效果</string>
     <string name="theme_blur_desc">为所有面板与工具栏启用半透明背景高斯模糊</string>

@@ -104,7 +104,31 @@ fun FloatingLayoutConfigDialog(
     var marginDp by remember { mutableFloatStateOf(vm.floatingUiConfig.marginDp.toFloat()) }
     var floatingScale by remember { mutableFloatStateOf(vm.floatingUiConfig.scale) }
     var currentTopBarActions by remember { mutableStateOf(vm.floatingUiConfig.topBarActions) }
+    var currentPanelOrder by remember { mutableStateOf(vm.floatingUiConfig.panelOrder) }
     var showShortcutsDialog by remember { mutableStateOf(false) }
+
+    fun getLayerIndex(panelId: String, pos: PanelPosition): Int {
+        val sharing = listOf(
+            "TOPBAR" to topPos,
+            "TOOLRAIL" to toolPos,
+            "SLIDERRAIL" to sliderPos
+        ).filter { it.second == pos }
+         .map { it.first }
+         .sortedBy { id ->
+             val idx = currentPanelOrder.indexOf(id)
+             if (idx < 0) 99 else idx
+         }
+        return sharing.indexOf(panelId).coerceAtLeast(0)
+    }
+
+    fun onPanelMoved(panelId: String, newPos: PanelPosition) {
+        when (panelId) {
+            "TOPBAR" -> topPos = newPos
+            "TOOLRAIL" -> toolPos = newPos
+            "SLIDERRAIL" -> sliderPos = newPos
+        }
+        currentPanelOrder = currentPanelOrder.filter { it != panelId } + panelId
+    }
 
     var selectedPanel by remember { mutableStateOf(DragTargetPanel.TOPBAR) }
     var draggingPanel by remember { mutableStateOf(DragTargetPanel.NONE) }
@@ -170,6 +194,7 @@ fun FloatingLayoutConfigDialog(
                                 marginDp = 12f
                                 floatingScale = 1.0f
                                 currentTopBarActions = emptyList()
+                                currentPanelOrder = com.reverie.paint.model.FloatingUiConfig.DEFAULT_PANEL_ORDER
                                 selectedPanel = DragTargetPanel.TOPBAR
                             },
                         )
@@ -288,9 +313,9 @@ fun FloatingLayoutConfigDialog(
                                                 onClick = {
                                                     // Tap to quickly place selected panel
                                                     when (selectedPanel) {
-                                                        DragTargetPanel.TOPBAR -> topPos = slot
-                                                        DragTargetPanel.TOOLRAIL -> toolPos = slot
-                                                        DragTargetPanel.SLIDERRAIL -> sliderPos = slot
+                                                        DragTargetPanel.TOPBAR -> onPanelMoved("TOPBAR", slot)
+                                                        DragTargetPanel.TOOLRAIL -> onPanelMoved("TOOLRAIL", slot)
+                                                        DragTargetPanel.SLIDERRAIL -> onPanelMoved("SLIDERRAIL", slot)
                                                         DragTargetPanel.NONE -> {}
                                                     }
                                                 }
@@ -326,6 +351,7 @@ fun FloatingLayoutConfigDialog(
                                     title = stringResource(R.string.panel_dock_topbar),
                                     icon = R.drawable.ic_canvas_tab,
                                     pos = topPos,
+                                    layerIndex = getLayerIndex("TOPBAR", topPos),
                                     isSelected = selectedPanel == DragTargetPanel.TOPBAR,
                                     isDragging = draggingPanel == DragTargetPanel.TOPBAR,
                                     onSelect = { selectedPanel = DragTargetPanel.TOPBAR },
@@ -337,7 +363,7 @@ fun FloatingLayoutConfigDialog(
                                     onDragEnd = {
                                         dragGlobalPos?.let { pos ->
                                             slotBoundsMap.entries.firstOrNull { it.value.contains(pos) }?.key?.let { targetSlot ->
-                                                topPos = targetSlot
+                                                onPanelMoved("TOPBAR", targetSlot)
                                             }
                                         }
                                         draggingPanel = DragTargetPanel.NONE
@@ -349,6 +375,7 @@ fun FloatingLayoutConfigDialog(
                                     title = stringResource(R.string.panel_dock_toolrail),
                                     icon = R.drawable.ic_brush,
                                     pos = toolPos,
+                                    layerIndex = getLayerIndex("TOOLRAIL", toolPos),
                                     isSelected = selectedPanel == DragTargetPanel.TOOLRAIL,
                                     isDragging = draggingPanel == DragTargetPanel.TOOLRAIL,
                                     onSelect = { selectedPanel = DragTargetPanel.TOOLRAIL },
@@ -360,7 +387,7 @@ fun FloatingLayoutConfigDialog(
                                     onDragEnd = {
                                         dragGlobalPos?.let { pos ->
                                             slotBoundsMap.entries.firstOrNull { it.value.contains(pos) }?.key?.let { targetSlot ->
-                                                toolPos = targetSlot
+                                                onPanelMoved("TOOLRAIL", targetSlot)
                                             }
                                         }
                                         draggingPanel = DragTargetPanel.NONE
@@ -372,6 +399,7 @@ fun FloatingLayoutConfigDialog(
                                     title = stringResource(R.string.panel_dock_sliderrail),
                                     icon = R.drawable.ic_eye,
                                     pos = sliderPos,
+                                    layerIndex = getLayerIndex("SLIDERRAIL", sliderPos),
                                     isSelected = selectedPanel == DragTargetPanel.SLIDERRAIL,
                                     isDragging = draggingPanel == DragTargetPanel.SLIDERRAIL,
                                     onSelect = { selectedPanel = DragTargetPanel.SLIDERRAIL },
@@ -383,7 +411,7 @@ fun FloatingLayoutConfigDialog(
                                     onDragEnd = {
                                         dragGlobalPos?.let { pos ->
                                             slotBoundsMap.entries.firstOrNull { it.value.contains(pos) }?.key?.let { targetSlot ->
-                                                sliderPos = targetSlot
+                                                onPanelMoved("SLIDERRAIL", targetSlot)
                                             }
                                         }
                                         draggingPanel = DragTargetPanel.NONE
@@ -578,6 +606,119 @@ fun FloatingLayoutConfigDialog(
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
+
+                        // Shared Slot & Stacking Card (if 2 or more panels share a slot)
+                        val sharedGroups = remember(topPos, toolPos, sliderPos, currentPanelOrder) {
+                            listOf(
+                                "TOPBAR" to topPos,
+                                "TOOLRAIL" to toolPos,
+                                "SLIDERRAIL" to sliderPos
+                            ).groupBy({ it.second }, { it.first })
+                             .filter { it.value.size > 1 }
+                        }
+
+                        if (sharedGroups.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(colors.panelHi.copy(alpha = 0.5f))
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.floating_shared_slot_title),
+                                        color = colors.text,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        text = "${sharedGroups.size}",
+                                        color = colors.accent,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                                Text(
+                                    text = stringResource(R.string.floating_shared_slot_desc),
+                                    color = colors.subText,
+                                    fontSize = 10.5.sp,
+                                )
+
+                                sharedGroups.forEach { (_, panelIds) ->
+                                    val sortedPanels = panelIds.sortedBy { id ->
+                                        val idx = currentPanelOrder.indexOf(id)
+                                        if (idx < 0) 99 else idx
+                                    }
+                                    if (sortedPanels.size >= 2) {
+                                        val outer = sortedPanels[0]
+                                        val inner = sortedPanels[1]
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(colors.panel.copy(alpha = 0.7f))
+                                                .padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                    val outerName = when (outer) {
+                                                        "TOPBAR" -> stringResource(R.string.panel_dock_topbar)
+                                                        "TOOLRAIL" -> stringResource(R.string.panel_dock_toolrail)
+                                                        else -> stringResource(R.string.panel_dock_sliderrail)
+                                                    }
+                                                    val innerName = when (inner) {
+                                                        "TOPBAR" -> stringResource(R.string.panel_dock_topbar)
+                                                        "TOOLRAIL" -> stringResource(R.string.panel_dock_toolrail)
+                                                        else -> stringResource(R.string.panel_dock_sliderrail)
+                                                    }
+                                                    Text(
+                                                        text = "${stringResource(R.string.floating_shared_slot_outer)}: $outerName",
+                                                        color = colors.text,
+                                                        fontSize = 11.5.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                    )
+                                                    Text(
+                                                        text = "${stringResource(R.string.floating_shared_slot_inner)}: $innerName",
+                                                        color = colors.subText,
+                                                        fontSize = 11.sp,
+                                                    )
+                                                }
+                                                ReButton(
+                                                    text = stringResource(R.string.floating_shared_slot_swap),
+                                                    primary = false,
+                                                    onClick = {
+                                                        val list = currentPanelOrder.toMutableList()
+                                                        val idx1 = list.indexOf(outer)
+                                                        val idx2 = list.indexOf(inner)
+                                                        if (idx1 >= 0 && idx2 >= 0) {
+                                                            list[idx1] = inner
+                                                            list[idx2] = outer
+                                                        } else {
+                                                            list.remove(outer)
+                                                            list.remove(inner)
+                                                            list.add(inner)
+                                                            list.add(outer)
+                                                        }
+                                                        currentPanelOrder = list
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -603,6 +744,7 @@ fun FloatingLayoutConfigDialog(
                                 topBarPosition = topPos,
                                 toolRailPosition = toolPos,
                                 sliderRailPosition = sliderPos,
+                                panelOrder = currentPanelOrder,
                             )
                             vm.updateFloatingUiMargin(marginDp.roundToInt())
                             vm.updateFloatingUiScale(floatingScale)
@@ -970,6 +1112,7 @@ private fun BoxWithConstraintsScope.DraggablePanelCapsule(
     title: String,
     icon: Int,
     pos: PanelPosition,
+    layerIndex: Int = 0,
     isSelected: Boolean,
     isDragging: Boolean,
     onSelect: () -> Unit,
@@ -981,7 +1124,7 @@ private fun BoxWithConstraintsScope.DraggablePanelCapsule(
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var currentGlobalBounds by remember { mutableStateOf<Rect?>(null) }
 
-    val slotModifier = resolveSlotAlignmentModifier(pos.edge, pos.alignment)
+    val slotModifier = resolveSlotAlignmentModifier(pos.edge, pos.alignment, layerIndex)
     val isH = pos.edge.isHorizontal
 
     val elevation by animateDpAsState(
@@ -1099,6 +1242,7 @@ private fun BoxWithConstraintsScope.DraggablePanelCapsule(
 private fun BoxWithConstraintsScope.resolveSlotAlignmentModifier(
     edge: PanelEdge,
     alignment: PanelAlignment,
+    layerIndex: Int = 0,
 ): Modifier {
     val align = when (edge) {
         PanelEdge.TOP -> {
@@ -1131,33 +1275,35 @@ private fun BoxWithConstraintsScope.resolveSlotAlignmentModifier(
         }
     }
 
+    val parallelShift = (layerIndex * (if (edge.isHorizontal) 34 else 42)).dp
+
     val offsetModifier = when (edge) {
         PanelEdge.TOP -> {
             when (alignment) {
-                PanelAlignment.START -> Modifier.padding(start = 10.dp, top = 6.dp)
-                PanelAlignment.CENTER -> Modifier.padding(top = 6.dp)
-                PanelAlignment.END -> Modifier.padding(end = 10.dp, top = 6.dp)
+                PanelAlignment.START -> Modifier.padding(start = 10.dp, top = 6.dp + parallelShift)
+                PanelAlignment.CENTER -> Modifier.padding(top = 6.dp + parallelShift)
+                PanelAlignment.END -> Modifier.padding(end = 10.dp, top = 6.dp + parallelShift)
             }
         }
         PanelEdge.BOTTOM -> {
             when (alignment) {
-                PanelAlignment.START -> Modifier.padding(start = 10.dp, bottom = 6.dp)
-                PanelAlignment.CENTER -> Modifier.padding(bottom = 6.dp)
-                PanelAlignment.END -> Modifier.padding(end = 10.dp, bottom = 6.dp)
+                PanelAlignment.START -> Modifier.padding(start = 10.dp, bottom = 6.dp + parallelShift)
+                PanelAlignment.CENTER -> Modifier.padding(bottom = 6.dp + parallelShift)
+                PanelAlignment.END -> Modifier.padding(end = 10.dp, bottom = 6.dp + parallelShift)
             }
         }
         PanelEdge.LEFT -> {
             when (alignment) {
-                PanelAlignment.START -> Modifier.padding(start = 6.dp, top = 10.dp)
-                PanelAlignment.CENTER -> Modifier.padding(start = 6.dp)
-                PanelAlignment.END -> Modifier.padding(start = 6.dp, bottom = 10.dp)
+                PanelAlignment.START -> Modifier.padding(start = 6.dp + parallelShift, top = 10.dp)
+                PanelAlignment.CENTER -> Modifier.padding(start = 6.dp + parallelShift)
+                PanelAlignment.END -> Modifier.padding(start = 6.dp + parallelShift, bottom = 10.dp)
             }
         }
         PanelEdge.RIGHT -> {
             when (alignment) {
-                PanelAlignment.START -> Modifier.padding(end = 6.dp, top = 10.dp)
-                PanelAlignment.CENTER -> Modifier.padding(end = 6.dp)
-                PanelAlignment.END -> Modifier.padding(end = 6.dp, bottom = 10.dp)
+                PanelAlignment.START -> Modifier.padding(end = 6.dp + parallelShift, top = 10.dp)
+                PanelAlignment.CENTER -> Modifier.padding(end = 6.dp + parallelShift)
+                PanelAlignment.END -> Modifier.padding(end = 6.dp + parallelShift, bottom = 10.dp)
             }
         }
     }

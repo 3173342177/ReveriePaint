@@ -2926,11 +2926,13 @@ class PaintViewModel : ViewModel() {
         topBarPosition: com.reverie.paint.model.PanelPosition = floatingUiConfig.topBarPosition,
         toolRailPosition: com.reverie.paint.model.PanelPosition = floatingUiConfig.toolRailPosition,
         sliderRailPosition: com.reverie.paint.model.PanelPosition = floatingUiConfig.sliderRailPosition,
+        panelOrder: List<String> = floatingUiConfig.panelOrder,
     ) {
         floatingUiConfig = floatingUiConfig.copy(
             topBarPosition = topBarPosition,
             toolRailPosition = toolRailPosition,
             sliderRailPosition = sliderRailPosition,
+            panelOrder = panelOrder,
         )
         persistFloatingUiConfig()
     }
@@ -2950,6 +2952,11 @@ class PaintViewModel : ViewModel() {
         persistFloatingUiConfig()
     }
 
+    fun updateFloatingUiPanelOrder(order: List<String>) {
+        floatingUiConfig = floatingUiConfig.copy(panelOrder = order)
+        persistFloatingUiConfig()
+    }
+
     fun resetFloatingUiEdges() {
         floatingUiConfig = floatingUiConfig.copy(
             topBarPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.TOP, com.reverie.paint.model.PanelAlignment.END),
@@ -2958,6 +2965,7 @@ class PaintViewModel : ViewModel() {
             marginDp = 12,
             scale = 1.0f,
             topBarActions = emptyList(),
+            panelOrder = com.reverie.paint.model.FloatingUiConfig.DEFAULT_PANEL_ORDER,
         )
         persistFloatingUiConfig()
     }
@@ -2977,6 +2985,7 @@ class PaintViewModel : ViewModel() {
                 .putInt("floatingUi_marginDp", floatingUiConfig.marginDp)
                 .putFloat("floatingUi_scale", floatingUiConfig.scale)
                 .putString("floatingUi_topBarActions", floatingUiConfig.topBarActions.joinToString(",") { it.id })
+                .putString("floatingUi_panelOrder", floatingUiConfig.panelOrder.joinToString(","))
                 .apply()
         }
     }
@@ -3271,6 +3280,13 @@ class PaintViewModel : ViewModel() {
             } else {
                 emptyList()
             }
+            val panelOrderStr = prefs.getString("floatingUi_panelOrder", null)
+            val panelOrder = if (!panelOrderStr.isNullOrEmpty()) {
+                val list = panelOrderStr.split(",").filter { it.isNotBlank() }
+                if (list.isNotEmpty()) list else com.reverie.paint.model.FloatingUiConfig.DEFAULT_PANEL_ORDER
+            } else {
+                com.reverie.paint.model.FloatingUiConfig.DEFAULT_PANEL_ORDER
+            }
             floatingUiConfig = com.reverie.paint.model.FloatingUiConfig(
                 enabled = isTabletDevice && floatingSavedEnabled,
                 topBarPosition = com.reverie.paint.model.PanelPosition(
@@ -3288,6 +3304,7 @@ class PaintViewModel : ViewModel() {
                 marginDp = marginDp,
                 scale = floatingScale,
                 topBarActions = topBarActions,
+                panelOrder = panelOrder,
             )
             selectionMaskColorHex = prefs.getString("selection_mask_color", "#141416") ?: "#141416"
             selectionMaskOpacity = prefs.getFloat("selection_mask_opacity", 0.47f).coerceIn(0.10f, 0.90f)

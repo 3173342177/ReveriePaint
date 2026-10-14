@@ -2001,6 +2001,11 @@
     <string name="floating_topbar_shortcuts_added_title">Added Shortcuts (Order)</string>
     <string name="floating_topbar_shortcuts_clear_all">Clear All</string>
     <string name="floating_topbar_shortcuts_all_added">All available actions have been added</string>
+    <string name="floating_shared_slot_title">Shared Slot &amp; Stacking</string>
+    <string name="floating_shared_slot_desc">Panels in the same position are arranged parallelly inwards</string>
+    <string name="floating_shared_slot_outer">Outer (Edge)</string>
+    <string name="floating_shared_slot_inner">Inner (Inward)</string>
+    <string name="floating_shared_slot_swap">Swap Inner/Outer</string>
     <string name="theme_category_effects">Display &amp; Effects</string>
     <string name="theme_blur_title">Background Frosted Glass Effect</string>
     <string name="theme_blur_desc">Enable translucent background Gaussian blur for all panels and toolbars</string>
