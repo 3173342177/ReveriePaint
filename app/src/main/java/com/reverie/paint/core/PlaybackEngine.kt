@@ -422,6 +422,7 @@ internal fun PaintViewModel.resetReplayDocLocked(s: ReplaySession) {
         renderW = -1
         renderH = -1
         setRenderViewport(coreW, coreH)
+        ReverieCoreBridge.touchStrokeCancel()
         ReverieCoreBridge.resetStrokeCounter()
         // 回放期间不设撤销步数限制(0 = 无限): 回放严格重放笔画和 T_UNDO/T_REDO，
         // 若使用常规 50 步上限，超过 50 步后旧命令从栈底被截断淘汰并调用 purgeHistory()，
@@ -586,6 +587,9 @@ private fun PaintViewModel.dispatchReplayLocked(
 }
 
 private fun PaintViewModel.applyReplayContextLocked(c: com.reverie.paint.model.ReplayContext) {
+    if (currentReplayPreset != c.preset && currentReplayPreset >= 0) {
+        ReverieCoreBridge.touchStrokeCancel()
+    }
     currentReplayPreset = c.preset
     ReverieCoreBridge.setToolMode(c.toolMode)
     if (c.preset >= 0) {
