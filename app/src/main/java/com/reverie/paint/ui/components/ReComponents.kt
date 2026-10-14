@@ -717,12 +717,11 @@ fun ReVerticalSlider(
                     label = "ind_alpha"
                 )
 
-                val travelPx = with(density) { (trackHeight.dp - indicatorHeight - 2.dp).toPx() }
+                val travelPx = with(density) { (trackHeight.dp - indicatorHeight).toPx() }
                 val indicatorColor = androidx.compose.ui.graphics.lerp(colors.text, colors.accent, 0.45f)
 
                 Box(
                     modifier = Modifier
-                        .padding(bottom = 1.dp)
                         .align(Alignment.BottomCenter)
                         .graphicsLayer {
                             translationY = -(localFraction.coerceIn(0f, 1f) * travelPx)
@@ -1017,12 +1016,11 @@ fun ReHorizontalSlider(
                     label = "ind_alpha_h"
                 )
 
-                val travelPx = with(density) { (trackWidth.dp - indicatorWidth - 2.dp).toPx() }
+                val travelPx = with(density) { (trackWidth.dp - indicatorWidth).toPx() }
                 val indicatorColor = androidx.compose.ui.graphics.lerp(colors.text, colors.accent, 0.45f)
 
                 Box(
                     modifier = Modifier
-                        .padding(start = 1.dp)
                         .align(Alignment.CenterStart)
                         .graphicsLayer {
                             translationX = localFraction.coerceIn(0f, 1f) * travelPx

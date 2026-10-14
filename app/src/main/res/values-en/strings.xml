@@ -1938,6 +1938,11 @@
     <string name="theme_mode_dark">Dark</string>
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_system">Follow System</string>
+    <string name="theme_contrast_title">Interface Contrast</string>
+    <string name="theme_contrast_summary">Adjust contrast level between panels, icons, and text</string>
+    <string name="theme_contrast_soft">Soft</string>
+    <string name="theme_contrast_standard">Standard</string>
+    <string name="theme_contrast_high">High</string>
     <string name="theme_monet_title">Monet Dynamic Color</string>
     <string name="theme_monet_summary">Extract theme colors dynamically from system wallpaper and Material You</string>
     <string name="theme_monet_unsupported">Requires Android 12 or above</string>

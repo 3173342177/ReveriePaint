@@ -1938,6 +1938,11 @@
     <string name="theme_mode_dark">深色</string>
     <string name="theme_mode_light">浅色</string>
     <string name="theme_mode_system">跟随系统</string>
+    <string name="theme_contrast_title">界面对比度</string>
+    <string name="theme_contrast_summary">调整面板底色、图标及文字的明暗反差等级</string>
+    <string name="theme_contrast_soft">柔和</string>
+    <string name="theme_contrast_standard">标准</string>
+    <string name="theme_contrast_high">清晰</string>
     <string name="theme_monet_title">莫奈取色 (Monet 动态色彩)</string>
     <string name="theme_monet_summary">跟随系统壁纸与 Material You 动态提取界面主题色</string>
     <string name="theme_monet_unsupported">需要 Android 12 及以上系统支持</string>

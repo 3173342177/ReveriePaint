@@ -134,8 +134,22 @@ internal fun ThemeSettingsSubPage(
                         "SYSTEM" to stringResource(R.string.theme_mode_system),
                     ),
                     selected = vm.themeMode,
-                    shape = settingGroupShape(0, 2),
+                    shape = settingGroupShape(0, 3),
                     onSelect = { vm.updateThemeMode(it) },
+                )
+
+                SettingSegmentGroupItem(
+                    icon = R.drawable.ic_contrast,
+                    title = stringResource(R.string.theme_contrast_title),
+                    summary = stringResource(R.string.theme_contrast_summary),
+                    options = listOf(
+                        "SOFT" to stringResource(R.string.theme_contrast_soft),
+                        "STANDARD" to stringResource(R.string.theme_contrast_standard),
+                        "HIGH" to stringResource(R.string.theme_contrast_high),
+                    ),
+                    selected = vm.themeContrast,
+                    shape = settingGroupShape(1, 3),
+                    onSelect = { vm.updateThemeContrast(it) },
                 )
 
                 SettingSwitchGroupItem(
@@ -148,7 +162,7 @@ internal fun ThemeSettingsSubPage(
                     },
                     checked = vm.monetEnabled,
                     enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
-                    shape = settingGroupShape(1, 2),
+                    shape = settingGroupShape(2, 3),
                     onCheckedChange = { vm.updateMonetEnabled(it) },
                 )
             }
