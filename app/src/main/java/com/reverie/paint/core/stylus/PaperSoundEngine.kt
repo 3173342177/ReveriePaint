@@ -88,9 +88,8 @@ class PaperSoundEngine(private val context: Context? = null) {
                 SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
             ).coerceAtLeast(CHUNK_FRAMES * 2 * 2)
             val attrs = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .setFlags(AudioAttributes.FLAG_LOW_LATENCY)
                 .build()
             val format = AudioFormat.Builder()
                 .setSampleRate(SAMPLE_RATE)
