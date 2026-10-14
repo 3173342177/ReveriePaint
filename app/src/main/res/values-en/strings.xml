@@ -1992,6 +1992,15 @@
     <string name="panel_dock_reset">Reset</string>
     <string name="panel_dock_dialog_tip">Drag panel capsules to dashed slots to dock them</string>
     <string name="panel_dock_drag_tip">Drag capsule or tap slot to place</string>
+    <string name="floating_topbar_shortcuts_title">Top Bar Shortcuts</string>
+    <string name="floating_topbar_shortcuts_desc">Add quick action buttons to the floating top bar capsule</string>
+    <string name="floating_topbar_shortcuts_btn">Configure Shortcuts</string>
+    <string name="floating_topbar_shortcuts_count">%1$d shortcut actions added</string>
+    <string name="floating_topbar_shortcuts_empty">No shortcuts added yet. Tap to configure</string>
+    <string name="floating_topbar_shortcuts_add_title">Available Shortcuts</string>
+    <string name="floating_topbar_shortcuts_added_title">Added Shortcuts (Order)</string>
+    <string name="floating_topbar_shortcuts_clear_all">Clear All</string>
+    <string name="floating_topbar_shortcuts_all_added">All available actions have been added</string>
     <string name="theme_category_effects">Display &amp; Effects</string>
     <string name="theme_blur_title">Background Frosted Glass Effect</string>
     <string name="theme_blur_desc">Enable translucent background Gaussian blur for all panels and toolbars</string>

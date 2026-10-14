@@ -1139,6 +1139,17 @@ class PaintViewModel : ViewModel() {
         syncAuthorProfileToCore()
     }
 
+    fun isQuickActionActivated(action: com.reverie.paint.model.QuickAction): Boolean =
+        when (action) {
+            com.reverie.paint.model.QuickAction.LOCK_VIEW -> isViewTransformLocked
+            com.reverie.paint.model.QuickAction.FLIP_H -> viewFlipX
+            com.reverie.paint.model.QuickAction.FLIP_V -> viewFlipY
+            com.reverie.paint.model.QuickAction.TOGGLE_ERASER -> currentToolId == "eraser"
+            com.reverie.paint.model.QuickAction.ALPHA_LOCK -> isCurrentLayerAlphaLocked()
+            com.reverie.paint.model.QuickAction.DISABLE_TOUCH -> isCanvasTouchDisabled
+            else -> false
+        }
+
     fun syncAuthorProfileToCore() {
         runCore(render = false) {
             ReverieCoreBridge.setAuthorProfile(authorProfile.toJson())
@@ -2934,6 +2945,11 @@ class PaintViewModel : ViewModel() {
         persistFloatingUiConfig()
     }
 
+    fun updateFloatingUiTopBarActions(actions: List<com.reverie.paint.model.QuickAction>) {
+        floatingUiConfig = floatingUiConfig.copy(topBarActions = actions)
+        persistFloatingUiConfig()
+    }
+
     fun resetFloatingUiEdges() {
         floatingUiConfig = floatingUiConfig.copy(
             topBarPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.TOP, com.reverie.paint.model.PanelAlignment.END),
@@ -2941,6 +2957,7 @@ class PaintViewModel : ViewModel() {
             sliderRailPosition = com.reverie.paint.model.PanelPosition(com.reverie.paint.model.PanelEdge.LEFT, com.reverie.paint.model.PanelAlignment.END),
             marginDp = 12,
             scale = 1.0f,
+            topBarActions = emptyList(),
         )
         persistFloatingUiConfig()
     }
@@ -2959,6 +2976,7 @@ class PaintViewModel : ViewModel() {
                 .putString("floatingUi_sliderRailAlign", floatingUiConfig.sliderRailPosition.alignment.name)
                 .putInt("floatingUi_marginDp", floatingUiConfig.marginDp)
                 .putFloat("floatingUi_scale", floatingUiConfig.scale)
+                .putString("floatingUi_topBarActions", floatingUiConfig.topBarActions.joinToString(",") { it.id })
                 .apply()
         }
     }
@@ -3247,6 +3265,12 @@ class PaintViewModel : ViewModel() {
             val sliderRailAlignName = prefs.getString("floatingUi_sliderRailAlign", "END") ?: "END"
             val marginDp = prefs.getInt("floatingUi_marginDp", 12).coerceIn(8, 48)
             val floatingScale = prefs.getFloat("floatingUi_scale", 1.0f).coerceIn(0.70f, 1.40f)
+            val topBarActionsStr = prefs.getString("floatingUi_topBarActions", null)
+            val topBarActions = if (!topBarActionsStr.isNullOrEmpty()) {
+                topBarActionsStr.split(",").mapNotNull { com.reverie.paint.model.QuickAction.fromId(it) }
+            } else {
+                emptyList()
+            }
             floatingUiConfig = com.reverie.paint.model.FloatingUiConfig(
                 enabled = isTabletDevice && floatingSavedEnabled,
                 topBarPosition = com.reverie.paint.model.PanelPosition(
@@ -3263,6 +3287,7 @@ class PaintViewModel : ViewModel() {
                 ),
                 marginDp = marginDp,
                 scale = floatingScale,
+                topBarActions = topBarActions,
             )
             selectionMaskColorHex = prefs.getString("selection_mask_color", "#141416") ?: "#141416"
             selectionMaskOpacity = prefs.getFloat("selection_mask_opacity", 0.47f).coerceIn(0.10f, 0.90f)

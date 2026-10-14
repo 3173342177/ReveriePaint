@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -26,11 +28,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +62,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,7 +74,9 @@ import com.reverie.paint.core.PaintViewModel
 import com.reverie.paint.model.PanelAlignment
 import com.reverie.paint.model.PanelEdge
 import com.reverie.paint.model.PanelPosition
+import com.reverie.paint.model.QuickAction
 import com.reverie.paint.ui.components.ReButton
+import com.reverie.paint.ui.components.ReIconButton
 import com.reverie.paint.ui.components.ReSlider
 import com.reverie.paint.ui.theme.Theme
 import com.reverie.paint.ui.theme.glassBorder
@@ -95,6 +103,8 @@ fun FloatingLayoutConfigDialog(
     var sliderPos by remember { mutableStateOf(vm.floatingUiConfig.sliderRailPosition) }
     var marginDp by remember { mutableFloatStateOf(vm.floatingUiConfig.marginDp.toFloat()) }
     var floatingScale by remember { mutableFloatStateOf(vm.floatingUiConfig.scale) }
+    var currentTopBarActions by remember { mutableStateOf(vm.floatingUiConfig.topBarActions) }
+    var showShortcutsDialog by remember { mutableStateOf(false) }
 
     var selectedPanel by remember { mutableStateOf(DragTargetPanel.TOPBAR) }
     var draggingPanel by remember { mutableStateOf(DragTargetPanel.NONE) }
@@ -159,6 +169,7 @@ fun FloatingLayoutConfigDialog(
                                 sliderPos = PanelPosition(PanelEdge.LEFT, PanelAlignment.END)
                                 marginDp = 12f
                                 floatingScale = 1.0f
+                                currentTopBarActions = emptyList()
                                 selectedPanel = DragTargetPanel.TOPBAR
                             },
                         )
@@ -524,6 +535,49 @@ fun FloatingLayoutConfigDialog(
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
+
+                        // Top Bar Shortcuts Configuration
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(colors.panelHi.copy(alpha = 0.5f))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.floating_topbar_shortcuts_title),
+                                    color = colors.text,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                if (currentTopBarActions.isNotEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.floating_topbar_shortcuts_count, currentTopBarActions.size),
+                                        color = colors.accent,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                text = stringResource(R.string.floating_topbar_shortcuts_desc),
+                                color = colors.subText,
+                                fontSize = 10.5.sp,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            ReButton(
+                                text = stringResource(R.string.floating_topbar_shortcuts_btn),
+                                primary = false,
+                                onClick = { showShortcutsDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
 
@@ -552,8 +606,334 @@ fun FloatingLayoutConfigDialog(
                             )
                             vm.updateFloatingUiMargin(marginDp.roundToInt())
                             vm.updateFloatingUiScale(floatingScale)
+                            vm.updateFloatingUiTopBarActions(currentTopBarActions)
                             onDismiss()
                         },
+                    )
+                }
+            }
+        }
+    }
+
+    if (showShortcutsDialog) {
+        TopBarActionsEditDialog(
+            initialActions = currentTopBarActions,
+            onDismiss = { showShortcutsDialog = false },
+            onConfirm = { updated ->
+                currentTopBarActions = updated
+                showShortcutsDialog = false
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun TopBarActionsEditDialog(
+    initialActions: List<QuickAction>,
+    onDismiss: () -> Unit,
+    onConfirm: (List<QuickAction>) -> Unit,
+) {
+    val colors = Theme.current
+    var actions by remember { mutableStateOf(initialActions) }
+    val candidateActions = remember {
+        QuickAction.entries.filter {
+            it != QuickAction.UNDO &&
+            it != QuickAction.REDO &&
+            it != QuickAction.TOGGLE_QUICK_LAYER
+        }
+    }
+    val availableActions = candidateActions.filter { it !in actions }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .padding(24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 760.dp)
+                    .heightIn(max = 560.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(colors.panel)
+                    .glassBorder(RoundedCornerShape(24.dp))
+                    .padding(24.dp),
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.floating_topbar_shortcuts_title),
+                            color = colors.text,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.floating_topbar_shortcuts_desc),
+                            color = colors.subText,
+                            fontSize = 12.sp,
+                        )
+                    }
+
+                    if (actions.isNotEmpty()) {
+                        ReButton(
+                            text = stringResource(R.string.floating_topbar_shortcuts_clear_all),
+                            primary = false,
+                            onClick = { actions = emptyList() },
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Content: Left = Added Shortcuts, Right = Available Shortcuts
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    // Left Column: Added shortcuts list
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.panelHi.copy(alpha = 0.4f))
+                            .padding(12.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.floating_topbar_shortcuts_added_title),
+                                color = colors.text,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = "${actions.size}",
+                                color = colors.accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        if (actions.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.floating_topbar_shortcuts_empty),
+                                    color = colors.subText.copy(alpha = 0.6f),
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                itemsIndexed(actions, key = { _, act -> act.id }) { index, action ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(colors.panel.copy(alpha = 0.85f))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(action.iconRes),
+                                                contentDescription = null,
+                                                tint = colors.accent,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                            Text(
+                                                text = stringResource(action.titleRes),
+                                                color = colors.text,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            if (index > 0) {
+                                                ReIconButton(
+                                                    icon = R.drawable.ic_arrow_up,
+                                                    desc = "Move Up",
+                                                    onTap = {
+                                                        val list = actions.toMutableList()
+                                                        val temp = list[index]
+                                                        list[index] = list[index - 1]
+                                                        list[index - 1] = temp
+                                                        actions = list
+                                                    },
+                                                    size = 28.dp,
+                                                    iconSize = 14.dp,
+                                                )
+                                            } else {
+                                                Spacer(Modifier.size(28.dp))
+                                            }
+
+                                            if (index < actions.size - 1) {
+                                                ReIconButton(
+                                                    icon = R.drawable.ic_arrow_down,
+                                                    desc = "Move Down",
+                                                    onTap = {
+                                                        val list = actions.toMutableList()
+                                                        val temp = list[index]
+                                                        list[index] = list[index + 1]
+                                                        list[index + 1] = temp
+                                                        actions = list
+                                                    },
+                                                    size = 28.dp,
+                                                    iconSize = 14.dp,
+                                                )
+                                            } else {
+                                                Spacer(Modifier.size(28.dp))
+                                            }
+
+                                            ReIconButton(
+                                                icon = R.drawable.ic_trash,
+                                                desc = "Remove",
+                                                onTap = {
+                                                    actions = actions.filterIndexed { i, _ -> i != index }
+                                                },
+                                                size = 28.dp,
+                                                iconSize = 14.dp,
+                                                tint = colors.subText,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Right Column: Available Shortcuts chips
+                    Column(
+                        modifier = Modifier
+                            .weight(1.1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.panelHi.copy(alpha = 0.4f))
+                            .padding(12.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.floating_topbar_shortcuts_add_title),
+                            color = colors.text,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        if (availableActions.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.floating_topbar_shortcuts_all_added),
+                                    color = colors.subText.copy(alpha = 0.6f),
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState()),
+                            ) {
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    availableActions.forEach { candidate ->
+                                        Row(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(colors.panel.copy(alpha = 0.85f))
+                                                .clickable {
+                                                    actions = actions + candidate
+                                                }
+                                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(candidate.iconRes),
+                                                contentDescription = null,
+                                                tint = colors.text,
+                                                modifier = Modifier.size(15.dp),
+                                            )
+                                            Text(
+                                                text = stringResource(candidate.titleRes),
+                                                color = colors.text,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                            )
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_plus),
+                                                contentDescription = null,
+                                                tint = colors.accent,
+                                                modifier = Modifier.size(13.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(18.dp))
+
+                // Footer
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ReButton(
+                        text = stringResource(R.string.common_cancel),
+                        primary = false,
+                        onClick = onDismiss,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    ReButton(
+                        text = stringResource(R.string.common_confirm),
+                        primary = true,
+                        onClick = { onConfirm(actions) },
                     )
                 }
             }

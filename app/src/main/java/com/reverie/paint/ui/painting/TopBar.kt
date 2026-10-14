@@ -96,6 +96,18 @@ fun TopBar(
         ) {
             ReIconButton(R.drawable.ic_undo, stringResource(R.string.common_undo), onUndo, modifier = Modifier.size(32.dp))
             ReIconButton(R.drawable.ic_redo, stringResource(R.string.common_redo), onRedo, modifier = Modifier.size(32.dp))
+            if (isFloating) {
+                vm.floatingUiConfig.topBarActions.forEach { action ->
+                    val isActivated = vm.isQuickActionActivated(action)
+                    ReIconButton(
+                        action.iconRes,
+                        stringResource(action.titleRes),
+                        onTap = { vm.executeQuickAction(action) },
+                        selected = isActivated,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
             if (vm.anim.enabled) {
                 ReIconButton(
                     R.drawable.ic_clock,
@@ -117,6 +129,18 @@ fun TopBar(
         ) {
             ReIconButton(R.drawable.ic_undo, stringResource(R.string.common_undo), onUndo, modifier = Modifier.size(32.dp))
             ReIconButton(R.drawable.ic_redo, stringResource(R.string.common_redo), onRedo, modifier = Modifier.size(32.dp))
+            if (isFloating) {
+                vm.floatingUiConfig.topBarActions.forEach { action ->
+                    val isActivated = vm.isQuickActionActivated(action)
+                    ReIconButton(
+                        action.iconRes,
+                        stringResource(action.titleRes),
+                        onTap = { vm.executeQuickAction(action) },
+                        selected = isActivated,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
             if (vm.anim.enabled) {
                 ReIconButton(
                     R.drawable.ic_clock,

@@ -50,4 +50,5 @@ data class FloatingUiConfig(
     val sliderRailPosition: PanelPosition = PanelPosition(PanelEdge.LEFT, PanelAlignment.END),
     val marginDp: Int = 12,
     val scale: Float = 1.0f,
+    val topBarActions: List<QuickAction> = emptyList(),
 )

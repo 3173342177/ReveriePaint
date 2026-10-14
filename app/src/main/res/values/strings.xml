@@ -1992,6 +1992,15 @@
     <string name="panel_dock_reset">恢复默认</string>
     <string name="panel_dock_dialog_tip">拖拽面板胶囊到目标虚线槽位即可完成停靠</string>
     <string name="panel_dock_drag_tip">拖拽或点击槽位放置胶囊</string>
+    <string name="floating_topbar_shortcuts_title">顶部栏快捷功能</string>
+    <string name="floating_topbar_shortcuts_desc">在悬浮顶部栏胶囊中添加常用快捷动作按钮</string>
+    <string name="floating_topbar_shortcuts_btn">配置快捷功能</string>
+    <string name="floating_topbar_shortcuts_count">已添加 %1$d 项快捷动作</string>
+    <string name="floating_topbar_shortcuts_empty">暂未添加快捷动作，点击配置添加</string>
+    <string name="floating_topbar_shortcuts_add_title">可添加的快捷动作</string>
+    <string name="floating_topbar_shortcuts_added_title">已添加的快捷动作（上下调整顺序）</string>
+    <string name="floating_topbar_shortcuts_clear_all">清空全部</string>
+    <string name="floating_topbar_shortcuts_all_added">已添加全部可用动作</string>
     <string name="theme_category_effects">显示与效果</string>
     <string name="theme_blur_title">背景毛玻璃效果</string>
     <string name="theme_blur_desc">为所有面板与工具栏启用半透明背景高斯模糊</string>
