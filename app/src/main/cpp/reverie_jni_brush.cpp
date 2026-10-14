@@ -486,6 +486,22 @@ Java_com_reverie_paint_core_ReverieCoreBridge_setBrushTexture(JNIEnv *env, jobje
     }
     core()->setBrushTexture(enabled == JNI_TRUE, scale, strength, modeStr, patStr);
 }
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_reverie_paint_core_ReverieCoreBridge_getCurrentBrushOutline(JNIEnv *env, jobject)
+{
+    const QVector<float> pts = core()->currentBrushOutline();
+    if (pts.isEmpty()) {
+        return nullptr;
+    }
+    jfloatArray arr = env->NewFloatArray(pts.size());
+    if (!arr) {
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(arr, 0, pts.size(), pts.constData());
+    return arr;
 }
+}
+
 
 

@@ -107,6 +107,51 @@ internal fun BrushCursorOverlay(
                     drawLine(Color.White, Offset(curPos.x - len, curPos.y), Offset(curPos.x + len, curPos.y), strokeWidth = 1.0.dp.toPx())
                     drawLine(Color.White, Offset(curPos.x, curPos.y - len), Offset(curPos.x, curPos.y + len), strokeWidth = 1.0.dp.toPx())
                 }
+                6 -> { // 笔刷真实轮廓 (Brush Outline)
+                    val polys = vm.brushOutlinePolygons
+                    if (polys != null && polys.isNotEmpty()) {
+                        val path = androidx.compose.ui.graphics.Path()
+                        for (poly in polys) {
+                            val count = poly.size / 2
+                            if (count >= 2) {
+                                val startX = curPos.x + poly[0] * brushRadiusScreen
+                                val startY = curPos.y + poly[1] * brushRadiusScreen
+                                path.moveTo(startX, startY)
+                                for (i in 1 until count) {
+                                    val px = curPos.x + poly[i * 2] * brushRadiusScreen
+                                    val py = curPos.y + poly[i * 2 + 1] * brushRadiusScreen
+                                    path.lineTo(px, py)
+                                }
+                                path.close()
+                            }
+                        }
+                        // 黑白双对比描边
+                        drawPath(
+                            path = path,
+                            color = Color.Black.copy(alpha = 0.55f),
+                            style = Stroke(width = 2.0.dp.toPx())
+                        )
+                        drawPath(
+                            path = path,
+                            color = Color.White.copy(alpha = 0.95f),
+                            style = Stroke(width = 1.0.dp.toPx())
+                        )
+                    } else {
+                        // 回退为双对比圆环
+                        drawCircle(
+                            color = Color.Black.copy(alpha = 0.55f),
+                            radius = brushRadiusScreen + 0.8f,
+                            center = curPos,
+                            style = Stroke(width = 1.6.dp.toPx())
+                        )
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.95f),
+                            radius = brushRadiusScreen,
+                            center = curPos,
+                            style = Stroke(width = 1.0.dp.toPx())
+                        )
+                    }
+                }
             }
         }
     }

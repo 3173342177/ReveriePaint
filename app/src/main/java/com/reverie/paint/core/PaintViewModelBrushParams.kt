@@ -218,7 +218,10 @@ import kotlinx.coroutines.launch
     internal fun PaintViewModel.updateBrushTipAsset(asset: String) {
         brushTipAsset = asset
         saveBrushParam(reloadEngine = true, immediateReload = true)
-        runCore(render = false) { ReverieCoreBridge.setBrushTipAsset(asset) }
+        runCore(render = false) {
+            ReverieCoreBridge.setBrushTipAsset(asset)
+            fetchBrushOutlinePolygons()
+        }
     }
 
     internal fun PaintViewModel.updateBrushPaintOpId(id: String) {

@@ -43,6 +43,8 @@
 #include <kis_imagepipe_brush.h>
 #include <kis_svg_brush.h>
 #include <kis_brush_option.h>
+#include <KisOptimizedBrushOutline.h>
+#include <kis_boundary.h>
 #include <KoPattern.h>
 #include <QMutex>
 #include <QImage>

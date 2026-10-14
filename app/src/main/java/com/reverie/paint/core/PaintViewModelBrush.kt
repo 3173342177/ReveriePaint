@@ -666,6 +666,36 @@ import kotlinx.coroutines.withContext
     }
 
     /** Share a brush preset (.kpp or .bundle if it has custom tip) via system share sheet */
+    internal fun PaintViewModel.fetchBrushOutlinePolygons() {
+        try {
+            val raw = ReverieCoreBridge.getCurrentBrushOutline()
+            if (raw == null || raw.isEmpty()) {
+                brushOutlinePolygons = null
+                return
+            }
+            val numPolys = raw[0].toInt()
+            if (numPolys <= 0) {
+                brushOutlinePolygons = null
+                return
+            }
+            val list = ArrayList<FloatArray>(numPolys)
+            var idx = 1
+            for (p in 0 until numPolys) {
+                if (idx >= raw.size) break
+                val count = raw[idx++].toInt()
+                if (count > 0 && idx + count * 2 <= raw.size) {
+                    val pts = FloatArray(count * 2)
+                    System.arraycopy(raw, idx, pts, 0, count * 2)
+                    list.add(pts)
+                    idx += count * 2
+                }
+            }
+            brushOutlinePolygons = if (list.isNotEmpty()) list else null
+        } catch (_: Throwable) {
+            brushOutlinePolygons = null
+        }
+    }
+
     internal fun resolvePresetSize(engineSize: Double, savedSize: Double?): Double {
         if (engineSize.isFinite() && engineSize > 1.0) return engineSize
         if (savedSize == null || !savedSize.isFinite() || savedSize <= 1.0) return engineSize
@@ -983,6 +1013,7 @@ import kotlinx.coroutines.withContext
                     ReverieCoreBridge.setBrushTipAsset("")
                 }
             }
+            fetchBrushOutlinePolygons()
         }
     }
 

@@ -1491,7 +1491,7 @@ class PaintViewModel : ViewModel() {
     var penModeSingleFingerPanEnabled by mutableStateOf(true) // 笔模式下单指平移画布 (可配置开关)
     var brushCursorMode by mutableIntStateOf(3) // 0: 不显示, 1: 绘画时显示, 2: 悬空显示, 3: 绘画和悬空显示
     var eraserCursorMode by mutableIntStateOf(3)
-    var cursorStyleMode by mutableIntStateOf(5) // 0: 圆形, 1: 十字准星, 2: 点, 3: 无, 4: 系统指针, 5: 圆+十字准星
+    var cursorStyleMode by mutableIntStateOf(5) // 0: 圆形, 1: 十字准星, 2: 点, 3: 无, 4: 系统指针, 5: 圆+十字准星, 6: 笔刷轮廓
     var quickShapeEnabled by mutableStateOf(false) // 驻停线条成形，默认关闭
     var quickShapeQuadrilateralEnabled by mutableStateOf(false)
     var quickShapeConversionsEnabled by mutableStateOf(false)
@@ -5217,6 +5217,9 @@ class PaintViewModel : ViewModel() {
     // Vector outline path of the active selection (document coords centered at origin)
     var selectionOutlinePath: androidx.compose.ui.graphics.Path? by mutableStateOf(null)
     @Volatile internal var pendingSelectionOutlinePath: androidx.compose.ui.graphics.Path? = null
+
+    /** 当前笔刷的归一化轮廓多边形集合 (每个多边形为 FloatArray: [x0, y0, x1, y1, ...], 坐标在 [-1, 1]) */
+    var brushOutlinePolygons: List<FloatArray>? by mutableStateOf(null)
 
     var transformPreviewBitmap: androidx.compose.ui.graphics.ImageBitmap? by mutableStateOf(null)
     var transformCopyOnly: Boolean by mutableStateOf(false)

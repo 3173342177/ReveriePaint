@@ -84,6 +84,7 @@ internal fun StylusSettingsSubPage(
         stringResource(R.string.stylus_cursor_shape_none),
         stringResource(R.string.stylus_cursor_shape_system),
         stringResource(R.string.stylus_cursor_shape_circle_crosshair),
+        stringResource(R.string.stylus_cursor_shape_brush_outline),
     )
 
     Column(

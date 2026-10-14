@@ -300,6 +300,8 @@ class CanvasTouchView(context: Context) : View(context) {
         strokeWidth = 0.7f * density
         color = android.graphics.Color.argb(255, 255, 255, 255)
     }
+    // 笔刷轮廓复用 Path
+    private val brushOutlinePath = android.graphics.Path()
 
     // 动态辅助吸附导引线 Paint
     private val dynamicGuideGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -3073,6 +3075,32 @@ class CanvasTouchView(context: Context) : View(context) {
                     canvas.drawLine(effectiveCursorPos.x, effectiveCursorPos.y - len, effectiveCursorPos.x, effectiveCursorPos.y + len, crosshairPaintBlack)
                     canvas.drawLine(effectiveCursorPos.x - len, effectiveCursorPos.y, effectiveCursorPos.x + len, effectiveCursorPos.y, crosshairPaintWhite)
                     canvas.drawLine(effectiveCursorPos.x, effectiveCursorPos.y - len, effectiveCursorPos.x, effectiveCursorPos.y + len, crosshairPaintWhite)
+                }
+                6 -> { // 笔刷真实轮廓 (Brush Outline)
+                    val polys = v.brushOutlinePolygons
+                    if (polys != null && polys.isNotEmpty()) {
+                        brushOutlinePath.rewind()
+                        for (poly in polys) {
+                            val count = poly.size / 2
+                            if (count >= 2) {
+                                val startX = effectiveCursorPos.x + poly[0] * brushRadiusScreen
+                                val startY = effectiveCursorPos.y + poly[1] * brushRadiusScreen
+                                brushOutlinePath.moveTo(startX, startY)
+                                for (i in 1 until count) {
+                                    val px = effectiveCursorPos.x + poly[i * 2] * brushRadiusScreen
+                                    val py = effectiveCursorPos.y + poly[i * 2 + 1] * brushRadiusScreen
+                                    brushOutlinePath.lineTo(px, py)
+                                }
+                                brushOutlinePath.close()
+                            }
+                        }
+                        canvas.drawPath(brushOutlinePath, cursorPaintBlack)
+                        canvas.drawPath(brushOutlinePath, cursorPaintWhite)
+                    } else {
+                        // 回退双对比圆环
+                        canvas.drawCircle(effectiveCursorPos.x, effectiveCursorPos.y, brushRadiusScreen + 0.8f, cursorPaintBlack)
+                        canvas.drawCircle(effectiveCursorPos.x, effectiveCursorPos.y, brushRadiusScreen, cursorPaintWhite)
+                    }
                 }
             }
 

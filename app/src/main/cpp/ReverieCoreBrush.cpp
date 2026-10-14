@@ -1834,4 +1834,67 @@ void ReverieCore::scratchpadEnd()
     m_scratchpadStrokeActive = false;
 }
 
+QVector<float> ReverieCore::currentBrushOutline()
+{
+    if (!m_brushPreset || !m_brushPreset->settings()) {
+        return {};
+    }
+    KisBrushBasedPaintOpSettings *bs =
+        dynamic_cast<KisBrushBasedPaintOpSettings *>(m_brushPreset->settings().data());
+    if (!bs) {
+        return {};
+    }
+    KisBrushSP brush = bs->brush();
+    if (!brush) {
+        return {};
+    }
+
+    KisOptimizedBrushOutline outline = brush->outline();
+    if (outline.isEmpty()) {
+        return {};
+    }
+
+    const QRectF bounds = outline.boundingRect();
+    if (bounds.width() <= 0.0 || bounds.height() <= 0.0) {
+        return {};
+    }
+
+    const qreal cx = bounds.center().x();
+    const qreal cy = bounds.center().y();
+    // 归一化基准半径: 取半宽与半高的较大者，使多边形点落在 [-1.0, 1.0] 范围内
+    const qreal baseR = qMax(bounds.width(), bounds.height()) * 0.5;
+    if (baseR <= 0.0) {
+        return {};
+    }
+
+    QVector<QPolygonF> polys;
+    for (auto it = outline.begin(); it != outline.end(); ++it) {
+        const QPolygonF p = *it;
+        if (p.size() >= 3) {
+            polys.append(p);
+        }
+    }
+    if (polys.isEmpty()) {
+        return {};
+    }
+
+    int totalPts = 0;
+    for (const QPolygonF &p : polys) {
+        totalPts += p.size();
+    }
+
+    QVector<float> out;
+    out.reserve(1 + polys.size() + totalPts * 2);
+    out.append(static_cast<float>(polys.size()));
+    for (const QPolygonF &poly : polys) {
+        out.append(static_cast<float>(poly.size()));
+        for (const QPointF &pt : poly) {
+            out.append(static_cast<float>((pt.x() - cx) / baseR));
+            out.append(static_cast<float>((pt.y() - cy) / baseR));
+        }
+    }
+    return out;
+}
+
+
 

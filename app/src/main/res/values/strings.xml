@@ -1723,6 +1723,7 @@
     <string name="stylus_cursor_shape_none">无</string>
     <string name="stylus_cursor_shape_system">系统指针</string>
     <string name="stylus_cursor_shape_circle_crosshair">圆+十字准星</string>
+    <string name="stylus_cursor_shape_brush_outline">笔刷轮廓</string>
     <string name="stylus_curve_preset_linear">标准线性</string>
     <string name="stylus_curve_preset_soft">轻压灵敏 (凸)</string>
     <string name="stylus_curve_preset_hard">用力扎实 (凹)</string>

@@ -758,6 +758,8 @@ public:
     qreal brushSize() const { return m_brushSize; }
     /** 当前预设 Size 压感曲线求值：pressure∈[0,1] → 尺寸比例∈[0,1]（光标环同源缩放） */
     float brushPressureFraction(float pressure);
+    /** 获取当前笔刷的基准归一化轮廓多边形点集 (x, y 以半宽半高归一化到 [-1, 1]) */
+    QVector<float> currentBrushOutline();
     void setBrushColor(const QColor &c);
     void setBrushSecondaryColor(const QColor &c);
     void setBrushColorName(const QString &colorName);

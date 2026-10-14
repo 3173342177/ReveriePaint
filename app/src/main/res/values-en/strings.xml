@@ -1723,6 +1723,7 @@
     <string name="stylus_cursor_shape_none">None</string>
     <string name="stylus_cursor_shape_system">System</string>
     <string name="stylus_cursor_shape_circle_crosshair">Circle + Crosshair</string>
+    <string name="stylus_cursor_shape_brush_outline">Brush Outline</string>
     <string name="stylus_curve_preset_linear">Linear</string>
     <string name="stylus_curve_preset_soft">Soft Response</string>
     <string name="stylus_curve_preset_hard">Firm Response</string>
