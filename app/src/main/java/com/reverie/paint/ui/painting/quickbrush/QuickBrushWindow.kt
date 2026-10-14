@@ -131,18 +131,16 @@ fun QuickBrushWindow(
     Box(
         modifier = modifier
             .offset {
-                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                val maxX = (screenWidthPx - curW).coerceAtLeast(0f)
-                val maxY = (screenHeightPx - curH).coerceAtLeast(0f)
                 val x = if (vm.quickBrushWindowX >= 0f) {
-                    vm.quickBrushWindowX.coerceAtMost(maxX).roundToInt()
+                    vm.quickBrushWindowX.roundToInt()
                 } else {
+                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
                     ((screenWidthPx - curW) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 val y = if (vm.quickBrushWindowY >= 0f) {
-                    vm.quickBrushWindowY.coerceAtMost(maxY).roundToInt()
+                    vm.quickBrushWindowY.roundToInt()
                 } else {
+                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                     ((screenHeightPx - curH) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 IntOffset(x, y)

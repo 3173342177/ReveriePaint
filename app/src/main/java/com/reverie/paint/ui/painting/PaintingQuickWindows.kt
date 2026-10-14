@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -44,14 +45,28 @@ internal fun BoxScope.PaintingQuickWindows(
     val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
 
-    // 横竖屏切换或屏幕尺寸变动时，将小窗坐标约束在安全区内
+    var isInitialLaunch by remember { mutableStateOf(true) }
+    var lastW by remember { mutableFloatStateOf(screenW) }
+    var lastH by remember { mutableFloatStateOf(screenH) }
+
+    // 仅在横竖屏切换或屏幕尺寸变动的一瞬间，将超出新视口的小窗拉回安全区内
     LaunchedEffect(screenW, screenH) {
         if (screenW <= 0f || screenH <= 0f) return@LaunchedEffect
-        vm.clampQuickWindowsToSafeArea(
-            screenWidthPx = screenW,
-            screenHeightPx = screenH,
-            density = density.density,
-        )
+        if (isInitialLaunch) {
+            isInitialLaunch = false
+            lastW = screenW
+            lastH = screenH
+            return@LaunchedEffect
+        }
+        if (screenW != lastW || screenH != lastH) {
+            lastW = screenW
+            lastH = screenH
+            vm.clampQuickWindowsToSafeArea(
+                screenWidthPx = screenW,
+                screenHeightPx = screenH,
+                density = density.density,
+            )
+        }
     }
 
     LaunchedEffect(vm.referenceWindowOpen) {

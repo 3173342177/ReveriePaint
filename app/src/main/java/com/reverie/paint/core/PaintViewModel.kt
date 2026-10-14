@@ -1042,15 +1042,11 @@ class PaintViewModel : ViewModel() {
         if (referenceWindowX >= 0f) {
             val w = referenceWindowWidth * density
             val h = referenceWindowHeight * density
-            val minX = margin
-            val minY = margin
-            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
-            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(0f)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(0f)
             var changed = false
             if (referenceWindowX > maxX) { referenceWindowX = maxX; changed = true }
-            if (referenceWindowX < minX) { referenceWindowX = minX; changed = true }
             if (referenceWindowY > maxY) { referenceWindowY = maxY; changed = true }
-            if (referenceWindowY < minY) { referenceWindowY = minY; changed = true }
             if (changed) persistReferenceState()
         }
 
@@ -1071,15 +1067,11 @@ class PaintViewModel : ViewModel() {
             }
             val w = if (quickActionWindowWidth > 0f) quickActionWindowWidth else fallbackW
             val h = if (quickActionWindowHeight > 0f) quickActionWindowHeight else fallbackH
-            val minX = margin
-            val minY = margin
-            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
-            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(0f)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(0f)
             var changed = false
             if (quickActionWindowX > maxX) { quickActionWindowX = maxX; changed = true }
-            if (quickActionWindowX < minX) { quickActionWindowX = minX; changed = true }
             if (quickActionWindowY > maxY) { quickActionWindowY = maxY; changed = true }
-            if (quickActionWindowY < minY) { quickActionWindowY = minY; changed = true }
             if (changed) persistQuickActionsState()
         }
 
@@ -1097,15 +1089,11 @@ class PaintViewModel : ViewModel() {
             }
             val w = if (quickBrushWindowWidth > 0f) quickBrushWindowWidth else fallbackW
             val h = if (quickBrushWindowHeight > 0f) quickBrushWindowHeight else fallbackH
-            val minX = margin
-            val minY = margin
-            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
-            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(0f)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(0f)
             var changed = false
             if (quickBrushWindowX > maxX) { quickBrushWindowX = maxX; changed = true }
-            if (quickBrushWindowX < minX) { quickBrushWindowX = minX; changed = true }
             if (quickBrushWindowY > maxY) { quickBrushWindowY = maxY; changed = true }
-            if (quickBrushWindowY < minY) { quickBrushWindowY = minY; changed = true }
             if (changed) persistQuickBrushState()
         }
 
@@ -1115,15 +1103,11 @@ class PaintViewModel : ViewModel() {
             val fallbackH = if (quickColorCollapsed) 48f * density else 272f * density
             val w = if (quickColorWindowWidth > 0f) quickColorWindowWidth else fallbackW
             val h = if (quickColorWindowHeight > 0f) quickColorWindowHeight else fallbackH
-            val minX = margin
-            val minY = margin
-            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
-            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(0f)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(0f)
             var changed = false
             if (quickColorWindowX > maxX) { quickColorWindowX = maxX; changed = true }
-            if (quickColorWindowX < minX) { quickColorWindowX = minX; changed = true }
             if (quickColorWindowY > maxY) { quickColorWindowY = maxY; changed = true }
-            if (quickColorWindowY < minY) { quickColorWindowY = minY; changed = true }
             if (changed) persistQuickColorState()
         }
 
@@ -1133,15 +1117,11 @@ class PaintViewModel : ViewModel() {
             val fallbackH = if (quickLayerCollapsed) 48f * density else 290f * density
             val w = if (quickLayerWindowWidth > 0f) quickLayerWindowWidth else fallbackW
             val h = if (quickLayerWindowHeight > 0f) quickLayerWindowHeight else fallbackH
-            val minX = margin
-            val minY = margin
-            val maxX = (screenWidthPx - w - margin).coerceAtLeast(minX)
-            val maxY = (screenHeightPx - h - margin).coerceAtLeast(minY)
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(0f)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(0f)
             var changed = false
             if (quickLayerWindowX > maxX) { quickLayerWindowX = maxX; changed = true }
-            if (quickLayerWindowX < minX) { quickLayerWindowX = minX; changed = true }
             if (quickLayerWindowY > maxY) { quickLayerWindowY = maxY; changed = true }
-            if (quickLayerWindowY < minY) { quickLayerWindowY = minY; changed = true }
             if (changed) persistQuickLayerState()
         }
     }

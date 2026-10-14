@@ -138,18 +138,16 @@ fun ReferenceWindow(
     Box(
         modifier = modifier
             .offset {
-                val panelWPx = with(density) { vm.referenceWindowWidth.dp.toPx() }
-                val panelHPx = with(density) { vm.referenceWindowHeight.dp.toPx() }
-                val maxX = (screenWidthPx - panelWPx).coerceAtLeast(0f)
-                val maxY = (screenHeightPx - panelHPx).coerceAtLeast(0f)
                 val x = if (vm.referenceWindowX >= 0f) {
-                    vm.referenceWindowX.coerceAtMost(maxX).roundToInt()
+                    vm.referenceWindowX.roundToInt()
                 } else {
+                    val panelWPx = with(density) { vm.referenceWindowWidth.dp.toPx() }
                     ((screenWidthPx - panelWPx) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 val y = if (vm.referenceWindowY >= 0f) {
-                    vm.referenceWindowY.coerceAtMost(maxY).roundToInt()
+                    vm.referenceWindowY.roundToInt()
                 } else {
+                    val panelHPx = with(density) { vm.referenceWindowHeight.dp.toPx() }
                     ((screenHeightPx - panelHPx) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 IntOffset(x, y)

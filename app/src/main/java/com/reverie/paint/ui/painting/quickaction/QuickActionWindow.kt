@@ -143,18 +143,16 @@ fun QuickActionWindow(
     Box(
         modifier = modifier
             .offset {
-                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                val maxX = (screenWidthPx - curW).coerceAtLeast(0f)
-                val maxY = (screenHeightPx - curH).coerceAtLeast(0f)
                 val x = if (vm.quickActionWindowX >= 0f) {
-                    vm.quickActionWindowX.coerceAtMost(maxX).roundToInt()
+                    vm.quickActionWindowX.roundToInt()
                 } else {
+                    val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
                     ((screenWidthPx - curW) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 val y = if (vm.quickActionWindowY >= 0f) {
-                    vm.quickActionWindowY.coerceAtMost(maxY).roundToInt()
+                    vm.quickActionWindowY.roundToInt()
                 } else {
+                    val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
                     ((screenHeightPx - curH) / 2f).coerceAtLeast(0f).roundToInt()
                 }
                 IntOffset(x, y)
