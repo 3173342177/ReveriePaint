@@ -1411,7 +1411,7 @@ internal fun PaintViewModel.undo() {
         }
         return
     }
-    if (pendingHistoryOps.get() >= 2) return
+    if (pendingHistoryOps.get() >= 1) return
     pendingHistoryOps.incrementAndGet()
     stopAirbrush()
     disarmStrokeStartKick()
@@ -1450,7 +1450,7 @@ internal fun PaintViewModel.undo() {
 
 internal fun PaintViewModel.redo() {
     if (isQuickShapeEditing) return
-    if (pendingHistoryOps.get() >= 2) return
+    if (pendingHistoryOps.get() >= 1) return
     pendingHistoryOps.incrementAndGet()
     stopAirbrush()
     disarmStrokeStartKick()

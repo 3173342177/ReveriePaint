@@ -593,16 +593,20 @@ class CanvasTouchView(context: Context) : View(context) {
     private val editMenuPointerIds = IntArray(3)
     private var editMenuGestureActive = false
     private var editMenuPointersReleased = false
+    private var continuousStepCount = 0
 
     private val continuousUndoRunnable = object : Runnable {
         override fun run() {
             val v = vm ?: return
-            // 多指误触保护: 液化手势进行中(含场通路的"零解算"阶段)第二指落下**不得**触发
-            // 连续撤销 —— 真机上这是"液化中手指一不小心碰到屏幕, 形变被连续撤销吃掉"的根源。
+            // 多指误触保护: 液化手势进行中(含场通路的"零解算"阶段)第二指落下不得触发
+            // 连续撤销，避免误吃形变
             if (maxTouchPointers == 2 && !isPinchMotion && !isTwoFingerRotation && isInteracting && !isLiquifyGestureActive) {
                 isContinuousUndoing = true
                 v.undo()
-                postDelayed(this, 110L)
+                continuousStepCount++
+                // 阶梯缓动：首步留出 260ms 反应窗口防止误吞多步，随后进入 120ms 连撤
+                val nextDelay = if (continuousStepCount == 1) 260L else 120L
+                postDelayed(this, nextDelay)
             }
         }
     }
@@ -613,7 +617,9 @@ class CanvasTouchView(context: Context) : View(context) {
             if (maxTouchPointers >= 3 && !isPinchMotion && isInteracting && !isLiquifyGestureActive) {
                 isContinuousUndoing = true
                 v.redo()
-                postDelayed(this, 110L)
+                continuousStepCount++
+                val nextDelay = if (continuousStepCount == 1) 260L else 120L
+                postDelayed(this, nextDelay)
             }
         }
     }
@@ -4081,11 +4087,12 @@ class CanvasTouchView(context: Context) : View(context) {
 
                     removeCallbacks(continuousUndoRunnable)
                     removeCallbacks(continuousRedoRunnable)
+                    continuousStepCount = 0
                     if (!isShiftTraceAlign && isNewGesture) {
                         if (numFingers == 2 && v.gestureTwoFingerUndo) {
-                            postDelayed(continuousUndoRunnable, 420L)
+                            postDelayed(continuousUndoRunnable, 560L)
                         } else if (numFingers >= 3 && v.gestureThreeFingerRedo) {
-                            postDelayed(continuousRedoRunnable, 420L)
+                            postDelayed(continuousRedoRunnable, 560L)
                         }
                     }
                 } else {

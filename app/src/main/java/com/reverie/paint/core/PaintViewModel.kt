@@ -1732,10 +1732,15 @@ class PaintViewModel : ViewModel() {
     var fillSampleLayers by mutableIntStateOf(1) // 0: 当前图层, 1: 全部图层
     var fillExpand by mutableIntStateOf(0) // 拓展 (-16..32 px)
     var fillFeather by mutableIntStateOf(0) // 羽化 (0..32 px)
-    var fillCloseGap by mutableIntStateOf(4) // 闭合空隙 (0..16 px)
+    var fillCloseGap by mutableIntStateOf(0) // 闭合空隙 (0..16 px, 默认为 0 保证秒级瞬时填充)
     var fillOpacity by mutableDoubleStateOf(1.0)
     var fillCompositeOp by mutableStateOf("normal")
     internal var fillPattern by mutableStateOf<FillPattern?>(null)
+
+    // 填充连击防抖追踪，防止卡顿时连点向撤销栈压入重复事务
+    internal var lastFillSubmitTime = 0L
+    internal var lastFillDocX = -9999f
+    internal var lastFillDocY = -9999f
 
     var gradientType by mutableIntStateOf(0) // 0: 线性, 1: 径向, 2: 角度
     var gradientRepeat by mutableIntStateOf(0) // 0: 无, 1: 重复, 2: 往返

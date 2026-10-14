@@ -506,7 +506,7 @@ internal fun PaintViewModel.loadToolOptions() {
         fillSampleLayers = o.optInt("fill_sample", 1)
         fillExpand = o.optInt("fill_expand", 0)
         fillFeather = o.optInt("fill_feather", 0)
-        fillCloseGap = o.optInt("fill_close_gap", 4)
+        fillCloseGap = o.optInt("fill_close_gap", 0)
         fillOpacity = o.optDouble("fill_op", 1.0)
         fillCompositeOp = o.optString("fill_cop", "normal")
         gradientType = o.optInt("grad_type", 0)
@@ -705,6 +705,16 @@ internal fun PaintViewModel.floodFill(
         showActionToast(R.string.canvas_toast_layer_hidden, com.reverie.paint.R.drawable.ic_eye_off)
         return
     }
+    // 连点防抖: 若上一笔填充正在引擎线程排队或执行中, 且位置相近, 丢弃重复点击, 防止撤销栈生成冗余事务
+    val now = android.os.SystemClock.uptimeMillis()
+    if (now - lastFillSubmitTime < 320L && pendingCoreOps.get() > 0 &&
+        kotlin.math.hypot(x - lastFillDocX, y - lastFillDocY) < 24f) {
+        return
+    }
+    lastFillSubmitTime = now
+    lastFillDocX = x
+    lastFillDocY = y
+
     if (fillPattern != null) {
         floodFillPattern(x, y, tolerance, sampleMerged, expand, feather, closeGap)
         return
