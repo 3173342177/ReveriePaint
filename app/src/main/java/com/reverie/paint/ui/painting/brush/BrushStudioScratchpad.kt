@@ -227,6 +227,7 @@ internal fun BrushStudioScratchpadPanel(
     val thumbnailUpdatedToast = stringResource(R.string.brush_studio_toast_thumbnail_updated)
 
     DisposableEffect(Unit) {
+        runCatching { ReverieCoreBridge.setBrushColor(vm.brushColor) }
         onDispose {
             ReverieCoreBridge.scratchpadEnd()
             scratchBitmap?.recycle()
@@ -323,7 +324,7 @@ internal fun BrushStudioScratchpadPanel(
             // 背景棋盘格 / 纯色切换
             ReIconButton(
                 if (solidBg) R.drawable.ic_layers else R.drawable.ic_circle,
-                stringResource(R.string.brush_studio_tex_enable),
+                stringResource(if (solidBg) R.string.scratchpad_bg_checker else R.string.scratchpad_bg_solid),
                 onTap = { solidBg = !solidBg },
                 tint = Morandi.subText,
                 iconSize = 15.dp,
@@ -382,7 +383,7 @@ internal fun BrushStudioScratchpadPanel(
                 .fillMaxWidth()
                 .weight(1f)
                 .clip(RoundedCornerShape(10.dp))
-                .background(if (solidBg) Morandi.panelHi else Morandi.panel)
+                .background(Color.White)
                 .onSizeChanged { size ->
                     if (size.width > 0 && size.height > 0 &&
                         (size.width != canvasSize.width || size.height != canvasSize.height)
@@ -397,7 +398,12 @@ internal fun BrushStudioScratchpadPanel(
                 },
         ) {
             if (!solidBg) {
-                CheckerboardBackground(modifier = Modifier.fillMaxSize())
+                CheckerboardBackground(
+                    modifier = Modifier.fillMaxSize(),
+                    color1 = Color(0xFFFFFFFF),
+                    color2 = Color(0xFFE8E8EC),
+                    gridSize = 12.dp,
+                )
             }
 
             ScratchpadCanvas(
@@ -407,6 +413,7 @@ internal fun BrushStudioScratchpadPanel(
                 onStrokeStart = { p ->
                     currentStroke.clear()
                     currentStroke.add(p)
+                    runCatching { ReverieCoreBridge.setBrushColor(vm.brushColor) }
                     ReverieCoreBridge.scratchpadStrokeStart(
                         p.x.toDouble(), p.y.toDouble(), p.pressure.toDouble(),
                         p.tiltX.toDouble(), p.tiltY.toDouble(), p.rotation.toDouble()
@@ -450,7 +457,7 @@ internal fun BrushStudioScratchpadPanel(
             if (strokes.isEmpty() && currentStroke.isEmpty()) {
                 Text(
                     stringResource(R.string.brush_studio_scratchpad_hint),
-                    color = Morandi.subText.copy(alpha = 0.45f),
+                    color = Color(0x66000000),
                     fontSize = 12.sp,
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -559,11 +566,14 @@ internal fun StudioRenameDialog(
 internal const val TIP_THUMB_MAX = 192
 
 @Composable
-internal fun CheckerboardBackground(modifier: Modifier = Modifier) {
-    val color1 = Morandi.panel
-    val color2 = Morandi.panelHi
+internal fun CheckerboardBackground(
+    modifier: Modifier = Modifier,
+    color1: Color = Morandi.panel,
+    color2: Color = Morandi.panelHi,
+    gridSize: androidx.compose.ui.unit.Dp = 12.dp,
+) {
     Canvas(modifier = modifier) {
-        val checkSize = 12.dp.toPx()
+        val checkSize = gridSize.toPx()
         val cols = (size.width / checkSize).toInt() + 1
         val rows = (size.height / checkSize).toInt() + 1
         for (i in 0 until cols) {

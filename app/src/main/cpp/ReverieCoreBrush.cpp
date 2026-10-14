@@ -1717,7 +1717,7 @@ bool ReverieCore::scratchpadStrokeStart(qreal x, qreal y, qreal pressure, qreal 
 
     m_scratchpadPainter->setOpacityF(qBound<qreal>(0.0, m_brushOpacity, 1.0));
     QString compOp = m_brushPreset->settings() ? m_brushPreset->settings()->effectivePaintOpCompositeOp() : QStringLiteral("normal");
-    if (m_toolMode == ToolEraser || (m_presetIsEraserOverride == 1)) {
+    if (m_presetIsEraserOverride == 1) {
         compOp = QStringLiteral("erase");
     }
     m_scratchpadPainter->setCompositeOpId(compOp.isEmpty() ? QStringLiteral("normal") : compOp);
