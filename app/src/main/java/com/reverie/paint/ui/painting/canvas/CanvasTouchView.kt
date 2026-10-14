@@ -3488,7 +3488,6 @@ class CanvasTouchView(context: Context) : View(context) {
                 localIsTouching = false
                 localPressure = 1f
                 physicalEraserActive = (event.getToolType(0) == MotionEvent.TOOL_TYPE_ERASER)
-                invalidateCursor(predPos)
 
                 // S Pen 悬空侧键: 按下/释放边沿时把事件交给驱动层状态机
                 // (悬停事件默认只更新光标, 从未到达 SamsungStylusAdapter, 导致悬空侧键动作失效)
@@ -3497,6 +3496,14 @@ class CanvasTouchView(context: Context) : View(context) {
                     getOrCreateStylusDriver()?.onStylusMotionEvent(event)
                 }
                 lastHoverButtonState = hoverButton
+
+                val prevTempErase = tempEraseActive
+                tempEraseActive = getOrCreateStylusDriver()?.isSideButtonEraseActive(event) == true
+                if (prevTempErase != tempEraseActive) {
+                    invalidate()
+                } else {
+                    invalidateCursor(predPos)
+                }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     val targetIcon = if (!overUi && hideCursor && systemNullPointer != null) {
@@ -3517,6 +3524,7 @@ class CanvasTouchView(context: Context) : View(context) {
                     getOrCreateStylusDriver()?.onStylusHoverExited()
                     lastHoverButtonState = 0
                 }
+                tempEraseActive = false
                 physicalEraserActive = false
                 localIsHovering = false
                 localIsTouching = false
@@ -3547,14 +3555,21 @@ class CanvasTouchView(context: Context) : View(context) {
                 val overUi = isHoverOverUi(event.x, event.y)
                 localIsHovering = !overUi
                 localIsTouching = false
-                invalidateCursor(predPos)
-
                 // 与 onHoverEvent 一致: 悬空侧键边沿接入驱动层 (部分 ROM 从此路径派发悬停)
                 val hoverButton = event.buttonState
                 if (hoverButton != 0 || lastHoverButtonState != 0) {
                     getOrCreateStylusDriver()?.onStylusMotionEvent(event)
                 }
                 lastHoverButtonState = hoverButton
+
+                physicalEraserActive = (event.getToolType(0) == MotionEvent.TOOL_TYPE_ERASER)
+                val prevTempErase = tempEraseActive
+                tempEraseActive = getOrCreateStylusDriver()?.isSideButtonEraseActive(event) == true
+                if (prevTempErase != tempEraseActive) {
+                    invalidate()
+                } else {
+                    invalidateCursor(predPos)
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     val v = vm
                     val hideCursor = (tool == Tool.BRUSH || tool == Tool.ERASER || tool == Tool.SMUDGE || tool == Tool.LIQUIFY) &&
@@ -6364,6 +6379,9 @@ class CanvasTouchView(context: Context) : View(context) {
                 }
             }
             else -> Unit
+        }
+        if (isStylus) {
+            tempEraseActive = false
         }
     }
 
