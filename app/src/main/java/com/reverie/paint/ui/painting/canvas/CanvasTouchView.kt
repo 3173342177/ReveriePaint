@@ -268,6 +268,27 @@ class CanvasTouchView(context: Context) : View(context) {
     private var localIsHovering = false
     private var localIsTouching = false
     private var localPressure = 1f
+    private var localCursorAngle = 0f
+    private var lastCursorMoveDocX = Float.NaN
+    private var lastCursorMoveDocY = Float.NaN
+
+    private fun updateCursorAngleFromDocMove(docX: Float, docY: Float, isDown: Boolean) {
+        if (isDown) {
+            lastCursorMoveDocX = docX
+            lastCursorMoveDocY = docY
+        } else if (!lastCursorMoveDocX.isNaN() && !lastCursorMoveDocY.isNaN()) {
+            val dX = docX - lastCursorMoveDocX
+            val dY = docY - lastCursorMoveDocY
+            if (hypot(dX, dY) > 1.5f) {
+                localCursorAngle = Math.toDegrees(kotlin.math.atan2(dY.toDouble(), dX.toDouble())).toFloat()
+                lastCursorMoveDocX = docX
+                lastCursorMoveDocY = docY
+            }
+        } else {
+            lastCursorMoveDocX = docX
+            lastCursorMoveDocY = docY
+        }
+    }
 
     // 硬件加速直出渲染 Paint
     var checkerboardPaint: Paint? = null
@@ -300,8 +321,13 @@ class CanvasTouchView(context: Context) : View(context) {
         strokeWidth = 0.7f * density
         color = android.graphics.Color.argb(255, 255, 255, 255)
     }
-    // 笔刷轮廓复用 Path
+    // 笔刷轮廓复用 Path 与专用 Paint (纯黑单层描边，不带白色)
     private val brushOutlinePath = android.graphics.Path()
+    private val brushOutlinePaintBlack = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.2f * density
+        color = android.graphics.Color.argb(190, 0, 0, 0)
+    }
 
     // 动态辅助吸附导引线 Paint
     private val dynamicGuideGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -3083,23 +3109,29 @@ class CanvasTouchView(context: Context) : View(context) {
                         for (poly in polys) {
                             val count = poly.size / 2
                             if (count >= 2) {
-                                val startX = effectiveCursorPos.x + poly[0] * brushRadiusScreen
-                                val startY = effectiveCursorPos.y + poly[1] * brushRadiusScreen
+                                val startX = poly[0] * brushRadiusScreen
+                                val startY = poly[1] * brushRadiusScreen
                                 brushOutlinePath.moveTo(startX, startY)
                                 for (i in 1 until count) {
-                                    val px = effectiveCursorPos.x + poly[i * 2] * brushRadiusScreen
-                                    val py = effectiveCursorPos.y + poly[i * 2 + 1] * brushRadiusScreen
+                                    val px = poly[i * 2] * brushRadiusScreen
+                                    val py = poly[i * 2 + 1] * brushRadiusScreen
                                     brushOutlinePath.lineTo(px, py)
                                 }
                                 brushOutlinePath.close()
                             }
                         }
-                        canvas.drawPath(brushOutlinePath, cursorPaintBlack)
-                        canvas.drawPath(brushOutlinePath, cursorPaintWhite)
+                        val baseRot = (v.brushAngle + v.brushRotation).toFloat()
+                        val motionRot = if (v.brushFollowDirection || v.brushRotationSensor == "drawingangle") localCursorAngle else 0f
+                        val totalRot = baseRot + motionRot + canvasRotation
+
+                        canvas.save()
+                        canvas.translate(effectiveCursorPos.x, effectiveCursorPos.y)
+                        canvas.rotate(totalRot)
+                        canvas.drawPath(brushOutlinePath, brushOutlinePaintBlack)
+                        canvas.restore()
                     } else {
-                        // 回退双对比圆环
-                        canvas.drawCircle(effectiveCursorPos.x, effectiveCursorPos.y, brushRadiusScreen + 0.8f, cursorPaintBlack)
-                        canvas.drawCircle(effectiveCursorPos.x, effectiveCursorPos.y, brushRadiusScreen, cursorPaintWhite)
+                        // 回退单黑细圆环
+                        canvas.drawCircle(effectiveCursorPos.x, effectiveCursorPos.y, brushRadiusScreen, brushOutlinePaintBlack)
                     }
                 }
             }
@@ -3511,6 +3543,9 @@ class CanvasTouchView(context: Context) : View(context) {
                 val predPos = calculatePredictedHoverPos(event.x, event.y, event.eventTime)
                 setLocalCursorPos(predPos.x, predPos.y)
                 vm?.lastPointerScreenPosition = Offset(event.x, event.y)
+                val docPt = screenToDoc(predPos)
+                val isEnter = event.actionMasked == MotionEvent.ACTION_HOVER_ENTER
+                updateCursorAngleFromDocMove(docPt.x, docPt.y, isEnter)
                 val overUi = isHoverOverUi(event.x, event.y)
                 localIsHovering = !overUi
                 localIsTouching = false
@@ -3822,6 +3857,8 @@ class CanvasTouchView(context: Context) : View(context) {
 
             setLocalCursorPos(screenPos.x, screenPos.y)
             vm?.lastPointerScreenPosition = screenPos
+            val isDown = event.actionMasked == MotionEvent.ACTION_DOWN || event.actionMasked == MotionEvent.ACTION_POINTER_DOWN
+            updateCursorAngleFromDocMove(docPos.x, docPos.y, isDown)
             localIsTouching = true
             localIsHovering = false
             localPressure = pressure
@@ -4451,6 +4488,7 @@ class CanvasTouchView(context: Context) : View(context) {
                 firstDocPos = docPos
                 currentStrokeDocPos = docPos
                 shapeEndDocPos = docPos
+                updateCursorAngleFromDocMove(docPos.x, docPos.y, true)
                 isLongPressPickerActive = false
                 removeCallbacks(longPressRunnable)
                 longPressToken++
@@ -4613,6 +4651,7 @@ class CanvasTouchView(context: Context) : View(context) {
                         return true
                     }
                     setLocalCursorPos(screenPos.x, screenPos.y)
+                    updateCursorAngleFromDocMove(docPos.x, docPos.y, false)
                     localIsTouching = true
                     handleToolMove(event, 0, docPos, 1f, isStylus = false)
                     invalidate()
