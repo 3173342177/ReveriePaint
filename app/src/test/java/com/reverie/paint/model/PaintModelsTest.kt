@@ -170,35 +170,39 @@ class PaintModelsTest {
     @Test
     fun `floating ui popupInwardMarginDp avoids shared slot panels`() {
         val slot = PanelPosition(PanelEdge.LEFT, PanelAlignment.CENTER)
-        // 场景 1: 单个面板停靠在左侧
+        // 场景 1: 单个面板停靠在左侧 (scale=1.0, 胶囊厚度~41dp, 呼吸间隙 14dp)
         val singleConfig = FloatingUiConfig(
             marginDp = 12,
+            scale = 1.0f,
             toolRailPosition = slot,
             sliderRailPosition = PanelPosition(PanelEdge.LEFT, PanelAlignment.END),
             topBarPosition = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER),
         )
-        assertEquals(12 + 44, singleConfig.popupInwardMarginDp(slot))
+        // 12 + round(0 + 36 * 1.13 + 14) = 12 + 55 = 67
+        assertEquals(67, singleConfig.popupInwardMarginDp(slot))
 
         // 场景 2: 两个面板共用同一槽位并排 (ToolRail + SliderRail 都在左侧中心)
         val sharedConfig = FloatingUiConfig(
             marginDp = 12,
+            scale = 1.0f,
             toolRailPosition = slot,
             sliderRailPosition = slot,
             topBarPosition = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER),
         )
-        // 避让 1 层垂直向内平移 (48dp): 12 + 1 * 48 + 44 = 104
-        assertEquals(12 + 48 + 44, sharedConfig.popupInwardMarginDp(slot))
+        // 避让 1 层垂直向内平移 (48 * 1.13): 12 + round(48 * 1.13 + 36 * 1.13 + 14) = 12 + 109 = 121
+        assertEquals(121, sharedConfig.popupInwardMarginDp(slot))
 
         // 场景 3: 水平槽位共享 (TopBar + ToolRail 都在顶部中心)
         val topSlot = PanelPosition(PanelEdge.TOP, PanelAlignment.CENTER)
         val horizontalSharedConfig = FloatingUiConfig(
             marginDp = 10,
+            scale = 1.0f,
             topBarPosition = topSlot,
             toolRailPosition = topSlot,
             sliderRailPosition = PanelPosition(PanelEdge.LEFT, PanelAlignment.CENTER),
         )
-        // 避让 1 层水平向内平移 (46dp): 10 + 1 * 46 + 44 = 100
-        assertEquals(10 + 46 + 44, horizontalSharedConfig.popupInwardMarginDp(topSlot))
+        // 避让 1 层水平向内平移 (46 * 1.13): 10 + round(46 * 1.13 + 36 * 1.13 + 14) = 10 + 107 = 117
+        assertEquals(117, horizontalSharedConfig.popupInwardMarginDp(topSlot))
     }
 }
 

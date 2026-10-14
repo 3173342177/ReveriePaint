@@ -55,13 +55,16 @@ data class FloatingUiConfig(
 ) {
     /**
      * 计算依附于宿主槽位弹出二级子面板时的向内边距 (dp 纯数值)
-     * 动态避让同槽位中向内堆叠的所有并列主面板，杜绝弹窗遮挡主面板
+     * 动态避让同槽位中向内堆叠的所有并列主面板，并考虑悬浮缩放比例与充足呼吸间隙
      */
     fun popupInwardMarginDp(hostPos: PanelPosition): Int {
         val sharingCount = listOf(topBarPosition, toolRailPosition, sliderRailPosition).count { it == hostPos }
         val maxLayer = (sharingCount - 1).coerceAtLeast(0)
-        val step = if (hostPos.edge.isHorizontal) 46 else 48
-        return marginDp + maxLayer * step + 44
+        val effScale = scale * 1.13f
+        val step = (if (hostPos.edge.isHorizontal) 46f else 48f) * effScale
+        val capsuleThickness = 36f * effScale
+        val gap = 14f
+        return marginDp + kotlin.math.round(maxLayer * step + capsuleThickness + gap).toInt()
     }
 
     companion object {
