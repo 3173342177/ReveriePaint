@@ -20,9 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.paint.R
@@ -189,6 +191,11 @@ fun BrushPropertyPage(
                     }
                 }
 
+                val context = LocalContext.current
+                val translatedName = preset?.name?.let {
+                    BrushPresetTranslations.getTranslatedDisplayName(context, it)
+                }
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = preset?.name ?: stringResource(R.string.brush_studio_custom_brush),
@@ -196,7 +203,18 @@ fun BrushPropertyPage(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
+                    if (translatedName != null) {
+                        Spacer(Modifier.height(1.dp))
+                        Text(
+                            text = translatedName,
+                            color = Morandi.subText,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     Spacer(Modifier.height(3.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
