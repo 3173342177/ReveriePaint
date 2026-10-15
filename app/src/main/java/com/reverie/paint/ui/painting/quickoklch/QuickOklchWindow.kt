@@ -50,6 +50,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
@@ -115,10 +116,9 @@ enum class OklchPickerMode {
 /**
  * 专业级 OKLCH 悬浮调色小窗:
  * - 多视角选择器: L-C 恒定色相切片 / 恒定感知明度色轮 / LCH 精密滑块
- * - 纯矢量平滑抗锯齿边界与高 DPI 渲染, 彻底消除锯齿
+ * - 纯矢量硬件级平滑抗锯齿边界与 360x360 超清贴图, 彻底根除锯齿
  * - 画布取色管吸管快捷按钮 (一键唤起 PICKER)
- * - 前背景色对撞交换与常用最近色历史色板 (Swatches)
- * - 支持数值微调步进按钮与点击弹出精确数字输入
+ * - 前背景色对撞交换与精确数值直接输入
  */
 @Composable
 fun QuickOklchWindow(
@@ -137,7 +137,7 @@ fun QuickOklchWindow(
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
     val defaultW = with(density) { 256.dp.toPx() }
-    val defaultH = with(density) { 360.dp.toPx() }
+    val defaultH = with(density) { 320.dp.toPx() }
 
     var windowSize by remember { mutableStateOf(IntSize.Zero) }
     val isCollapsed = vm.quickOklchCollapsed
@@ -273,7 +273,7 @@ fun QuickOklchWindow(
                         .padding(horizontal = 9.dp, vertical = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // 1. 顶部操作栏 (拖拽把手 + 标题/模式标签 + 吸管/双色互换/折叠/关闭)
+                    // 1. 顶部操作栏 (拖拽把手 + 标题 + 吸管/双色互换/折叠/关闭)
                     Box(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center,
@@ -449,22 +449,9 @@ fun QuickOklchWindow(
                         }
                     }
 
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(7.dp))
 
-                    // 4. 常用色彩历史色板 (Swatches)
-                    if (vm.recentColors.isNotEmpty()) {
-                        OklchRecentSwatchesRow(
-                            recentColors = vm.recentColors.take(8),
-                            currentColorHex = currentOklch.toHex(clip = true),
-                            onColorSelected = { hex ->
-                                updateColor(OklchColor.fromHex(hex))
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            },
-                        )
-                        Spacer(Modifier.height(5.dp))
-                    }
-
-                    // 5. 底部 Hex 色值与色域裁切指示
+                    // 4. 底部 Hex 色值与色域裁切指示
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -562,9 +549,9 @@ private fun OklchModeSegmentedTabs(
  * 视角 1: 恒定色相 L-C 切片平面 + 色相滑块
  *
  * 消除锯齿设计:
- * 1. 240x160 高分辨率离屏渲染
- * 2. 图像绘制启用 FilterQuality.Medium 双线性插值
- * 3. 采样 60 个明度高度的 C_max 构造矢量闭合路径, 并使用 clipPath 和 drawPath 描边
+ * 1. 360x240 超高清离屏渲染
+ * 2. 采样 120 个明度高度的 C_max 构造矢量闭合路径, 并使用硬件级 clipPath 和 drawPath 描边
+ * 3. 图像绘制启用 FilterQuality.Medium 双线性插值
  */
 @Composable
 private fun OklchLCSlicePlaneView(
@@ -575,15 +562,15 @@ private fun OklchLCSlicePlaneView(
     onEditNumeric: (DirectInputTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val bmpWidth = 240
-    val bmpHeight = 160
+    val bmpWidth = 360
+    val bmpHeight = 240
     val maxChroma = OklchColor.MAX_CHROMA
 
     val bitmap = remember { Bitmap.createBitmap(bmpWidth, bmpHeight, Bitmap.Config.ARGB_8888) }
     val pixelBuffer = remember { IntArray(bmpWidth * bmpHeight) }
     var lastHueForBmp by remember { mutableFloatStateOf(-999f) }
 
-    // 仅在 Hue 变化时重新生成切片像素 (240x160 仅 3.8 万像素，耗时 ~1ms)
+    // 仅在 Hue 变化时重新生成切片像素
     LaunchedEffect(oklch.h) {
         if (abs(oklch.h - lastHueForBmp) >= 0.5f) {
             val h = oklch.h
@@ -675,10 +662,10 @@ private fun OklchLCSlicePlaneView(
                 val w = size.width
                 val h = size.height
 
-                // 计算色域边界平滑矢量多边形
+                // 计算色域边界平滑矢量多边形 (120 段采样, 极致平滑)
                 val gamutPath = Path().apply {
                     moveTo(0f, 0f)
-                    val steps = 50
+                    val steps = 120
                     for (i in 0..steps) {
                         val frac = i.toFloat() / steps
                         val sampleL = 1f - frac
@@ -768,10 +755,10 @@ private fun OklchLCSlicePlaneView(
 /**
  * 视角 2: 恒定感知明度色轮 + 明度滑块
  *
- * 核心特性:
- * - 保持感知明度 L 绝对恒定, 沿圆环展开所有 360° 色相与向外扩展的饱和度
- * - 使用 360 度 LUT 预计算 C_max，像素级零二分计算, 极速生成
- * - 结合抗锯齿圆形裁剪与高清晰度贴图, 细腻无锯齿
+ * 消除锯齿设计:
+ * 1. 360x360 超高清贴图, 全域填充满色彩 (无栅格透明裁剪与硬边缘阶梯)
+ * 2. 720 阶 (0.5° 精度) C_max 色相角度查找表, 平滑连续无角向折线
+ * 3. Canvas 硬件级矢量圆形路径 clipPath 裁切, 绝对 100% 丝滑抗锯齿
  */
 @Composable
 private fun OklchLightnessWheelView(
@@ -782,18 +769,19 @@ private fun OklchLightnessWheelView(
     onEditNumeric: (DirectInputTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val wheelBmpSize = 180
+    val wheelBmpSize = 360
     val wheelBitmap = remember { Bitmap.createBitmap(wheelBmpSize, wheelBmpSize, Bitmap.Config.ARGB_8888) }
     val wheelPixels = remember { IntArray(wheelBmpSize * wheelBmpSize) }
     var lastLightnessForBmp by remember { mutableFloatStateOf(-999f) }
 
-    // 当 L 发生实质变化时重新计算色轮 (仅 ~0.8ms)
+    // 当 L 发生实质变化时重新计算色轮
     LaunchedEffect(oklch.l) {
         if (abs(oklch.l - lastLightnessForBmp) >= 0.005f) {
             val l = oklch.l
-            val lut = OklchColor.computeMaxChromaLUT(l, 360)
+            // 720 采样点 (每 0.5 度一个精确值)
+            val lut = OklchColor.computeMaxChromaLUT(l, 720)
             val center = wheelBmpSize / 2f
-            val radius = center - 2f
+            val radius = center
 
             for (y in 0 until wheelBmpSize) {
                 val dy = y - center
@@ -801,17 +789,14 @@ private fun OklchLightnessWheelView(
                 for (x in 0 until wheelBmpSize) {
                     val dx = x - center
                     val dist = sqrt(dx * dx + dy * dy)
-                    if (dist <= radius) {
-                        val normDist = (dist / radius).coerceIn(0f, 1f)
-                        var angleDeg = (atan2(dy, dx) * (180f / PI.toFloat()))
-                        if (angleDeg < 0f) angleDeg += 360f
+                    val normDist = (dist / radius).coerceIn(0f, 1f)
+                    var angleDeg = (atan2(dy, dx) * (180f / PI.toFloat()))
+                    if (angleDeg < 0f) angleDeg += 360f
 
-                        val maxC = OklchColor.sampleMaxChromaFromLUT(lut, angleDeg)
-                        val c = normDist * maxC
-                        wheelPixels[rowOffset + x] = OklchColor.toRgbInt(l, c, angleDeg, clip = false)
-                    } else {
-                        wheelPixels[rowOffset + x] = 0 // 透明背景
-                    }
+                    val maxC = OklchColor.sampleMaxChromaFromLUT(lut, angleDeg)
+                    val c = normDist * maxC
+                    // 填充满所有像素 (包括圆外边缘也连续延伸最饱和色彩, 绝不在此处引入栅格阶梯透明裁切)
+                    wheelPixels[rowOffset + x] = OklchColor.toRgbInt(l, c, angleDeg, clip = false)
                 }
             }
             wheelBitmap.setPixels(wheelPixels, 0, wheelBmpSize, 0, 0, wheelBmpSize, wheelBmpSize)
@@ -829,7 +814,6 @@ private fun OklchLightnessWheelView(
             modifier = Modifier
                 .size(150.dp)
                 .clip(CircleShape)
-                .border(1.2.dp, Morandi.border, CircleShape)
         ) {
             Canvas(
                 modifier = Modifier
@@ -907,11 +891,24 @@ private fun OklchLightnessWheelView(
                 val cy = h / 2f
                 val radius = w / 2f
 
-                // 绘制平滑抗锯齿色轮底图
-                drawImage(
-                    image = wheelBitmap.asImageBitmap(),
-                    dstSize = IntSize(w.roundToInt(), h.roundToInt()),
-                    filterQuality = FilterQuality.Medium,
+                // 硬件级矢量圆形裁切, 杜绝任何边缘锯齿
+                val circlePath = Path().apply {
+                    addOval(Rect(0f, 0f, w, h))
+                }
+                clipPath(circlePath) {
+                    drawImage(
+                        image = wheelBitmap.asImageBitmap(),
+                        dstSize = IntSize(w.roundToInt(), h.roundToInt()),
+                        filterQuality = FilterQuality.Medium,
+                    )
+                }
+
+                // 矢量抗锯齿外圆环描边
+                drawCircle(
+                    color = Morandi.border,
+                    radius = radius - 0.75.dp.toPx(),
+                    center = Offset(cx, cy),
+                    style = Stroke(width = 1.5.dp.toPx()),
                 )
 
                 // 绘制准星
@@ -1254,55 +1251,6 @@ private fun OklchSteppedSlider(
                 fontWeight = FontWeight.SemiBold,
                 color = Morandi.text,
                 textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-/**
- * 常用色彩快捷色板行 (最近使用的 8 种前景色)
- */
-@Composable
-private fun OklchRecentSwatchesRow(
-    recentColors: List<String>,
-    currentColorHex: String,
-    onColorSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .background(Morandi.panelHi.copy(alpha = 0.35f))
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        recentColors.forEach { hex ->
-            val swatchColor = remember(hex) {
-                try {
-                    Color(android.graphics.Color.parseColor(hex))
-                } catch (_: Exception) {
-                    Color.Gray
-                }
-            }
-            val isCurrent = currentColorHex.equals(hex, ignoreCase = true)
-            val interactionSource = remember { MutableInteractionSource() }
-
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .pressScale(interactionSource)
-                    .clip(CircleShape)
-                    .background(swatchColor)
-                    .border(
-                        width = if (isCurrent) 2.dp else 1.dp,
-                        color = if (isCurrent) Color.White else Morandi.border,
-                        shape = CircleShape,
-                    )
-                    .clickable(interactionSource = interactionSource, indication = null) {
-                        onColorSelected(hex)
-                    }
             )
         }
     }
