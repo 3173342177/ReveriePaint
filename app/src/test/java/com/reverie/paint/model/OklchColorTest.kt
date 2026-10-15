@@ -74,4 +74,21 @@ class OklchColorTest {
         assertEquals(outOfGamut.h, clipped.h, 0.001f)
         assertTrue("Clipped chroma should be smaller", clipped.c < outOfGamut.c)
     }
+
+    @Test
+    fun `lut precomputation and interpolation test`() {
+        val lut = OklchColor.computeMaxChromaLUT(0.6f, 360)
+        assertEquals(360, lut.size)
+        // Check for continuity and positive values
+        for (i in 0 until 360) {
+            assertTrue("Chroma should be positive", lut[i] > 0f)
+            assertTrue("Chroma should not exceed MAX_CHROMA", lut[i] <= OklchColor.MAX_CHROMA)
+        }
+
+        // Test smooth sampling
+        val sampled0 = OklchColor.sampleMaxChromaFromLUT(lut, 0f)
+        val sampledHalf = OklchColor.sampleMaxChromaFromLUT(lut, 0.5f)
+        val sampled1 = OklchColor.sampleMaxChromaFromLUT(lut, 1f)
+        assertTrue(sampledHalf in minOf(sampled0, sampled1)..maxOf(sampled0, sampled1))
+    }
 }

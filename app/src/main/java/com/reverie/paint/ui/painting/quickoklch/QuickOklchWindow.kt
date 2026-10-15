@@ -30,6 +30,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,16 +41,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -57,13 +67,19 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.reverie.paint.R
 import com.reverie.paint.core.PaintViewModel
+import com.reverie.paint.core.applyTool
 import com.reverie.paint.core.updateBrushColor
 import com.reverie.paint.model.OklchColor
 import com.reverie.paint.ui.components.DragPillHandle
@@ -76,15 +92,33 @@ import com.reverie.paint.ui.theme.glassBorder
 import com.reverie.paint.ui.theme.systemHoverIcon
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeChild
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
- * 紧凑纯粹型 OKLCH 悬浮调色小窗:
- * - 顶部: 拖拽手柄、"OKLCH" 标题、前景色/背景色互换预览、Hex 色值、折叠/关闭按钮
- * - 上半部: 当前色相下的 2D L-C (感知亮度-彩度) 色域切片平面 (动态展示 sRGB 边界与色域裁切)
- * - 下半部: L (Lightness)、C (Chroma)、H (Hue) 三联精密渐变滑块与数值调节
- * - 纯粹致密布局, 零垃圾回收内存分配, 144Hz 满帧交互
+ * 调色视角模式:
+ * - HUE_PLANE: 恒定色相 L-C 色域切片平面 (纵轴感知明度 L, 横轴彩度 C, 底部色相滑块)
+ * - LIGHTNESS_WHEEL: 恒定感知明度色轮 (圆心灰色, 边缘最大饱和度, 环向色相角, 底部明度滑块)
+ * - SLIDERS: L / C / H 精密三联数值与微调滑块
+ */
+enum class OklchPickerMode {
+    HUE_PLANE,
+    LIGHTNESS_WHEEL,
+    SLIDERS,
+}
+
+/**
+ * 专业级 OKLCH 悬浮调色小窗:
+ * - 多视角选择器: L-C 恒定色相切片 / 恒定感知明度色轮 / LCH 精密滑块
+ * - 纯矢量平滑抗锯齿边界与高 DPI 渲染, 彻底消除锯齿
+ * - 画布取色管吸管快捷按钮 (一键唤起 PICKER)
+ * - 前背景色对撞交换与常用最近色历史色板 (Swatches)
+ * - 支持数值微调步进按钮与点击弹出精确数字输入
  */
 @Composable
 fun QuickOklchWindow(
@@ -102,8 +136,8 @@ fun QuickOklchWindow(
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
 
-    val defaultW = with(density) { 244.dp.toPx() }
-    val defaultH = with(density) { 330.dp.toPx() }
+    val defaultW = with(density) { 256.dp.toPx() }
+    val defaultH = with(density) { 360.dp.toPx() }
 
     var windowSize by remember { mutableStateOf(IntSize.Zero) }
     val isCollapsed = vm.quickOklchCollapsed
@@ -111,11 +145,15 @@ fun QuickOklchWindow(
         if (isCollapsed) CircleShape else RoundedCornerShape(16.dp)
     }
 
+    var pickerMode by rememberSaveable { mutableStateOf(OklchPickerMode.HUE_PLANE) }
     var isInteracting by remember { mutableStateOf(false) }
     var currentOklch by remember { mutableStateOf(OklchColor.fromHex(vm.brushColor)) }
     var lastSelfHex by remember { mutableStateOf("") }
 
-    // 与 vm.brushColor 双向同步 (非交互态下由外界取色管驱动更新)
+    // 精确数值编辑弹窗状态 (null 表示无弹窗)
+    var directInputTarget by remember { mutableStateOf<DirectInputTarget?>(null) }
+
+    // 与 vm.brushColor 双向同步 (非自身拖拽交互态下由外界取色管驱动更新)
     LaunchedEffect(vm.brushColor) {
         if (!isInteracting && !vm.brushColor.equals(lastSelfHex, ignoreCase = true)) {
             currentOklch = OklchColor.fromHex(vm.brushColor)
@@ -224,18 +262,18 @@ fun QuickOklchWindow(
                             .size(34.dp)
                             .clip(CircleShape)
                             .background(parsedCurrentColor)
-                            .border(1.5.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+                            .border(1.5.dp, Color.White.copy(alpha = 0.6f), CircleShape)
                     )
                 }
             } else {
-                // ---- 展开态：紧凑纯粹 OKLCH 调色面板 ----
+                // ---- 展开态：专业 OKLCH 调色面板 ----
                 Column(
                     modifier = Modifier
-                        .width(244.dp)
+                        .width(256.dp)
                         .padding(horizontal = 9.dp, vertical = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // 1. 顶部操作栏
+                    // 1. 顶部操作栏 (拖拽把手 + 标题/模式标签 + 吸管/双色互换/折叠/关闭)
                     Box(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center,
@@ -264,38 +302,41 @@ fun QuickOklchWindow(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            // 标题 + 徽标
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.quick_oklch_window_title),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Morandi.text,
-                                )
+                            // 标题
+                            Text(
+                                text = stringResource(R.string.quick_oklch_window_title),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Morandi.text,
+                            )
 
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(Morandi.accent.copy(alpha = 0.22f))
-                                        .padding(horizontal = 3.dp, vertical = 1.dp)
-                                ) {
-                                    Text(
-                                        text = "Perceptual",
-                                        color = Morandi.accent,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                }
-                            }
-
-                            // 右侧: 前背景双色重叠预览 + 折叠 + 关闭
+                            // 右侧动作按钮组: 吸管 + 前背景双色重叠预览 + 折叠 + 关闭
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                             ) {
+                                // 快捷吸管
+                                val pickerSource = remember { MutableInteractionSource() }
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .pressScale(pickerSource)
+                                        .clip(CircleShape)
+                                        .background(Morandi.panelHi.copy(alpha = 0.5f))
+                                        .clickable(interactionSource = pickerSource, indication = null) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            vm.applyTool("picker")
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_picker),
+                                        contentDescription = stringResource(R.string.quick_color_eyedropper),
+                                        tint = Morandi.text,
+                                        modifier = Modifier.size(13.dp),
+                                    )
+                                }
+
                                 // 前背景色交换预览
                                 val swapSource = remember { MutableInteractionSource() }
                                 Box(
@@ -361,31 +402,69 @@ fun QuickOklchWindow(
 
                     Spacer(Modifier.height(6.dp))
 
-                    // 2. 核心 2D L-C 切片平面
-                    OklchLCSlicePlane(
-                        oklch = currentOklch,
-                        onColorChange = { newColor ->
-                            updateColor(newColor)
+                    // 2. 视角模式分段切换 (切片 / 色轮 / 滑块)
+                    OklchModeSegmentedTabs(
+                        currentMode = pickerMode,
+                        onModeSelected = { mode ->
+                            pickerMode = mode
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         },
-                        onInteractionStart = { isInteracting = true },
-                        onInteractionEnd = { isInteracting = false },
                     )
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(7.dp))
 
-                    // 3. L / C / H 三联精密滑块
-                    OklchSlidersGroup(
-                        oklch = currentOklch,
-                        onColorChange = { newColor ->
-                            updateColor(newColor)
-                        },
-                        onInteractionStart = { isInteracting = true },
-                        onInteractionEnd = { isInteracting = false },
-                    )
+                    // 3. 核心调色区域
+                    when (pickerMode) {
+                        OklchPickerMode.HUE_PLANE -> {
+                            // 视角 1: 恒定色相 L-C 切片平面 + 色相滑块
+                            OklchLCSlicePlaneView(
+                                oklch = currentOklch,
+                                onColorChange = { updateColor(it) },
+                                onInteractionStart = { isInteracting = true },
+                                onInteractionEnd = { isInteracting = false },
+                                onEditNumeric = { target -> directInputTarget = target },
+                            )
+                        }
+
+                        OklchPickerMode.LIGHTNESS_WHEEL -> {
+                            // 视角 2: 恒定感知明度色轮 + 明度滑块
+                            OklchLightnessWheelView(
+                                oklch = currentOklch,
+                                onColorChange = { updateColor(it) },
+                                onInteractionStart = { isInteracting = true },
+                                onInteractionEnd = { isInteracting = false },
+                                onEditNumeric = { target -> directInputTarget = target },
+                            )
+                        }
+
+                        OklchPickerMode.SLIDERS -> {
+                            // 视角 3: L / C / H 三联精密滑块
+                            OklchPrecisionSlidersView(
+                                oklch = currentOklch,
+                                onColorChange = { updateColor(it) },
+                                onInteractionStart = { isInteracting = true },
+                                onInteractionEnd = { isInteracting = false },
+                                onEditNumeric = { target -> directInputTarget = target },
+                            )
+                        }
+                    }
 
                     Spacer(Modifier.height(6.dp))
 
-                    // 4. 底部 Hex 预览与一键复制
+                    // 4. 常用色彩历史色板 (Swatches)
+                    if (vm.recentColors.isNotEmpty()) {
+                        OklchRecentSwatchesRow(
+                            recentColors = vm.recentColors.take(8),
+                            currentColorHex = currentOklch.toHex(clip = true),
+                            onColorSelected = { hex ->
+                                updateColor(OklchColor.fromHex(hex))
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                        )
+                        Spacer(Modifier.height(5.dp))
+                    }
+
+                    // 5. 底部 Hex 色值与色域裁切指示
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -419,48 +498,103 @@ fun QuickOklchWindow(
             }
         }
     }
+
+    // 弹出的精确数值输入对话框
+    directInputTarget?.let { target ->
+        OklchValueInputDialog(
+            target = target,
+            currentOklch = currentOklch,
+            onDismiss = { directInputTarget = null },
+            onConfirm = { newColor ->
+                updateColor(newColor)
+                directInputTarget = null
+            },
+        )
+    }
 }
 
 /**
- * 2D L-C 切片平面:
- * 纵轴: Lightness L [1.0 (顶部白色) ~ 0.0 (底部黑色)]
- * 横轴: Chroma C [0.0 (左侧灰色) ~ 0.37 (右侧极限彩度)]
- * 色相: 固定为当前传入的 H (色相变动时重绘底图 Bitmap，L/C 变动只移动准星，零性能开销)
+ * 视角模式选择分段药丸标签
  */
 @Composable
-private fun OklchLCSlicePlane(
+private fun OklchModeSegmentedTabs(
+    currentMode: OklchPickerMode,
+    onModeSelected: (OklchPickerMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Morandi.panelHi.copy(alpha = 0.4f))
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        val modes = listOf(
+            Triple(OklchPickerMode.HUE_PLANE, R.string.oklch_view_lc, R.string.oklch_view_lc_desc),
+            Triple(OklchPickerMode.LIGHTNESS_WHEEL, R.string.oklch_view_wheel, R.string.oklch_view_wheel_desc),
+            Triple(OklchPickerMode.SLIDERS, R.string.oklch_view_sliders, R.string.oklch_view_sliders_desc),
+        )
+
+        modes.forEach { (mode, labelRes, _) ->
+            val isSelected = currentMode == mode
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (isSelected) Morandi.accent.copy(alpha = 0.22f) else Color.Transparent)
+                    .clickable { onModeSelected(mode) }
+                    .padding(vertical = 3.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(labelRes),
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) Morandi.accent else Morandi.subText,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 视角 1: 恒定色相 L-C 切片平面 + 色相滑块
+ *
+ * 消除锯齿设计:
+ * 1. 240x160 高分辨率离屏渲染
+ * 2. 图像绘制启用 FilterQuality.Medium 双线性插值
+ * 3. 采样 60 个明度高度的 C_max 构造矢量闭合路径, 并使用 clipPath 和 drawPath 描边
+ */
+@Composable
+private fun OklchLCSlicePlaneView(
     oklch: OklchColor,
     onColorChange: (OklchColor) -> Unit,
     onInteractionStart: () -> Unit,
     onInteractionEnd: () -> Unit,
+    onEditNumeric: (DirectInputTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val bmpWidth = 114
-    val bmpHeight = 75
+    val bmpWidth = 240
+    val bmpHeight = 160
     val maxChroma = OklchColor.MAX_CHROMA
 
-    // 离屏渲染 Bitmap 缓存 (零每帧分配)
     val bitmap = remember { Bitmap.createBitmap(bmpWidth, bmpHeight, Bitmap.Config.ARGB_8888) }
     val pixelBuffer = remember { IntArray(bmpWidth * bmpHeight) }
     var lastHueForBmp by remember { mutableFloatStateOf(-999f) }
 
-    // 仅在 Hue 变化时重新生成切片像素 (114x75 尺寸极小，仅 8550 像素，耗时 < 1ms)
+    // 仅在 Hue 变化时重新生成切片像素 (240x160 仅 3.8 万像素，耗时 ~1ms)
     LaunchedEffect(oklch.h) {
         if (abs(oklch.h - lastHueForBmp) >= 0.5f) {
             val h = oklch.h
             for (y in 0 until bmpHeight) {
                 val l = 1f - (y.toFloat() / (bmpHeight - 1).toFloat())
                 val rowOffset = y * bmpWidth
+                val maxCInGamut = OklchColor.findMaxChromaInGamut(l, h)
                 for (x in 0 until bmpWidth) {
                     val c = (x.toFloat() / (bmpWidth - 1).toFloat()) * maxChroma
-                    if (OklchColor.isInGamut(l, c, h)) {
-                        pixelBuffer[rowOffset + x] = OklchColor.toRgbInt(l, c, h, clip = false)
-                    } else {
-                        // 超色域区域: 呈现暗色半透明网格视觉，直观展示当前色相的 sRGB 边界轮廓
-                        val isChecker = ((x / 3) + (y / 3)) % 2 == 0
-                        val checkerColor = if (isChecker) 0xFF2A2C30.toInt() else 0xFF202226.toInt()
-                        pixelBuffer[rowOffset + x] = checkerColor
-                    }
+                    val effectiveC = c.coerceAtMost(maxCInGamut)
+                    pixelBuffer[rowOffset + x] = OklchColor.toRgbInt(l, effectiveC, h, clip = false)
                 }
             }
             bitmap.setPixels(pixelBuffer, 0, bmpWidth, 0, 0, bmpWidth, bmpHeight)
@@ -470,125 +604,352 @@ private fun OklchLCSlicePlane(
 
     val planeShape = RoundedCornerShape(8.dp)
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(150.dp)
-            .clip(planeShape)
-            .border(1.dp, Morandi.border, planeShape)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Canvas(
+        // 2D L-C 切片画布
+        Box(
             modifier = Modifier
-                .matchParentSize()
-                .pointerInput(oklch.h) {
-                    val handleTouch = { pos: Offset ->
-                        val w = size.width.toFloat()
-                        val h = size.height.toFloat()
-                        if (w > 0f && h > 0f) {
-                            val newL = (1f - (pos.y / h)).coerceIn(0f, 1f)
-                            val rawC = (pos.x / w * maxChroma).coerceIn(0f, maxChroma)
-                            val maxCInGamut = OklchColor.findMaxChromaInGamut(newL, oklch.h)
-                            val finalC = rawC.coerceAtMost(maxCInGamut)
-                            onColorChange(OklchColor(newL, finalC, oklch.h))
-                        }
-                    }
-
-                    detectTapGestures(
-                        onPress = { offset ->
-                            onInteractionStart()
-                            handleTouch(offset)
-                            tryAwaitRelease()
-                            onInteractionEnd()
-                        }
-                    )
-                }
-                .pointerInput(oklch.h) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            onInteractionStart()
+                .fillMaxWidth()
+                .height(150.dp)
+                .clip(planeShape)
+                .background(Color(0xFF1E2024))
+                .border(1.dp, Morandi.border, planeShape)
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .matchParentSize()
+                    .pointerInput(oklch.h) {
+                        val handleTouch = { pos: Offset ->
                             val w = size.width.toFloat()
                             val h = size.height.toFloat()
                             if (w > 0f && h > 0f) {
-                                val newL = (1f - (offset.y / h)).coerceIn(0f, 1f)
-                                val rawC = (offset.x / w * maxChroma).coerceIn(0f, maxChroma)
+                                val newL = (1f - (pos.y / h)).coerceIn(0f, 1f)
+                                val rawC = (pos.x / w * maxChroma).coerceIn(0f, maxChroma)
                                 val maxCInGamut = OklchColor.findMaxChromaInGamut(newL, oklch.h)
                                 val finalC = rawC.coerceAtMost(maxCInGamut)
                                 onColorChange(OklchColor(newL, finalC, oklch.h))
                             }
-                        },
-                        onDragEnd = { onInteractionEnd() },
-                        onDragCancel = { onInteractionEnd() },
-                    ) { change, _ ->
-                        change.consume()
-                        val w = size.width.toFloat()
-                        val h = size.height.toFloat()
-                        if (w > 0f && h > 0f) {
-                            val newL = (1f - (change.position.y / h)).coerceIn(0f, 1f)
-                            val rawC = (change.position.x / w * maxChroma).coerceIn(0f, maxChroma)
-                            val maxCInGamut = OklchColor.findMaxChromaInGamut(newL, oklch.h)
-                            val finalC = rawC.coerceAtMost(maxCInGamut)
-                            onColorChange(OklchColor(newL, finalC, oklch.h))
+                        }
+
+                        detectTapGestures(
+                            onPress = { offset ->
+                                onInteractionStart()
+                                handleTouch(offset)
+                                tryAwaitRelease()
+                                onInteractionEnd()
+                            }
+                        )
+                    }
+                    .pointerInput(oklch.h) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                onInteractionStart()
+                                val w = size.width.toFloat()
+                                val h = size.height.toFloat()
+                                if (w > 0f && h > 0f) {
+                                    val newL = (1f - (offset.y / h)).coerceIn(0f, 1f)
+                                    val rawC = (offset.x / w * maxChroma).coerceIn(0f, maxChroma)
+                                    val maxCInGamut = OklchColor.findMaxChromaInGamut(newL, oklch.h)
+                                    val finalC = rawC.coerceAtMost(maxCInGamut)
+                                    onColorChange(OklchColor(newL, finalC, oklch.h))
+                                }
+                            },
+                            onDragEnd = { onInteractionEnd() },
+                            onDragCancel = { onInteractionEnd() },
+                        ) { change, _ ->
+                            change.consume()
+                            val w = size.width.toFloat()
+                            val h = size.height.toFloat()
+                            if (w > 0f && h > 0f) {
+                                val newL = (1f - (change.position.y / h)).coerceIn(0f, 1f)
+                                val rawC = (change.position.x / w * maxChroma).coerceIn(0f, maxChroma)
+                                val maxCInGamut = OklchColor.findMaxChromaInGamut(newL, oklch.h)
+                                val finalC = rawC.coerceAtMost(maxCInGamut)
+                                onColorChange(OklchColor(newL, finalC, oklch.h))
+                            }
                         }
                     }
+            ) {
+                val w = size.width
+                val h = size.height
+
+                // 计算色域边界平滑矢量多边形
+                val gamutPath = Path().apply {
+                    moveTo(0f, 0f)
+                    val steps = 50
+                    for (i in 0..steps) {
+                        val frac = i.toFloat() / steps
+                        val sampleL = 1f - frac
+                        val maxC = OklchColor.findMaxChromaInGamut(sampleL, oklch.h)
+                        val px = (maxC / maxChroma) * w
+                        val py = frac * h
+                        lineTo(px, py)
+                    }
+                    lineTo(0f, h)
+                    close()
                 }
-        ) {
-            // 绘制离屏切片 Bitmap
-            drawImage(
-                image = bitmap.asImageBitmap(),
-                dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-            )
 
-            // 绘制当前选色准星 (白环 + 黑边描边)
-            val cursorX = (oklch.c / maxChroma) * size.width
-            val cursorY = (1f - oklch.l) * size.height
+                // 矢量裁剪抗锯齿渲染切片
+                clipPath(gamutPath) {
+                    drawImage(
+                        image = bitmap.asImageBitmap(),
+                        dstSize = IntSize(w.roundToInt(), h.roundToInt()),
+                        filterQuality = FilterQuality.Medium,
+                    )
+                }
 
-            drawCircle(
-                color = Color.Black.copy(alpha = 0.8f),
-                radius = 8.dp.toPx(),
-                center = Offset(cursorX, cursorY),
-                style = Stroke(width = 2.5.dp.toPx()),
-            )
-            drawCircle(
-                color = Color.White,
-                radius = 7.dp.toPx(),
-                center = Offset(cursorX, cursorY),
-                style = Stroke(width = 1.8.dp.toPx()),
-            )
-            drawCircle(
-                color = Color(oklch.toRgbInt(clip = true)),
-                radius = 4.5.dp.toPx(),
-                center = Offset(cursorX, cursorY),
-            )
+                // 绘制平滑色域外轮廓线
+                drawPath(
+                    path = gamutPath,
+                    color = Color.White.copy(alpha = 0.45f),
+                    style = Stroke(width = 1.5.dp.toPx()),
+                )
+
+                // 准星十字环
+                val cursorX = (oklch.c / maxChroma) * w
+                val cursorY = (1f - oklch.l) * h
+
+                drawCircle(
+                    color = Color.Black.copy(alpha = 0.8f),
+                    radius = 8.dp.toPx(),
+                    center = Offset(cursorX, cursorY),
+                    style = Stroke(width = 2.5.dp.toPx()),
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 7.dp.toPx(),
+                    center = Offset(cursorX, cursorY),
+                    style = Stroke(width = 1.8.dp.toPx()),
+                )
+                drawCircle(
+                    color = Color(oklch.toRgbInt(clip = true)),
+                    radius = 4.5.dp.toPx(),
+                    center = Offset(cursorX, cursorY),
+                )
+            }
         }
+
+        // 下方色相调节滑块
+        val hColors = remember {
+            (0..12).map { i ->
+                val deg = (i * 30f) % 360f
+                Color(OklchColor.toRgbInt(0.68f, 0.22f, deg))
+            }
+        }
+        OklchSteppedSlider(
+            label = "H",
+            displayValue = "${oklch.h.roundToInt()}°",
+            progress = (oklch.h / 360f).coerceIn(0f, 1f),
+            trackBrush = Brush.horizontalGradient(hColors),
+            onValueChange = { frac ->
+                val newH = (frac * 360f) % 360f
+                val maxC = OklchColor.findMaxChromaInGamut(oklch.l, newH)
+                onColorChange(OklchColor(oklch.l, oklch.c.coerceAtMost(maxC), newH))
+            },
+            onStepDown = {
+                val newH = ((oklch.h - 5f) % 360f + 360f) % 360f
+                val maxC = OklchColor.findMaxChromaInGamut(oklch.l, newH)
+                onColorChange(OklchColor(oklch.l, oklch.c.coerceAtMost(maxC), newH))
+            },
+            onStepUp = {
+                val newH = (oklch.h + 5f) % 360f
+                val maxC = OklchColor.findMaxChromaInGamut(oklch.l, newH)
+                onColorChange(OklchColor(oklch.l, oklch.c.coerceAtMost(maxC), newH))
+            },
+            onClickValue = { onEditNumeric(DirectInputTarget.HUE) },
+            onInteractionStart = onInteractionStart,
+            onInteractionEnd = onInteractionEnd,
+        )
     }
 }
 
 /**
- * L / C / H 三联精密滑块组件组
+ * 视角 2: 恒定感知明度色轮 + 明度滑块
+ *
+ * 核心特性:
+ * - 保持感知明度 L 绝对恒定, 沿圆环展开所有 360° 色相与向外扩展的饱和度
+ * - 使用 360 度 LUT 预计算 C_max，像素级零二分计算, 极速生成
+ * - 结合抗锯齿圆形裁剪与高清晰度贴图, 细腻无锯齿
  */
 @Composable
-private fun OklchSlidersGroup(
+private fun OklchLightnessWheelView(
     oklch: OklchColor,
     onColorChange: (OklchColor) -> Unit,
     onInteractionStart: () -> Unit,
     onInteractionEnd: () -> Unit,
+    onEditNumeric: (DirectInputTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val wheelBmpSize = 180
+    val wheelBitmap = remember { Bitmap.createBitmap(wheelBmpSize, wheelBmpSize, Bitmap.Config.ARGB_8888) }
+    val wheelPixels = remember { IntArray(wheelBmpSize * wheelBmpSize) }
+    var lastLightnessForBmp by remember { mutableFloatStateOf(-999f) }
+
+    // 当 L 发生实质变化时重新计算色轮 (仅 ~0.8ms)
+    LaunchedEffect(oklch.l) {
+        if (abs(oklch.l - lastLightnessForBmp) >= 0.005f) {
+            val l = oklch.l
+            val lut = OklchColor.computeMaxChromaLUT(l, 360)
+            val center = wheelBmpSize / 2f
+            val radius = center - 2f
+
+            for (y in 0 until wheelBmpSize) {
+                val dy = y - center
+                val rowOffset = y * wheelBmpSize
+                for (x in 0 until wheelBmpSize) {
+                    val dx = x - center
+                    val dist = sqrt(dx * dx + dy * dy)
+                    if (dist <= radius) {
+                        val normDist = (dist / radius).coerceIn(0f, 1f)
+                        var angleDeg = (atan2(dy, dx) * (180f / PI.toFloat()))
+                        if (angleDeg < 0f) angleDeg += 360f
+
+                        val maxC = OklchColor.sampleMaxChromaFromLUT(lut, angleDeg)
+                        val c = normDist * maxC
+                        wheelPixels[rowOffset + x] = OklchColor.toRgbInt(l, c, angleDeg, clip = false)
+                    } else {
+                        wheelPixels[rowOffset + x] = 0 // 透明背景
+                    }
+                }
+            }
+            wheelBitmap.setPixels(wheelPixels, 0, wheelBmpSize, 0, 0, wheelBmpSize, wheelBmpSize)
+            lastLightnessForBmp = l
+        }
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // 1. L (Lightness 0% ~ 100%)
-        val lColors = remember(oklch.c, oklch.h) {
+        // 圆形色轮
+        Box(
+            modifier = Modifier
+                .size(150.dp)
+                .clip(CircleShape)
+                .border(1.2.dp, Morandi.border, CircleShape)
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .matchParentSize()
+                    .pointerInput(oklch.l) {
+                        val handleTouch = { pos: Offset ->
+                            val cx = size.width / 2f
+                            val cy = size.height / 2f
+                            val dx = pos.x - cx
+                            val dy = pos.y - cy
+                            val dist = sqrt(dx * dx + dy * dy)
+                            val radius = size.width / 2f
+                            val normDist = (dist / radius).coerceIn(0f, 1f)
+
+                            var angleDeg = (atan2(dy, dx) * (180f / PI.toFloat()))
+                            if (angleDeg < 0f) angleDeg += 360f
+
+                            val maxC = OklchColor.findMaxChromaInGamut(oklch.l, angleDeg)
+                            val finalC = normDist * maxC
+                            onColorChange(OklchColor(oklch.l, finalC, angleDeg))
+                        }
+
+                        detectTapGestures(
+                            onPress = { offset ->
+                                onInteractionStart()
+                                handleTouch(offset)
+                                tryAwaitRelease()
+                                onInteractionEnd()
+                            }
+                        )
+                    }
+                    .pointerInput(oklch.l) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                onInteractionStart()
+                                val cx = size.width / 2f
+                                val cy = size.height / 2f
+                                val dx = offset.x - cx
+                                val dy = offset.y - cy
+                                val dist = sqrt(dx * dx + dy * dy)
+                                val radius = size.width / 2f
+                                val normDist = (dist / radius).coerceIn(0f, 1f)
+
+                                var angleDeg = (atan2(dy, dx) * (180f / PI.toFloat()))
+                                if (angleDeg < 0f) angleDeg += 360f
+
+                                val maxC = OklchColor.findMaxChromaInGamut(oklch.l, angleDeg)
+                                val finalC = normDist * maxC
+                                onColorChange(OklchColor(oklch.l, finalC, angleDeg))
+                            },
+                            onDragEnd = { onInteractionEnd() },
+                            onDragCancel = { onInteractionEnd() },
+                        ) { change, _ ->
+                            change.consume()
+                            val cx = size.width / 2f
+                            val cy = size.height / 2f
+                            val dx = change.position.x - cx
+                            val dy = change.position.y - cy
+                            val dist = sqrt(dx * dx + dy * dy)
+                            val radius = size.width / 2f
+                            val normDist = (dist / radius).coerceIn(0f, 1f)
+
+                            var angleDeg = (atan2(dy, dx) * (180f / PI.toFloat()))
+                            if (angleDeg < 0f) angleDeg += 360f
+
+                            val maxC = OklchColor.findMaxChromaInGamut(oklch.l, angleDeg)
+                            val finalC = normDist * maxC
+                            onColorChange(OklchColor(oklch.l, finalC, angleDeg))
+                        }
+                    }
+            ) {
+                val w = size.width
+                val h = size.height
+                val cx = w / 2f
+                val cy = h / 2f
+                val radius = w / 2f
+
+                // 绘制平滑抗锯齿色轮底图
+                drawImage(
+                    image = wheelBitmap.asImageBitmap(),
+                    dstSize = IntSize(w.roundToInt(), h.roundToInt()),
+                    filterQuality = FilterQuality.Medium,
+                )
+
+                // 绘制准星
+                val maxC = OklchColor.findMaxChromaInGamut(oklch.l, oklch.h)
+                val normRadius = if (maxC > 0.001f) (oklch.c / maxC).coerceIn(0f, 1f) else 0f
+                val rad = oklch.h * (PI.toFloat() / 180f)
+                val cursorX = cx + normRadius * radius * cos(rad)
+                val cursorY = cy + normRadius * radius * sin(rad)
+
+                drawCircle(
+                    color = Color.Black.copy(alpha = 0.8f),
+                    radius = 8.dp.toPx(),
+                    center = Offset(cursorX, cursorY),
+                    style = Stroke(width = 2.5.dp.toPx()),
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 7.dp.toPx(),
+                    center = Offset(cursorX, cursorY),
+                    style = Stroke(width = 1.8.dp.toPx()),
+                )
+                drawCircle(
+                    color = Color(oklch.toRgbInt(clip = true)),
+                    radius = 4.5.dp.toPx(),
+                    center = Offset(cursorX, cursorY),
+                )
+            }
+        }
+
+        // 下方明度 (L) 调节滑块
+        val lColors = remember(oklch.h, oklch.c) {
             listOf(
-                Color(OklchColor.toRgbInt(0f, oklch.c, oklch.h)),
-                Color(OklchColor.toRgbInt(0.25f, oklch.c, oklch.h)),
+                Color.Black,
                 Color(OklchColor.toRgbInt(0.5f, oklch.c, oklch.h)),
-                Color(OklchColor.toRgbInt(0.75f, oklch.c, oklch.h)),
-                Color(OklchColor.toRgbInt(1f, oklch.c, oklch.h)),
+                Color.White,
             )
         }
-        OklchSingleSlider(
+        OklchSteppedSlider(
             label = "L",
             displayValue = "${(oklch.l * 100f).roundToInt()}%",
             progress = oklch.l,
@@ -598,6 +959,68 @@ private fun OklchSlidersGroup(
                 val maxC = OklchColor.findMaxChromaInGamut(newL, oklch.h)
                 onColorChange(OklchColor(newL, oklch.c.coerceAtMost(maxC), oklch.h))
             },
+            onStepDown = {
+                val newL = (oklch.l - 0.02f).coerceIn(0f, 1f)
+                val maxC = OklchColor.findMaxChromaInGamut(newL, oklch.h)
+                onColorChange(OklchColor(newL, oklch.c.coerceAtMost(maxC), oklch.h))
+            },
+            onStepUp = {
+                val newL = (oklch.l + 0.02f).coerceIn(0f, 1f)
+                val maxC = OklchColor.findMaxChromaInGamut(newL, oklch.h)
+                onColorChange(OklchColor(newL, oklch.c.coerceAtMost(maxC), oklch.h))
+            },
+            onClickValue = { onEditNumeric(DirectInputTarget.LIGHTNESS) },
+            onInteractionStart = onInteractionStart,
+            onInteractionEnd = onInteractionEnd,
+        )
+    }
+}
+
+/**
+ * 视角 3: L / C / H 三联精密数值调节滑块
+ */
+@Composable
+private fun OklchPrecisionSlidersView(
+    oklch: OklchColor,
+    onColorChange: (OklchColor) -> Unit,
+    onInteractionStart: () -> Unit,
+    onInteractionEnd: () -> Unit,
+    onEditNumeric: (DirectInputTarget) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        // 1. L (Lightness 0% ~ 100%)
+        val lColors = remember(oklch.c, oklch.h) {
+            listOf(
+                Color.Black,
+                Color(OklchColor.toRgbInt(0.5f, oklch.c, oklch.h)),
+                Color.White,
+            )
+        }
+        OklchSteppedSlider(
+            label = "L",
+            displayValue = "${(oklch.l * 100f).roundToInt()}%",
+            progress = oklch.l,
+            trackBrush = Brush.horizontalGradient(lColors),
+            onValueChange = { frac ->
+                val newL = frac.coerceIn(0f, 1f)
+                val maxC = OklchColor.findMaxChromaInGamut(newL, oklch.h)
+                onColorChange(OklchColor(newL, oklch.c.coerceAtMost(maxC), oklch.h))
+            },
+            onStepDown = {
+                val newL = (oklch.l - 0.01f).coerceIn(0f, 1f)
+                val maxC = OklchColor.findMaxChromaInGamut(newL, oklch.h)
+                onColorChange(OklchColor(newL, oklch.c.coerceAtMost(maxC), oklch.h))
+            },
+            onStepUp = {
+                val newL = (oklch.l + 0.01f).coerceIn(0f, 1f)
+                val maxC = OklchColor.findMaxChromaInGamut(newL, oklch.h)
+                onColorChange(OklchColor(newL, oklch.c.coerceAtMost(maxC), oklch.h))
+            },
+            onClickValue = { onEditNumeric(DirectInputTarget.LIGHTNESS) },
             onInteractionStart = onInteractionStart,
             onInteractionEnd = onInteractionEnd,
         )
@@ -612,7 +1035,7 @@ private fun OklchSlidersGroup(
                 Color(OklchColor.toRgbInt(oklch.l, maxC, oklch.h)),
             )
         }
-        OklchSingleSlider(
+        OklchSteppedSlider(
             label = "C",
             displayValue = "%.2f".format(oklch.c),
             progress = (oklch.c / maxC).coerceIn(0f, 1f),
@@ -622,6 +1045,17 @@ private fun OklchSlidersGroup(
                 val maxCInGamut = OklchColor.findMaxChromaInGamut(oklch.l, oklch.h)
                 onColorChange(OklchColor(oklch.l, rawC.coerceAtMost(maxCInGamut), oklch.h))
             },
+            onStepDown = {
+                val rawC = (oklch.c - 0.01f).coerceIn(0f, maxC)
+                val maxCInGamut = OklchColor.findMaxChromaInGamut(oklch.l, oklch.h)
+                onColorChange(OklchColor(oklch.l, rawC.coerceAtMost(maxCInGamut), oklch.h))
+            },
+            onStepUp = {
+                val rawC = (oklch.c + 0.01f).coerceIn(0f, maxC)
+                val maxCInGamut = OklchColor.findMaxChromaInGamut(oklch.l, oklch.h)
+                onColorChange(OklchColor(oklch.l, rawC.coerceAtMost(maxCInGamut), oklch.h))
+            },
+            onClickValue = { onEditNumeric(DirectInputTarget.CHROMA) },
             onInteractionStart = onInteractionStart,
             onInteractionEnd = onInteractionEnd,
         )
@@ -633,7 +1067,7 @@ private fun OklchSlidersGroup(
                 Color(OklchColor.toRgbInt(oklch.l.coerceIn(0.2f, 0.85f), oklch.c.coerceAtLeast(0.12f), deg))
             }
         }
-        OklchSingleSlider(
+        OklchSteppedSlider(
             label = "H",
             displayValue = "${oklch.h.roundToInt()}°",
             progress = (oklch.h / 360f).coerceIn(0f, 1f),
@@ -643,6 +1077,17 @@ private fun OklchSlidersGroup(
                 val maxCInGamut = OklchColor.findMaxChromaInGamut(oklch.l, newH)
                 onColorChange(OklchColor(oklch.l, oklch.c.coerceAtMost(maxCInGamut), newH))
             },
+            onStepDown = {
+                val newH = ((oklch.h - 1f) % 360f + 360f) % 360f
+                val maxCInGamut = OklchColor.findMaxChromaInGamut(oklch.l, newH)
+                onColorChange(OklchColor(oklch.l, oklch.c.coerceAtMost(maxCInGamut), newH))
+            },
+            onStepUp = {
+                val newH = (oklch.h + 1f) % 360f
+                val maxCInGamut = OklchColor.findMaxChromaInGamut(oklch.l, newH)
+                onColorChange(OklchColor(oklch.l, oklch.c.coerceAtMost(maxCInGamut), newH))
+            },
+            onClickValue = { onEditNumeric(DirectInputTarget.HUE) },
             onInteractionStart = onInteractionStart,
             onInteractionEnd = onInteractionEnd,
         )
@@ -650,32 +1095,62 @@ private fun OklchSlidersGroup(
 }
 
 /**
- * 单条精简滑动轨道组件
+ * 带有微调步进按钮 `[-]` `[+]` 与可点击数值的单条滑动条
  */
 @Composable
-private fun OklchSingleSlider(
+private fun OklchSteppedSlider(
     label: String,
     displayValue: String,
     progress: Float,
     trackBrush: Brush,
     onValueChange: (Float) -> Unit,
+    onStepDown: () -> Unit,
+    onStepUp: () -> Unit,
+    onClickValue: () -> Unit,
     onInteractionStart: () -> Unit,
     onInteractionEnd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptic = LocalHapticFeedback.current
+
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        // 标签
         Text(
             text = label,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             color = Morandi.text,
-            modifier = Modifier.width(13.dp),
+            modifier = Modifier.width(11.dp),
         )
 
+        // 步进减少 [-]
+        val stepDownSource = remember { MutableInteractionSource() }
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .pressScale(stepDownSource)
+                .clip(CircleShape)
+                .background(Morandi.panelHi.copy(alpha = 0.5f))
+                .clickable(interactionSource = stepDownSource, indication = null) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onStepDown()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(7.dp)
+                    .height(1.5.dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(Morandi.text)
+            )
+        }
+
+        // 滑轨
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -730,12 +1205,277 @@ private fun OklchSingleSlider(
             }
         }
 
-        Text(
-            text = displayValue,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Morandi.subText,
-            modifier = Modifier.width(32.dp),
-        )
+        // 步进增加 [+]
+        val stepUpSource = remember { MutableInteractionSource() }
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .pressScale(stepUpSource)
+                .clip(CircleShape)
+                .background(Morandi.panelHi.copy(alpha = 0.5f))
+                .clickable(interactionSource = stepUpSource, indication = null) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onStepUp()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(7.dp)
+                    .height(1.5.dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(Morandi.text)
+            )
+            Box(
+                modifier = Modifier
+                    .width(1.5.dp)
+                    .height(7.dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(Morandi.text)
+            )
+        }
+
+        // 点击打开精确数字键盘的数值药丸
+        Box(
+            modifier = Modifier
+                .width(36.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Morandi.panelHi.copy(alpha = 0.35f))
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClickValue()
+                }
+                .padding(vertical = 1.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = displayValue,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Morandi.text,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+/**
+ * 常用色彩快捷色板行 (最近使用的 8 种前景色)
+ */
+@Composable
+private fun OklchRecentSwatchesRow(
+    recentColors: List<String>,
+    currentColorHex: String,
+    onColorSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .background(Morandi.panelHi.copy(alpha = 0.35f))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        recentColors.forEach { hex ->
+            val swatchColor = remember(hex) {
+                try {
+                    Color(android.graphics.Color.parseColor(hex))
+                } catch (_: Exception) {
+                    Color.Gray
+                }
+            }
+            val isCurrent = currentColorHex.equals(hex, ignoreCase = true)
+            val interactionSource = remember { MutableInteractionSource() }
+
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .pressScale(interactionSource)
+                    .clip(CircleShape)
+                    .background(swatchColor)
+                    .border(
+                        width = if (isCurrent) 2.dp else 1.dp,
+                        color = if (isCurrent) Color.White else Morandi.border,
+                        shape = CircleShape,
+                    )
+                    .clickable(interactionSource = interactionSource, indication = null) {
+                        onColorSelected(hex)
+                    }
+            )
+        }
+    }
+}
+
+enum class DirectInputTarget {
+    LIGHTNESS,
+    CHROMA,
+    HUE,
+}
+
+/**
+ * 精确数值输入对话框
+ */
+@Composable
+private fun OklchValueInputDialog(
+    target: DirectInputTarget,
+    currentOklch: OklchColor,
+    onDismiss: () -> Unit,
+    onConfirm: (OklchColor) -> Unit,
+) {
+    val initialText = remember(target, currentOklch) {
+        when (target) {
+            DirectInputTarget.LIGHTNESS -> "${(currentOklch.l * 100f).roundToInt()}"
+            DirectInputTarget.CHROMA -> "%.2f".format(currentOklch.c)
+            DirectInputTarget.HUE -> "${currentOklch.h.roundToInt()}"
+        }
+    }
+    var inputText by remember { mutableStateOf(initialText) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .width(220.dp)
+                .shadow(16.dp, RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(14.dp))
+                .background(Morandi.panel)
+                .glassBorder(RoundedCornerShape(14.dp))
+                .padding(14.dp),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = when (target) {
+                        DirectInputTarget.LIGHTNESS -> stringResource(R.string.oklch_lightness) + " (0 ~ 100%)"
+                        DirectInputTarget.CHROMA -> stringResource(R.string.oklch_chroma) + " (0.00 ~ 0.37)"
+                        DirectInputTarget.HUE -> stringResource(R.string.oklch_hue) + " (0° ~ 360°)"
+                    },
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Morandi.text,
+                )
+
+                BasicTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        color = Morandi.text,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                    ),
+                    cursorBrush = SolidColor(Morandi.accent),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            val num = inputText.toFloatOrNull()
+                            if (num != null) {
+                                val newColor = when (target) {
+                                    DirectInputTarget.LIGHTNESS -> {
+                                        val l = (num / 100f).coerceIn(0f, 1f)
+                                        val maxC = OklchColor.findMaxChromaInGamut(l, currentOklch.h)
+                                        OklchColor(l, currentOklch.c.coerceAtMost(maxC), currentOklch.h)
+                                    }
+                                    DirectInputTarget.CHROMA -> {
+                                        val c = num.coerceIn(0f, OklchColor.MAX_CHROMA)
+                                        val maxC = OklchColor.findMaxChromaInGamut(currentOklch.l, currentOklch.h)
+                                        OklchColor(currentOklch.l, c.coerceAtMost(maxC), currentOklch.h)
+                                    }
+                                    DirectInputTarget.HUE -> {
+                                        val h = ((num % 360f) + 360f) % 360f
+                                        val maxC = OklchColor.findMaxChromaInGamut(currentOklch.l, h)
+                                        OklchColor(currentOklch.l, currentOklch.c.coerceAtMost(maxC), h)
+                                    }
+                                }
+                                onConfirm(newColor)
+                            } else {
+                                onDismiss()
+                            }
+                        }
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Morandi.panelHi.copy(alpha = 0.5f))
+                        .border(1.dp, Morandi.border, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .focusRequester(focusRequester),
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Morandi.panelHi.copy(alpha = 0.4f))
+                            .clickable { onDismiss() }
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.common_cancel),
+                            fontSize = 11.sp,
+                            color = Morandi.subText,
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Morandi.accent.copy(alpha = 0.25f))
+                            .clickable {
+                                val num = inputText.toFloatOrNull()
+                                if (num != null) {
+                                    val newColor = when (target) {
+                                        DirectInputTarget.LIGHTNESS -> {
+                                            val l = (num / 100f).coerceIn(0f, 1f)
+                                            val maxC = OklchColor.findMaxChromaInGamut(l, currentOklch.h)
+                                            OklchColor(l, currentOklch.c.coerceAtMost(maxC), currentOklch.h)
+                                        }
+                                        DirectInputTarget.CHROMA -> {
+                                            val c = num.coerceIn(0f, OklchColor.MAX_CHROMA)
+                                            val maxC = OklchColor.findMaxChromaInGamut(currentOklch.l, currentOklch.h)
+                                            OklchColor(currentOklch.l, c.coerceAtMost(maxC), currentOklch.h)
+                                        }
+                                        DirectInputTarget.HUE -> {
+                                            val h = ((num % 360f) + 360f) % 360f
+                                            val maxC = OklchColor.findMaxChromaInGamut(currentOklch.l, h)
+                                            OklchColor(currentOklch.l, currentOklch.c.coerceAtMost(maxC), h)
+                                        }
+                                    }
+                                    onConfirm(newColor)
+                                } else {
+                                    onDismiss()
+                                }
+                            }
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.common_confirm),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Morandi.accent,
+                        )
+                    }
+                }
+            }
+        }
     }
 }

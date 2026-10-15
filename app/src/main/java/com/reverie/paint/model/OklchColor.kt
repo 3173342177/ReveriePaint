@@ -109,6 +109,33 @@ data class OklchColor(
         }
 
         /**
+         * 预计算给定明度 L 下 0°~360° 色相的最大彩度查找表 (LUT)，用于色轮超高速零延迟渲染
+         */
+        fun computeMaxChromaLUT(l: Float, steps: Int = 360): FloatArray {
+            val lut = FloatArray(steps)
+            if (l <= 0.001f || l >= 0.999f) return lut
+            val stepDeg = 360f / steps
+            for (i in 0 until steps) {
+                lut[i] = findMaxChromaInGamut(l, i * stepDeg)
+            }
+            return lut
+        }
+
+        /**
+         * 从 LUT 中平滑双线性采样指定色相角的最大彩度
+         */
+        fun sampleMaxChromaFromLUT(lut: FloatArray, h: Float): Float {
+            if (lut.isEmpty()) return 0f
+            val size = lut.size
+            val normH = ((h % 360f) + 360f) % 360f
+            val pos = (normH / 360f) * size
+            val idx0 = pos.toInt() % size
+            val idx1 = (idx0 + 1) % size
+            val frac = pos - pos.toInt()
+            return lut[idx0] * (1f - frac) + lut[idx1] * frac
+        }
+
+        /**
          * 色域裁切 (Gamut Clip):
          * 保持 L 与 H 不变，若超色域则将 C 限制在 sRGB 最大边界内
          */
