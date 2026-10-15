@@ -33,7 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,7 +65,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -80,10 +78,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.reverie.paint.R
 import com.reverie.paint.core.PaintViewModel
-import com.reverie.paint.core.applyTool
 import com.reverie.paint.core.updateBrushColor
 import com.reverie.paint.model.OklchColor
-import com.reverie.paint.ui.components.DragPillHandle
 import com.reverie.paint.ui.components.PanelCloseButton
 import com.reverie.paint.ui.components.pressScale
 import com.reverie.paint.ui.theme.Glass
@@ -273,27 +269,55 @@ fun QuickOklchWindow(
                         .padding(horizontal = 9.dp, vertical = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // 1. 顶部操作栏 (拖拽把手 + 标题 + 吸管/双色互换/折叠/关闭)
+                    // 1. 顶部操作栏 (顶部横条拖拽/点击收起 + 标题 + 双色互换/关闭)
                     Box(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center,
                     ) {
-                        DragPillHandle(
-                            onDrag = { dragAmount ->
-                                val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
-                                val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
-                                if (vm.quickOklchWindowX < 0f) {
-                                    vm.quickOklchWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                        // 顶部小横条: 兼具拖动手柄与点击收起折叠
+                        val handleSource = remember { MutableInteractionSource() }
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .size(60.dp, 16.dp)
+                                .pointerInput(Unit) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            val curW = if (windowSize.width > 0) windowSize.width.toFloat() else defaultW
+                                            val curH = if (windowSize.height > 0) windowSize.height.toFloat() else defaultH
+                                            if (vm.quickOklchWindowX < 0f) {
+                                                vm.quickOklchWindowX = ((screenWidthPx - curW) / 2f).coerceAtLeast(0f)
+                                            }
+                                            if (vm.quickOklchWindowY < 0f) {
+                                                vm.quickOklchWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
+                                            }
+                                        },
+                                        onDragEnd = { vm.persistQuickOklchState() },
+                                        onDragCancel = { vm.persistQuickOklchState() },
+                                    ) { change, dragAmount ->
+                                        change.consume()
+                                        vm.quickOklchWindowX += dragAmount.x
+                                        vm.quickOklchWindowY += dragAmount.y
+                                    }
                                 }
-                                if (vm.quickOklchWindowY < 0f) {
-                                    vm.quickOklchWindowY = ((screenHeightPx - curH) / 2f).coerceAtLeast(0f)
-                                }
-                                vm.quickOklchWindowX += dragAmount.x
-                                vm.quickOklchWindowY += dragAmount.y
-                                vm.persistQuickOklchState()
-                            },
-                            modifier = Modifier.align(Alignment.TopCenter),
-                        )
+                                .pressScale(handleSource, pressedScale = 0.92f)
+                                .clickable(
+                                    interactionSource = handleSource,
+                                    indication = null,
+                                ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    vm.quickOklchCollapsed = true
+                                    vm.persistQuickOklchState()
+                                },
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp, 3.5.dp)
+                                    .clip(CircleShape)
+                                    .background(Morandi.subText.copy(alpha = 0.5f))
+                            )
+                        }
 
                         Row(
                             modifier = Modifier
@@ -310,33 +334,11 @@ fun QuickOklchWindow(
                                 color = Morandi.text,
                             )
 
-                            // 右侧动作按钮组: 吸管 + 前背景双色重叠预览 + 折叠 + 关闭
+                            // 右侧动作按钮组: 前背景双色重叠预览 + 关闭
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                // 快捷吸管
-                                val pickerSource = remember { MutableInteractionSource() }
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .pressScale(pickerSource)
-                                        .clip(CircleShape)
-                                        .background(Morandi.panelHi.copy(alpha = 0.5f))
-                                        .clickable(interactionSource = pickerSource, indication = null) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            vm.applyTool("picker")
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_picker),
-                                        contentDescription = stringResource(R.string.quick_color_eyedropper),
-                                        tint = Morandi.text,
-                                        modifier = Modifier.size(13.dp),
-                                    )
-                                }
-
                                 // 前背景色交换预览
                                 val swapSource = remember { MutableInteractionSource() }
                                 Box(
@@ -368,30 +370,6 @@ fun QuickOklchWindow(
                                             .clip(CircleShape)
                                             .background(parsedCurrentColor)
                                             .border(1.2.dp, Color.White.copy(alpha = 0.7f), CircleShape)
-                                    )
-                                }
-
-                                // 最小化折叠按钮
-                                val collapseSource = remember { MutableInteractionSource() }
-                                Box(
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .pressScale(collapseSource)
-                                        .clip(CircleShape)
-                                        .background(Morandi.panelHi.copy(alpha = 0.5f))
-                                        .clickable(interactionSource = collapseSource, indication = null) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            vm.quickOklchCollapsed = true
-                                            vm.persistQuickOklchState()
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(9.dp)
-                                            .height(2.dp)
-                                            .clip(RoundedCornerShape(1.dp))
-                                            .background(Morandi.subText)
                                     )
                                 }
 
