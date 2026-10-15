@@ -2439,14 +2439,26 @@ class CanvasTouchView(context: Context) : View(context) {
         }
     }
 
-    // Support drawing huge bitmaps (> 100MB, e.g. 8192x8192 = 256MB)
+    // Support drawing huge bitmaps (> 100MB, e.g. 6000x6000 = 144MB, 8192x8192 = 256MB)
     // without triggering android.graphics.RecordingCanvas.throwIfCannotDraw
-    private var largeBitmapTiles: Array<Bitmap>? = null
+    private class LargeBitmapTile(
+        val bitmap: Bitmap,
+        val canvas: Canvas,
+        val sx: Int,
+        val sy: Int,
+        val width: Int,
+        val height: Int,
+    )
+    private var largeBitmapTiles: Array<LargeBitmapTile>? = null
     private var largeBitmapLastGenId: Int = -1
     private var largeBitmapCols: Int = 0
     private var largeBitmapRows: Int = 0
+    private val largeBitmapTilePaint = Paint().apply {
+        xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC)
+    }
     private val largeBitmapSrcRect = android.graphics.Rect()
     private val largeBitmapDstRect = android.graphics.Rect()
+    private val largeBitmapDirtyScratch = android.graphics.Rect()
 
     private fun drawLargeBitmapTiled(
         canvas: Canvas,
@@ -2455,9 +2467,8 @@ class CanvasTouchView(context: Context) : View(context) {
         top: Float,
         paint: Paint,
     ) {
-        val maxTileDim = 4096
-        val cols = (bmp.width + maxTileDim - 1) / maxTileDim
-        val rows = (bmp.height + maxTileDim - 1) / maxTileDim
+        val tileDim = LargeBitmapTilingPolicy.TILE_DIM
+        val (cols, rows) = LargeBitmapTilingPolicy.tileCount(bmp.width, bmp.height, tileDim)
         val totalTiles = cols * rows
 
         val tilesNeedRealloc = largeBitmapTiles == null ||
@@ -2466,14 +2477,24 @@ class CanvasTouchView(context: Context) : View(context) {
             largeBitmapRows != rows
 
         if (tilesNeedRealloc) {
-            largeBitmapTiles?.forEach { it.recycle() }
+            largeBitmapTiles?.forEach { it.bitmap.recycle() }
             try {
                 val newTiles = Array(totalTiles) { idx ->
                     val c = idx % cols
                     val r = idx / cols
-                    val tw = minOf(maxTileDim, bmp.width - c * maxTileDim)
-                    val th = minOf(maxTileDim, bmp.height - r * maxTileDim)
-                    Bitmap.createBitmap(tw, th, Bitmap.Config.ARGB_8888)
+                    val sx = c * tileDim
+                    val sy = r * tileDim
+                    val tw = minOf(tileDim, bmp.width - sx)
+                    val th = minOf(tileDim, bmp.height - sy)
+                    val tileBmp = Bitmap.createBitmap(tw, th, Bitmap.Config.ARGB_8888)
+                    LargeBitmapTile(
+                        bitmap = tileBmp,
+                        canvas = Canvas(tileBmp),
+                        sx = sx,
+                        sy = sy,
+                        width = tw,
+                        height = th,
+                    )
                 }
                 largeBitmapTiles = newTiles
                 largeBitmapCols = cols
@@ -2481,7 +2502,7 @@ class CanvasTouchView(context: Context) : View(context) {
                 largeBitmapLastGenId = -1
             } catch (t: Throwable) {
                 android.util.Log.e("CanvasTouchView", "Failed to allocate large bitmap tiles", t)
-                largeBitmapTiles?.forEach { it.recycle() }
+                largeBitmapTiles?.forEach { it.bitmap.recycle() }
                 largeBitmapTiles = null
                 return
             }
@@ -2489,40 +2510,57 @@ class CanvasTouchView(context: Context) : View(context) {
 
         val tiles = largeBitmapTiles ?: return
         if (largeBitmapLastGenId != bmp.generationId) {
-            val tilePaint = Paint().apply {
-                xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC)
-            }
-            for (r in 0 until rows) {
-                for (c in 0 until cols) {
-                    val idx = r * cols + c
-                    val tile = tiles[idx]
-                    val sx = c * maxTileDim
-                    val sy = r * maxTileDim
-                    val tw = tile.width
-                    val th = tile.height
-                    largeBitmapSrcRect.set(sx, sy, sx + tw, sy + th)
-                    largeBitmapDstRect.set(0, 0, tw, th)
-                    val tileCanvas = Canvas(tile)
-                    tileCanvas.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
-                    tileCanvas.drawBitmap(bmp, largeBitmapSrcRect, largeBitmapDstRect, tilePaint)
+            val v = vm
+            val hasAccum = v?.consumeLargeBitmapDirtyRect(largeBitmapDirtyScratch) == true
+            val isFullUpdate = largeBitmapLastGenId == -1 || !hasAccum ||
+                (largeBitmapDirtyScratch.width() >= bmp.width && largeBitmapDirtyScratch.height() >= bmp.height)
+
+            if (isFullUpdate) {
+                for (tile in tiles) {
+                    largeBitmapSrcRect.set(tile.sx, tile.sy, tile.sx + tile.width, tile.sy + tile.height)
+                    largeBitmapDstRect.set(0, 0, tile.width, tile.height)
+                    tile.canvas.drawBitmap(bmp, largeBitmapSrcRect, largeBitmapDstRect, largeBitmapTilePaint)
+                }
+            } else {
+                val dirtyL = largeBitmapDirtyScratch.left
+                val dirtyT = largeBitmapDirtyScratch.top
+                val dirtyR = largeBitmapDirtyScratch.right
+                val dirtyB = largeBitmapDirtyScratch.bottom
+                for (tile in tiles) {
+                    val interL = maxOf(tile.sx, dirtyL)
+                    val interT = maxOf(tile.sy, dirtyT)
+                    val interR = minOf(tile.sx + tile.width, dirtyR)
+                    val interB = minOf(tile.sy + tile.height, dirtyB)
+                    if (interR > interL && interB > interT) {
+                        largeBitmapSrcRect.set(interL, interT, interR, interB)
+                        largeBitmapDstRect.set(interL - tile.sx, interT - tile.sy, interR - tile.sx, interB - tile.sy)
+                        tile.canvas.drawBitmap(bmp, largeBitmapSrcRect, largeBitmapDstRect, largeBitmapTilePaint)
+                    }
                 }
             }
             largeBitmapLastGenId = bmp.generationId
         }
 
-        for (r in 0 until rows) {
-            for (c in 0 until cols) {
-                val idx = r * cols + c
-                val tile = tiles[idx]
-                val tx = left + c * maxTileDim
-                val ty = top + r * maxTileDim
-                canvas.drawBitmap(tile, tx, ty, paint)
+        // 视口裁剪: 仅绘制当前视口内可见的瓦片, 彻底杜绝超大画幅高倍缩放下的 GPU 纹理抖动与带宽吞吐过载
+        ensureViewTransform()
+        visibleBitmapBounds(boundsScratch)
+        val visL = boundsScratch[0]
+        val visT = boundsScratch[1]
+        val visR = boundsScratch[2]
+        val visB = boundsScratch[3]
+
+        for (tile in tiles) {
+            if (tile.sx + tile.width >= visL && tile.sx <= visR &&
+                tile.sy + tile.height >= visT && tile.sy <= visB) {
+                val tx = left + tile.sx
+                val ty = top + tile.sy
+                canvas.drawBitmap(tile.bitmap, tx, ty, paint)
             }
         }
     }
 
     private fun releaseLargeBitmapTiles() {
-        largeBitmapTiles?.forEach { it.recycle() }
+        largeBitmapTiles?.forEach { it.bitmap.recycle() }
         largeBitmapTiles = null
         largeBitmapLastGenId = -1
     }
@@ -2565,7 +2603,7 @@ class CanvasTouchView(context: Context) : View(context) {
             // 绘制真实画布像素
             directBitmapPaint.isFilterBitmap = v.magnificationInterpolation
             directBitmapPaint.isAntiAlias = v.magnificationInterpolation
-            if (bmp.byteCount > 100 * 1024 * 1024) {
+            if (LargeBitmapTilingPolicy.isLargeBitmap(bmp.byteCount.toLong())) {
                 drawLargeBitmapTiled(canvas, bmp, -imgW / 2f, -imgH / 2f, directBitmapPaint)
             } else {
                 if (largeBitmapTiles != null) {

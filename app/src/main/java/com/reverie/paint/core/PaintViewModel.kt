@@ -4606,15 +4606,8 @@ class PaintViewModel : ViewModel() {
         viewH: Int,
     ) {
         if (viewW <= 0 || viewH <= 0) return
-        val maxTex = 4096
-        val scale =
-            if (coreW > maxTex || coreH > maxTex) {
-                minOf(maxTex.toFloat() / coreW, maxTex.toFloat() / coreH)
-            } else {
-                1f
-            }
-        val nw = maxOf(1, (coreW * scale).toInt())
-        val nh = maxOf(1, (coreH * scale).toInt())
+        val nw = maxOf(1, coreW)
+        val nh = maxOf(1, coreH)
         if (nw != renderW || nh != renderH) {
             renderW = nw
             renderH = nh
@@ -4639,6 +4632,18 @@ class PaintViewModel : ViewModel() {
     // backBuffer is rendered into by C++ ReverieCore on the render thread.
     internal var frontBuffer: Bitmap? = null
     internal var backBuffer: Bitmap? = null
+
+    // Cumulative dirty rect for large bitmap tiling (> 100MB) synchronization
+    private val largeBitmapDirtyRect = android.graphics.Rect()
+
+    internal fun consumeLargeBitmapDirtyRect(out: android.graphics.Rect): Boolean {
+        synchronized(largeBitmapDirtyRect) {
+            if (largeBitmapDirtyRect.isEmpty) return false
+            out.set(largeBitmapDirtyRect)
+            largeBitmapDirtyRect.setEmpty()
+            return true
+        }
+    }
 
     // Zero-allocation reusable canvas, rect and dirty array for buffer synchronization
     private val syncCanvas = android.graphics.Canvas()
@@ -5331,6 +5336,7 @@ class PaintViewModel : ViewModel() {
                 displayBufferInvalid = false
                 frontMissingRect.setEmpty()
                 backMissingRect.setEmpty()
+                synchronized(largeBitmapDirtyRect) { largeBitmapDirtyRect.setEmpty() }
                 hasWrittenRect = false
                 // 缓冲重分配后旧脏区已无意义, 清掉免得 UI 侧拿它做局部失效
                 renderDirtySnapshot = null
@@ -5344,6 +5350,7 @@ class PaintViewModel : ViewModel() {
                     displayBufferInvalid = false
                     frontMissingRect.setEmpty()
                     backMissingRect.setEmpty()
+                    synchronized(largeBitmapDirtyRect) { largeBitmapDirtyRect.setEmpty() }
                     hasWrittenRect = false
                     renderDirtySnapshot = null
                 } catch (retryOom: OutOfMemoryError) {
@@ -5410,6 +5417,13 @@ class PaintViewModel : ViewModel() {
                 frontMissingRect.set(writtenLeft, writtenTop, writtenRight, writtenBottom)
             } else {
                 frontMissingRect.union(writtenLeft, writtenTop, writtenRight, writtenBottom)
+            }
+            synchronized(largeBitmapDirtyRect) {
+                if (largeBitmapDirtyRect.isEmpty) {
+                    largeBitmapDirtyRect.set(writtenLeft, writtenTop, writtenRight, writtenBottom)
+                } else {
+                    largeBitmapDirtyRect.union(writtenLeft, writtenTop, writtenRight, writtenBottom)
+                }
             }
             hasWrittenRect = true
             publishRenderDirtySnapshot()
