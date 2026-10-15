@@ -44,7 +44,7 @@ fun brushCategoryDisplayName(context: android.content.Context, category: String)
 }
 
 /**
- * 笔刷搜索匹配规则: 支持不区分大小写匹配笔刷预设名、笔刷分组名与国际化分组显示名。
+ * 笔刷搜索匹配规则: 支持不区分大小写匹配笔刷预设名、官方中文译名、笔刷分组名与国际化分组显示名。
  */
 fun matchesBrushQuery(
     presetName: String,
@@ -54,7 +54,9 @@ fun matchesBrushQuery(
 ): Boolean {
     val q = query.trim()
     if (q.isEmpty()) return true
+    val translation = BrushPresetTranslations.getChineseTranslation(presetName)
     return presetName.contains(q, ignoreCase = true) ||
+        (translation != null && translation.contains(q, ignoreCase = true)) ||
         presetGroup.contains(q, ignoreCase = true) ||
         groupDisplayName.contains(q, ignoreCase = true)
 }

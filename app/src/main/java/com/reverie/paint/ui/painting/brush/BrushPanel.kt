@@ -1572,6 +1572,23 @@ private fun PresetListRow(
             }
         }
         Spacer(Modifier.width(10.dp))
+        val context = LocalContext.current
+        val translatedName = BrushPresetTranslations.getTranslatedDisplayName(context, preset.name)
+        val inUseText = if (isSelected && !isBatchMode) stringResource(R.string.brush_in_use_hint) else null
+        val fullSubtitle = remember(translatedName, inUseText, subtitleText) {
+            val parts = mutableListOf<String>()
+            if (translatedName != null) {
+                parts.add(translatedName)
+            }
+            if (inUseText != null) {
+                parts.add(inUseText)
+            }
+            if (subtitleText != null) {
+                parts.add(subtitleText)
+            }
+            if (parts.isNotEmpty()) parts.joinToString(" · ") else null
+        }
+
         Column(Modifier.weight(1f)) {
             Text(
                 preset.name,
@@ -1581,10 +1598,14 @@ private fun PresetListRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (isSelected && !isBatchMode) {
-                Text(stringResource(R.string.brush_in_use_hint), color = Morandi.subText, fontSize = 10.sp)
-            } else if (subtitleText != null) {
-                Text(subtitleText, color = Morandi.subText.copy(alpha = 0.6f), fontSize = 10.sp, maxLines = 1)
+            if (fullSubtitle != null) {
+                Text(
+                    fullSubtitle,
+                    color = Morandi.subText.copy(alpha = 0.75f),
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         // Star button (hidden in batch mode)

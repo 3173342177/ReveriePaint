@@ -177,9 +177,33 @@ internal fun ReorderBrushMenu(
     val moveToGroupText = stringResource(R.string.brush_move_to_group)
     val deleteBrushText = stringResource(R.string.brush_delete_brush_item)
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val translatedName = BrushPresetTranslations.getTranslatedDisplayName(context, presetName)
+
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(presetName, color = Morandi.text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 15.sp) },
+        title = {
+            Column {
+                Text(
+                    presetName,
+                    color = Morandi.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (translatedName != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        translatedName,
+                        color = Morandi.subText,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        },
         text = {
             Column(Modifier.fillMaxWidth()) {
                 val menuItems = mutableListOf(
