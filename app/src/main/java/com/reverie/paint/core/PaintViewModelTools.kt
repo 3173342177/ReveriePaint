@@ -192,8 +192,10 @@ internal fun PaintViewModel.touchStart(
         effEraserSize = eraserMem?.getOrNull(0) ?: savedEraserParam?.size ?: brushSize
         effEraserOpacity = eraserMem?.getOrNull(1) ?: savedEraserParam?.opacity ?: 1.0
         effEraserFlow = eraserMem?.getOrNull(2) ?: savedEraserParam?.flow ?: 1.0
+        activeStrokePresetSwitched = (eraserPresetIdx >= 0 && eraserPresetIdx != brushPresetIndex)
     } else {
         activeStrokeToolOverride = null
+        activeStrokePresetSwitched = false
     }
 
     if (recorder.recording) {
@@ -565,15 +567,10 @@ internal fun PaintViewModel.touchEnd(render: Boolean = true, deferOverrideRestor
         android.util.Log.d("ReverieRec", "touchEnd: recorder NOT recording")
     }
     val hadOverride = (activeStrokeToolOverride != null)
-    val origPreset = activeStrokeOriginalPresetIndex
-    val origSize = activeStrokeOriginalSize
-    val origOpacity = activeStrokeOriginalOpacity
-    val origFlow = activeStrokeOriginalFlow
-    val origOp = activeStrokeOriginalCompositeOp
-    val origMode = activeStrokeOriginalToolMode
-    val origIsEraser = (currentToolId == "eraser")
+    val presetSwitched = activeStrokePresetSwitched
     if (!deferOverrideRestore) {
         activeStrokeToolOverride = null
+        activeStrokePresetSwitched = false
     }
 
     resetRenderedFrontier()
@@ -584,30 +581,14 @@ internal fun PaintViewModel.touchEnd(render: Boolean = true, deferOverrideRestor
         }) {
             ReverieCoreBridge.touchStrokeEnd()
             if (hadOverride && !deferOverrideRestore) {
-                if (origPreset >= 0 && origPreset != brushPresetIndex) {
-                    ReverieCoreBridge.loadBrushPreset(origPreset)
-                }
-                ReverieCoreBridge.setPresetIsEraser(origIsEraser)
-                ReverieCoreBridge.setBrushCompositeOp(origOp)
-                ReverieCoreBridge.setBrushSize(origSize)
-                ReverieCoreBridge.setBrushOpacity(origOpacity)
-                ReverieCoreBridge.setBrushFlow(origFlow)
-                ReverieCoreBridge.setToolMode(origMode)
+                restoreCurrentBrushToNative(reloadPreset = presetSwitched)
             }
         }
     } else {
         runCore(render = false) {
             ReverieCoreBridge.touchStrokeEnd()
             if (hadOverride && !deferOverrideRestore) {
-                if (origPreset >= 0 && origPreset != brushPresetIndex) {
-                    ReverieCoreBridge.loadBrushPreset(origPreset)
-                }
-                ReverieCoreBridge.setPresetIsEraser(origIsEraser)
-                ReverieCoreBridge.setBrushCompositeOp(origOp)
-                ReverieCoreBridge.setBrushSize(origSize)
-                ReverieCoreBridge.setBrushOpacity(origOpacity)
-                ReverieCoreBridge.setBrushFlow(origFlow)
-                ReverieCoreBridge.setToolMode(origMode)
+                restoreCurrentBrushToNative(reloadPreset = presetSwitched)
             }
         }
     }
@@ -624,14 +605,9 @@ internal fun PaintViewModel.touchCancel() {
         recorder.strokeCancel()
     }
     val hadOverride = (activeStrokeToolOverride != null)
-    val origPreset = activeStrokeOriginalPresetIndex
-    val origSize = activeStrokeOriginalSize
-    val origOpacity = activeStrokeOriginalOpacity
-    val origFlow = activeStrokeOriginalFlow
-    val origOp = activeStrokeOriginalCompositeOp
-    val origMode = activeStrokeOriginalToolMode
-    val origIsEraser = (currentToolId == "eraser")
+    val presetSwitched = activeStrokePresetSwitched
     activeStrokeToolOverride = null
+    activeStrokePresetSwitched = false
 
     runCore(after = {
         // The reverted partial stroke must disappear from the display right
@@ -641,15 +617,7 @@ internal fun PaintViewModel.touchCancel() {
     }) {
         ReverieCoreBridge.touchStrokeCancel()
         if (hadOverride) {
-            if (origPreset >= 0 && origPreset != brushPresetIndex) {
-                ReverieCoreBridge.loadBrushPreset(origPreset)
-            }
-            ReverieCoreBridge.setPresetIsEraser(origIsEraser)
-            ReverieCoreBridge.setBrushCompositeOp(origOp)
-            ReverieCoreBridge.setBrushSize(origSize)
-            ReverieCoreBridge.setBrushOpacity(origOpacity)
-            ReverieCoreBridge.setBrushFlow(origFlow)
-            ReverieCoreBridge.setToolMode(origMode)
+            restoreCurrentBrushToNative(reloadPreset = presetSwitched)
         }
     }
 }
@@ -663,26 +631,13 @@ internal fun PaintViewModel.replaySymmetricBranches(
     onComplete: (() -> Unit)? = null,
 ) {
     val hadOverride = (overrideTool != null || activeStrokeToolOverride != null)
-    val origPreset = activeStrokeOriginalPresetIndex
-    val origSize = activeStrokeOriginalSize
-    val origOpacity = activeStrokeOriginalOpacity
-    val origFlow = activeStrokeOriginalFlow
-    val origOp = activeStrokeOriginalCompositeOp
-    val origMode = activeStrokeOriginalToolMode
-    val origIsEraser = (currentToolId == "eraser")
+    val presetSwitched = activeStrokePresetSwitched
     activeStrokeToolOverride = null
+    activeStrokePresetSwitched = false
 
     val restoreOverrideNative = {
         if (hadOverride) {
-            if (origPreset >= 0 && origPreset != brushPresetIndex) {
-                ReverieCoreBridge.loadBrushPreset(origPreset)
-            }
-            ReverieCoreBridge.setPresetIsEraser(origIsEraser)
-            ReverieCoreBridge.setBrushCompositeOp(origOp)
-            ReverieCoreBridge.setBrushSize(origSize)
-            ReverieCoreBridge.setBrushOpacity(origOpacity)
-            ReverieCoreBridge.setBrushFlow(origFlow)
-            ReverieCoreBridge.setToolMode(origMode)
+            restoreCurrentBrushToNative(reloadPreset = presetSwitched)
         }
     }
 

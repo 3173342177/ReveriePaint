@@ -1023,6 +1023,140 @@ import kotlinx.coroutines.withContext
         }
     }
 
+    /**
+     * 还原临时覆盖（如物理橡皮末端 TOOL_TYPE_ERASER 或手写笔侧键长按临时擦除）结束后的引擎笔刷状态。
+     * 若在临时覆盖期间切换了预设 ([reloadPreset] == true)，则完整重新加载原预设及其所有定制动力学与属性，
+     * 避免笔刷引擎 (如 ColorSmudge) 被残留的橡皮预设 (如 PaintBrush) 污染覆写。
+     */
+    internal fun PaintViewModel.restoreCurrentBrushToNative(reloadPreset: Boolean = false) {
+        val origPreset = activeStrokeOriginalPresetIndex
+        val origSize = activeStrokeOriginalSize
+        val origOpacity = activeStrokeOriginalOpacity
+        val origFlow = activeStrokeOriginalFlow
+        val origOp = activeStrokeOriginalCompositeOp
+        val origMode = activeStrokeOriginalToolMode
+        val origIsEraser = (currentToolId == "eraser")
+
+        if (reloadPreset && origPreset >= 0) {
+            val preset = brushPresets.firstOrNull { it.index == origPreset }
+            val isEraserPreset = preset?.group == "橡皮擦" ||
+                    preset?.name?.startsWith("a)_Eraser", ignoreCase = true) == true ||
+                    preset?.name?.contains("Eraser", ignoreCase = true) == true
+            val saved = if (preset != null) brushParams[preset.name] else null
+            val isCustomized = saved?.isCustomized == true
+            val nativeCompOp = ReverieCoreBridge.brushPresetCompositeOp(origPreset)
+            val effectiveCompOp = if (origIsEraser || isEraserPreset) {
+                "erase"
+            } else {
+                val savedOp = saved?.compositeOp
+                if (isCustomized && !savedOp.isNullOrBlank() && savedOp != "erase") savedOp else nativeCompOp
+            }
+
+            if (ReverieCoreBridge.loadBrushPreset(origPreset)) {
+                Breadcrumbs.record("Brush", "Restore preset [$origPreset]: ${preset?.name}")
+                ReverieCoreBridge.setPresetIsEraser(origIsEraser || isEraserPreset)
+                ReverieCoreBridge.setBrushCompositeOp(effectiveCompOp)
+                ReverieCoreBridge.setBrushColor(brushColor)
+                ReverieCoreBridge.setBrushSecondaryColor(brushSecondaryColor)
+            }
+
+            if (saved != null && isCustomized) {
+                ReverieCoreBridge.setBrushSize(origSize)
+                ReverieCoreBridge.setBrushOpacity(origOpacity)
+                ReverieCoreBridge.setBrushFlow(origFlow)
+                if (saved.spacingCustomized) {
+                    ReverieCoreBridge.setBrushSpacing(saved.spacing)
+                }
+                ReverieCoreBridge.setBrushAngle(saved.angle)
+                if (saved.dynamicsCustomized) {
+                    ReverieCoreBridge.setBrushScatter(saved.scatter)
+                }
+                ReverieCoreBridge.setBrushFade(saved.fade)
+                ReverieCoreBridge.setBrushSoftness(saved.softness)
+                ReverieCoreBridge.setBrushRatio(saved.ratio)
+                ReverieCoreBridge.setBrushSharpness(saved.sharpness)
+                ReverieCoreBridge.setBrushRotation(saved.rotation)
+                ReverieCoreBridge.setBrushCompositeOp(effectiveCompOp)
+                if (saved.dynamicsCustomized) {
+                    if (saved.dynamicOptions.isNotEmpty()) {
+                        for ((opt, xml) in saved.dynamicOptions) {
+                            val sensorId = Regex("""id="([^"]+)"""").find(xml)?.groupValues?.getOrNull(1) ?: "pressure"
+                            val curve = Regex("""<curve>([^<]*)</curve>""").find(xml)?.groupValues?.getOrNull(1) ?: "0,0;1,1;"
+                            val strength = when (opt.lowercase()) {
+                                "size" -> saved.pressureSize
+                                "opacity" -> saved.pressureOpacity
+                                "flow" -> saved.pressureFlow
+                                else -> 1.0
+                            }
+                            val isEnabled = when (opt.lowercase()) {
+                                "size" -> saved.pressureEnabled && saved.pressureSize > 0.001
+                                "opacity" -> saved.pressureEnabled && saved.pressureOpacity > 0.001
+                                "flow" -> saved.pressureEnabled && saved.pressureFlow > 0.001
+                                else -> brushDynamicOptions[opt]?.enabled ?: true
+                            }
+                            ReverieCoreBridge.setBrushOptionDynamics(
+                                opt,
+                                isEnabled,
+                                sensorId,
+                                curve,
+                                strength,
+                            )
+                        }
+                    } else {
+                        ReverieCoreBridge.setBrushPressureDynamics(
+                            saved.pressureEnabled,
+                            saved.pressureSize,
+                            saved.pressureOpacity,
+                            saved.pressureFlow,
+                            saved.pressureCurve,
+                        )
+                    }
+                }
+                ReverieCoreBridge.setBrushFollowDirection(saved.followDirection)
+                ReverieCoreBridge.setBrushJitter(saved.jitterAngle, saved.jitterSize)
+                ReverieCoreBridge.setBrushMirror(saved.randomFlipX, saved.randomFlipY)
+                ReverieCoreBridge.setBrushAntiAliasing(saved.antiAliasing)
+                if (saved.smudgeCustomized) {
+                    ReverieCoreBridge.setBrushSmudgeRate(saved.smudgeRate)
+                    ReverieCoreBridge.setBrushSmudgeLength(saved.smudgeLength)
+                }
+                val effectiveAirbrushRate = if (saved.airbrushRate >= 5.0) saved.airbrushRate else 30.0
+                ReverieCoreBridge.setBrushAirbrush(saved.airbrush, effectiveAirbrushRate)
+                if (saved.tipAsset.isNotEmpty()) {
+                    ReverieCoreBridge.setBrushTipAsset(saved.tipAsset)
+                } else {
+                    ReverieCoreBridge.setBrushTipAsset("")
+                }
+                ReverieCoreBridge.setBrushTexture(
+                    saved.textureEnabled,
+                    saved.textureScale,
+                    saved.textureStrength,
+                    saved.textureMode,
+                    saved.texturePattern,
+                )
+            } else {
+                ReverieCoreBridge.setBrushSize(origSize)
+                ReverieCoreBridge.setBrushOpacity(origOpacity)
+                ReverieCoreBridge.setBrushFlow(origFlow)
+                ReverieCoreBridge.setBrushCompositeOp(effectiveCompOp)
+                if (saved?.tipAsset?.isNotEmpty() == true) {
+                    ReverieCoreBridge.setBrushTipAsset(saved.tipAsset)
+                } else {
+                    ReverieCoreBridge.setBrushTipAsset("")
+                }
+            }
+            ReverieCoreBridge.setToolMode(origMode)
+            fetchBrushOutlinePolygons()
+        } else {
+            ReverieCoreBridge.setPresetIsEraser(origIsEraser)
+            ReverieCoreBridge.setBrushCompositeOp(origOp)
+            ReverieCoreBridge.setBrushSize(origSize)
+            ReverieCoreBridge.setBrushOpacity(origOpacity)
+            ReverieCoreBridge.setBrushFlow(origFlow)
+            ReverieCoreBridge.setToolMode(origMode)
+        }
+    }
+
     internal fun PaintViewModel.updateCurrentToolBrushState(updater: (PaintViewModel.ToolBrushState) -> PaintViewModel.ToolBrushState) {
         val t = com.reverie.paint.model.Tool.fromId(currentToolId)
         val targetToolId = if (t == com.reverie.paint.model.Tool.BRUSH ||

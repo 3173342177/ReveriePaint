@@ -832,6 +832,7 @@ class PaintViewModel : ViewModel() {
     internal var activeStrokeOriginalFlow: Double = 1.0
     internal var activeStrokeOriginalCompositeOp: String = "normal"
     internal var activeStrokeOriginalToolMode: Int = 0
+    internal var activeStrokePresetSwitched: Boolean = false
 
     /**
      * 获取指定工具 (如 "eraser") 的当前有效笔尖尺寸
