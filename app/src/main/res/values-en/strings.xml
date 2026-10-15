@@ -870,6 +870,16 @@
     <string name="quick_color_swap">Swap Colors</string>
     <string name="quick_color_eyedropper">Eyedropper</string>
 
+    <!-- Quick OKLCH Strings -->
+    <string name="tool_quick_oklch">OKLCH Color</string>
+    <string name="quick_oklch_window_title">OKLCH</string>
+    <string name="quick_action_toggle_quick_oklch">OKLCH Color</string>
+    <string name="oklch_lightness">Lightness (L)</string>
+    <string name="oklch_chroma">Chroma (C)</string>
+    <string name="oklch_hue">Hue (H)</string>
+    <string name="oklch_out_of_gamut">Out of Gamut</string>
+    <string name="oklch_gamut_clipped">Clipped to sRGB boundary</string>
+
     <!-- Quick Layer Strings -->
     <string name="tool_quick_layer">Quick Layers</string>
     <string name="quick_layer_window_title">Quick Layers</string>

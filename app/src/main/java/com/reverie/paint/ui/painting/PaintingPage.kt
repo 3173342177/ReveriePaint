@@ -1191,6 +1191,11 @@ fun PaintingPage(
                                     vm.persistQuickColorState()
                                     moreToolsOpen = false
                                 }
+                                Tool.QUICK_OKLCH -> {
+                                    vm.quickOklchWindowOpen = !vm.quickOklchWindowOpen
+                                    vm.persistQuickOklchState()
+                                    moreToolsOpen = false
+                                }
                                 Tool.QUICK_LAYER -> {
                                     vm.quickLayerWindowOpen = !vm.quickLayerWindowOpen
                                     vm.persistQuickLayerState()
@@ -1392,6 +1397,11 @@ fun PaintingPage(
                                 Tool.QUICK_COLOR -> {
                                     vm.quickColorWindowOpen = !vm.quickColorWindowOpen
                                     vm.persistQuickColorState()
+                                    moreToolsOpen = false
+                                }
+                                Tool.QUICK_OKLCH -> {
+                                    vm.quickOklchWindowOpen = !vm.quickOklchWindowOpen
+                                    vm.persistQuickOklchState()
                                     moreToolsOpen = false
                                 }
                                 Tool.QUICK_LAYER -> {
@@ -2284,6 +2294,11 @@ fun PaintingPage(
                         Tool.QUICK_COLOR -> {
                             vm.quickColorWindowOpen = !vm.quickColorWindowOpen
                             vm.persistQuickColorState()
+                            moreToolsOpen = false
+                        }
+                        Tool.QUICK_OKLCH -> {
+                            vm.quickOklchWindowOpen = !vm.quickOklchWindowOpen
+                            vm.persistQuickOklchState()
                             moreToolsOpen = false
                         }
                         Tool.QUICK_LAYER -> {

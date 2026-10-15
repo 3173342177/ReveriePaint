@@ -195,6 +195,7 @@ fun AllToolsPanel(
                                         Tool.SHORTCUT -> vm.quickActionWindowOpen
                                         Tool.QUICK_BRUSH -> vm.quickBrushWindowOpen
                                         Tool.QUICK_COLOR -> vm.quickColorWindowOpen
+                                        Tool.QUICK_OKLCH -> vm.quickOklchWindowOpen
                                         Tool.QUICK_LAYER -> vm.quickLayerWindowOpen
                                         Tool.SYMMETRY -> vm.drawingGuide.mode == GuideMode.SYMMETRY
                                         Tool.PERSPECTIVE -> vm.drawingGuide.mode == GuideMode.PERSPECTIVE

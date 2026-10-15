@@ -53,6 +53,7 @@ fun Tool.labelRes(): Int = when (this) {
     Tool.SHORTCUT -> R.string.tool_quick_action
     Tool.QUICK_BRUSH -> R.string.tool_quick_brush
     Tool.QUICK_COLOR -> R.string.tool_quick_color
+    Tool.QUICK_OKLCH -> R.string.tool_quick_oklch
     Tool.QUICK_LAYER -> R.string.tool_quick_layer
     Tool.SYMMETRY -> R.string.tool_symmetry
     Tool.PERSPECTIVE -> R.string.tool_perspective

@@ -924,6 +924,11 @@ class PaintViewModel : ViewModel() {
     internal var quickColorWindowX_port: Float = -1f
     internal var quickColorWindowY_port: Float = -1f
 
+    internal var quickOklchWindowX_land: Float = -1f
+    internal var quickOklchWindowY_land: Float = -1f
+    internal var quickOklchWindowX_port: Float = -1f
+    internal var quickOklchWindowY_port: Float = -1f
+
     internal var quickLayerWindowX_land: Float = -1f
     internal var quickLayerWindowY_land: Float = -1f
     internal var quickLayerWindowX_port: Float = -1f
@@ -1072,6 +1077,53 @@ class PaintViewModel : ViewModel() {
         updateBrushSecondaryColor(c1)
     }
 
+    // Quick OKLCH Tool Window State (OKLCH 悬浮调色窗)
+    var quickOklchWindowOpen by mutableStateOf(false)
+    var quickOklchWindowWasOpen = false
+    var quickOklchWindowX by mutableFloatStateOf(-1f)
+    var quickOklchWindowY by mutableFloatStateOf(-1f)
+    var quickOklchWindowWidth by mutableFloatStateOf(0f)
+    var quickOklchWindowHeight by mutableFloatStateOf(0f)
+    var quickOklchCollapsed by mutableStateOf(false)
+
+    fun persistQuickOklchState() {
+        if (!::appContext.isInitialized) return
+        try {
+            if (isLandscapeMode) {
+                quickOklchWindowX_land = quickOklchWindowX
+                quickOklchWindowY_land = quickOklchWindowY
+            } else {
+                quickOklchWindowX_port = quickOklchWindowX
+                quickOklchWindowY_port = quickOklchWindowY
+            }
+            val p = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE).edit()
+            p.putBoolean("quick_oklch_open", quickOklchWindowOpen)
+            p.putFloat("quick_oklch_x_land", quickOklchWindowX_land)
+            p.putFloat("quick_oklch_y_land", quickOklchWindowY_land)
+            p.putFloat("quick_oklch_x_port", quickOklchWindowX_port)
+            p.putFloat("quick_oklch_y_port", quickOklchWindowY_port)
+            p.putFloat("quick_oklch_x", quickOklchWindowX)
+            p.putFloat("quick_oklch_y", quickOklchWindowY)
+            p.putBoolean("quick_oklch_collapsed", quickOklchCollapsed)
+            p.apply()
+        } catch (_: Exception) {}
+    }
+
+    fun toggleQuickOklch(atPointer: Boolean = false) {
+        if (quickOklchWindowOpen) {
+            quickOklchWindowOpen = false
+        } else {
+            if (atPointer) {
+                lastPointerScreenPosition?.let { pos ->
+                    quickOklchWindowX = (pos.x - 110f).coerceAtLeast(0f)
+                    quickOklchWindowY = (pos.y - 120f).coerceAtLeast(0f)
+                }
+            }
+            quickOklchWindowOpen = true
+        }
+        persistQuickOklchState()
+    }
+
     // Quick Layer Tool Window State (快捷图层浮窗)
     var quickLayerWindowOpen by mutableStateOf(false)
     var quickLayerWindowWasOpen = false
@@ -1137,6 +1189,8 @@ class PaintViewModel : ViewModel() {
             quickBrushOrientation_land = quickBrushOrientation
             quickColorWindowX_land = quickColorWindowX
             quickColorWindowY_land = quickColorWindowY
+            quickOklchWindowX_land = quickOklchWindowX
+            quickOklchWindowY_land = quickOklchWindowY
             quickLayerWindowX_land = quickLayerWindowX
             quickLayerWindowY_land = quickLayerWindowY
             referenceWindowX_land = referenceWindowX
@@ -1149,6 +1203,8 @@ class PaintViewModel : ViewModel() {
             quickBrushOrientation_port = quickBrushOrientation
             quickColorWindowX_port = quickColorWindowX
             quickColorWindowY_port = quickColorWindowY
+            quickOklchWindowX_port = quickOklchWindowX
+            quickOklchWindowY_port = quickOklchWindowY
             quickLayerWindowX_port = quickLayerWindowX
             quickLayerWindowY_port = quickLayerWindowY
             referenceWindowX_port = referenceWindowX
@@ -1167,6 +1223,8 @@ class PaintViewModel : ViewModel() {
             quickBrushOrientation = quickBrushOrientation_land
             quickColorWindowX = if (quickColorWindowX_land >= 0f) quickColorWindowX_land else quickColorWindowX
             quickColorWindowY = if (quickColorWindowY_land >= 0f) quickColorWindowY_land else quickColorWindowY
+            quickOklchWindowX = if (quickOklchWindowX_land >= 0f) quickOklchWindowX_land else quickOklchWindowX
+            quickOklchWindowY = if (quickOklchWindowY_land >= 0f) quickOklchWindowY_land else quickOklchWindowY
             quickLayerWindowX = if (quickLayerWindowX_land >= 0f) quickLayerWindowX_land else quickLayerWindowX
             quickLayerWindowY = if (quickLayerWindowY_land >= 0f) quickLayerWindowY_land else quickLayerWindowY
             if (referenceWindowX_land >= 0f) referenceWindowX = referenceWindowX_land
@@ -1179,6 +1237,8 @@ class PaintViewModel : ViewModel() {
             quickBrushOrientation = quickBrushOrientation_port
             quickColorWindowX = if (quickColorWindowX_port >= 0f) quickColorWindowX_port else quickColorWindowX
             quickColorWindowY = if (quickColorWindowY_port >= 0f) quickColorWindowY_port else quickColorWindowY
+            quickOklchWindowX = if (quickOklchWindowX_port >= 0f) quickOklchWindowX_port else quickOklchWindowX
+            quickOklchWindowY = if (quickOklchWindowY_port >= 0f) quickOklchWindowY_port else quickOklchWindowY
             quickLayerWindowX = if (quickLayerWindowX_port >= 0f) quickLayerWindowX_port else quickLayerWindowX
             quickLayerWindowY = if (quickLayerWindowY_port >= 0f) quickLayerWindowY_port else quickLayerWindowY
             if (referenceWindowX_port >= 0f) referenceWindowX = referenceWindowX_port
@@ -1196,6 +1256,8 @@ class PaintViewModel : ViewModel() {
             quickBrushWindowY_land = quickBrushWindowY
             quickColorWindowX_land = quickColorWindowX
             quickColorWindowY_land = quickColorWindowY
+            quickOklchWindowX_land = quickOklchWindowX
+            quickOklchWindowY_land = quickOklchWindowY
             quickLayerWindowX_land = quickLayerWindowX
             quickLayerWindowY_land = quickLayerWindowY
             referenceWindowX_land = referenceWindowX
@@ -1207,6 +1269,8 @@ class PaintViewModel : ViewModel() {
             quickBrushWindowY_port = quickBrushWindowY
             quickColorWindowX_port = quickColorWindowX
             quickColorWindowY_port = quickColorWindowY
+            quickOklchWindowX_port = quickOklchWindowX
+            quickOklchWindowY_port = quickOklchWindowY
             quickLayerWindowX_port = quickLayerWindowX
             quickLayerWindowY_port = quickLayerWindowY
             referenceWindowX_port = referenceWindowX
@@ -1215,6 +1279,7 @@ class PaintViewModel : ViewModel() {
         persistQuickActionsState()
         persistQuickBrushState()
         persistQuickColorState()
+        persistQuickOklchState()
         persistQuickLayerState()
     }
 
@@ -1299,7 +1364,21 @@ class PaintViewModel : ViewModel() {
             if (changed) persistQuickColorState()
         }
 
-        // 5. Quick Layer Window
+        // 5. Quick OKLCH Window
+        if (quickOklchWindowX >= 0f) {
+            val fallbackW = if (quickOklchCollapsed) 48f * density else 244f * density
+            val fallbackH = if (quickOklchCollapsed) 48f * density else 320f * density
+            val w = if (quickOklchWindowWidth > 0f) quickOklchWindowWidth else fallbackW
+            val h = if (quickOklchWindowHeight > 0f) quickOklchWindowHeight else fallbackH
+            val maxX = (screenWidthPx - w - margin).coerceAtLeast(0f)
+            val maxY = (screenHeightPx - h - margin).coerceAtLeast(0f)
+            var changed = false
+            if (quickOklchWindowX > maxX) { quickOklchWindowX = maxX; changed = true }
+            if (quickOklchWindowY > maxY) { quickOklchWindowY = maxY; changed = true }
+            if (changed) persistQuickOklchState()
+        }
+
+        // 6. Quick Layer Window
         if (quickLayerWindowX >= 0f) {
             val fallbackW = if (quickLayerCollapsed) 48f * density else 156f * density
             val fallbackH = if (quickLayerCollapsed) 48f * density else 290f * density
@@ -1396,6 +1475,9 @@ class PaintViewModel : ViewModel() {
             }
             com.reverie.paint.model.QuickAction.TOGGLE_QUICK_COLOR -> {
                 toggleQuickColor(atPointer = true)
+            }
+            com.reverie.paint.model.QuickAction.TOGGLE_QUICK_OKLCH -> {
+                toggleQuickOklch(atPointer = true)
             }
             com.reverie.paint.model.QuickAction.TOGGLE_QUICK_LAYER -> {
                 toggleQuickLayer()
@@ -3947,6 +4029,27 @@ class PaintViewModel : ViewModel() {
             }
             quickColorCollapsed = prefs.getBoolean("quick_color_collapsed", false)
             quickColorTab = prefs.getInt("quick_color_tab", 0)
+
+            // OKLCH 浮窗持久化恢复
+            quickOklchWindowOpen = prefs.getBoolean("quick_oklch_open", false)
+            quickOklchWindowWasOpen = quickOklchWindowOpen
+            val qoLegacyX = prefs.getFloat("quick_oklch_x", -1f)
+            val qoLegacyY = prefs.getFloat("quick_oklch_y", -1f)
+            quickOklchWindowX_land = prefs.getFloat("quick_oklch_x_land", qoLegacyX)
+            quickOklchWindowY_land = prefs.getFloat("quick_oklch_y_land", qoLegacyY)
+            quickOklchWindowX_port = prefs.getFloat("quick_oklch_x_port", -1f)
+            quickOklchWindowY_port = prefs.getFloat("quick_oklch_y_port", -1f)
+            quickOklchWindowX = if (isLand) {
+                if (quickOklchWindowX_land >= 0f) quickOklchWindowX_land else qoLegacyX
+            } else {
+                if (quickOklchWindowX_port >= 0f) quickOklchWindowX_port else qoLegacyX
+            }
+            quickOklchWindowY = if (isLand) {
+                if (quickOklchWindowY_land >= 0f) quickOklchWindowY_land else qoLegacyY
+            } else {
+                if (quickOklchWindowY_port >= 0f) quickOklchWindowY_port else qoLegacyY
+            }
+            quickOklchCollapsed = prefs.getBoolean("quick_oklch_collapsed", false)
 
             // 快捷图层浮窗持久化恢复
             quickLayerWindowOpen = prefs.getBoolean("quick_layer_open", false)

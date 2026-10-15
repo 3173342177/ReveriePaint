@@ -28,8 +28,10 @@ class QuickActionModelsTest {
     @Test
     fun `quick color and layer actions exist and have valid ids`() {
         assertNotNull(QuickAction.fromId("toggle_quick_color"))
+        assertNotNull(QuickAction.fromId("toggle_quick_oklch"))
         assertNotNull(QuickAction.fromId("toggle_quick_layer"))
         assertEquals(QuickAction.TOGGLE_QUICK_COLOR, QuickAction.fromId("toggle_quick_color"))
+        assertEquals(QuickAction.TOGGLE_QUICK_OKLCH, QuickAction.fromId("toggle_quick_oklch"))
         assertEquals(QuickAction.TOGGLE_QUICK_LAYER, QuickAction.fromId("toggle_quick_layer"))
     }
 

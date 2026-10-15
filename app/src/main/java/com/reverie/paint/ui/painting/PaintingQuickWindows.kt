@@ -129,6 +129,19 @@ internal fun BoxScope.PaintingQuickWindows(
         vm.quickColorWindowWasOpen = vm.quickColorWindowOpen
     }
 
+    LaunchedEffect(vm.quickOklchWindowOpen) {
+        if (vm.quickOklchWindowOpen && !vm.quickOklchWindowWasOpen) {
+            if (vm.quickOklchWindowX < 0f || vm.quickOklchWindowY < 0f) {
+                val panelW = if (vm.quickOklchWindowWidth > 0f) vm.quickOklchWindowWidth else with(density) { 244.dp.toPx() }
+                val panelH = if (vm.quickOklchWindowHeight > 0f) vm.quickOklchWindowHeight else with(density) { 330.dp.toPx() }
+                vm.quickOklchWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+                vm.quickOklchWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+                vm.persistQuickOklchState()
+            }
+        }
+        vm.quickOklchWindowWasOpen = vm.quickOklchWindowOpen
+    }
+
     LaunchedEffect(vm.quickLayerWindowOpen) {
         if (vm.quickLayerWindowOpen && !vm.quickLayerWindowWasOpen) {
             if (vm.quickLayerWindowX < 0f || vm.quickLayerWindowY < 0f) {
@@ -205,6 +218,24 @@ internal fun BoxScope.PaintingQuickWindows(
             onClose = {
                 vm.quickColorWindowOpen = false
                 vm.persistQuickColorState()
+            },
+            hazeState = hazeState,
+            opacity = vm.popupPanelOpacity,
+        )
+    }
+
+    // ---- Persistent Floating Quick OKLCH Window (常驻悬浮 OKLCH 调色小窗) ----
+    AnimatedVisibility(
+        visible = vm.quickOklchWindowOpen,
+        enter = fadeIn(Motion.enterSpring()) + androidx.compose.animation.scaleIn(Motion.enterSpring(), initialScale = 0.92f),
+        exit = fadeOut(Motion.exitTween(150)) + androidx.compose.animation.scaleOut(Motion.exitTween(150), targetScale = 0.92f),
+        modifier = Modifier.zIndex(77.5f),
+    ) {
+        com.reverie.paint.ui.painting.quickoklch.QuickOklchWindow(
+            vm = vm,
+            onClose = {
+                vm.quickOklchWindowOpen = false
+                vm.persistQuickOklchState()
             },
             hazeState = hazeState,
             opacity = vm.popupPanelOpacity,

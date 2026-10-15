@@ -2083,6 +2083,19 @@ class CanvasTouchView(context: Context) : View(context) {
             }
         }
 
+        // OKLCH 调色浮窗区域 (若打开)
+        if (v.quickOklchWindowOpen) {
+            val ow = if (v.quickOklchWindowWidth > 0f) v.quickOklchWindowWidth
+                     else if (v.quickOklchCollapsed) 48f * d else 244f * d
+            val oh = if (v.quickOklchWindowHeight > 0f) v.quickOklchWindowHeight
+                     else if (v.quickOklchCollapsed) 48f * d else 330f * d
+            val ox = if (v.quickOklchWindowX >= 0f) v.quickOklchWindowX else ((width - ow) / 2f).coerceAtLeast(0f)
+            val oy = if (v.quickOklchWindowY >= 0f) v.quickOklchWindowY else ((height - oh) / 2f).coerceAtLeast(0f)
+            if (x >= ox && x <= ox + ow && y >= oy && y <= oy + oh) {
+                return true
+            }
+        }
+
         // 快捷图层浮窗区域 (若打开)
         if (v.quickLayerWindowOpen) {
             val lw = if (v.quickLayerWindowWidth > 0f) v.quickLayerWindowWidth
