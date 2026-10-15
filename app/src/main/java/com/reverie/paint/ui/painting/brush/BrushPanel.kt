@@ -22,6 +22,11 @@ import com.reverie.paint.ui.components.ReTextButton
 import com.reverie.paint.ui.components.ReDropdownMenu
 import com.reverie.paint.ui.components.ReDropdownMenuItem
 import com.reverie.paint.ui.painting.TextInputGuard
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import com.reverie.paint.R
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -153,6 +158,23 @@ fun BrushPanel(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var movePresetName by remember { mutableStateOf<String?>(null) }
     var reorderPresetName by remember { mutableStateOf<String?>(null) }
+    var isSearchActive by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    val searchFocusRequester = remember { FocusRequester() }
+
+    if (isSearchActive) {
+        TextInputGuard(vm)
+        BackHandler {
+            isSearchActive = false
+            searchQuery = ""
+        }
+    }
+
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) {
+            searchFocusRequester.requestFocus()
+        }
+    }
 
     val importBrushLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -426,8 +448,22 @@ fun BrushPanel(
                                         .weight(1f)
                                         .fillMaxHeight()
                                 ) {
-                                    val filtered = remember(selectedCategory, vm.brushPresets, vm.favoriteBrushNames, vm.recentBrushNames) {
-                                        when (selectedCategory) {
+                                    val allCategoryMatches = remember(searchQuery, vm.brushPresets) {
+                                        if (searchQuery.isBlank()) emptyList()
+                                        else {
+                                            vm.brushPresets.filter { preset ->
+                                                matchesBrushQuery(
+                                                    preset.name,
+                                                    preset.group,
+                                                    searchQuery,
+                                                    brushCategoryDisplayName(context, preset.group)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    val filtered = remember(selectedCategory, vm.brushPresets, vm.favoriteBrushNames, vm.recentBrushNames, searchQuery) {
+                                        val baseList = when (selectedCategory) {
                                             "全部" -> vm.brushPresets
                                             "常用" -> vm.brushPresets.filter { vm.isFavoriteBrush(it.name) }
                                             "最近" -> vm.recentBrushNames.mapNotNull { name ->
@@ -435,13 +471,25 @@ fun BrushPanel(
                                             }
                                             else -> vm.brushPresets.filter { it.group == selectedCategory }
                                         }
+                                        if (searchQuery.isBlank()) {
+                                            baseList
+                                        } else {
+                                            baseList.filter { preset ->
+                                                matchesBrushQuery(
+                                                    preset.name,
+                                                    preset.group,
+                                                    searchQuery,
+                                                    brushCategoryDisplayName(context, preset.group)
+                                                )
+                                            }
+                                        }
                                     }
 
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(52.dp)
-                                            .padding(horizontal = 14.dp),
+                                            .padding(horizontal = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         if (isBatchMode) {
@@ -478,6 +526,83 @@ fun BrushPanel(
                                                     }
                                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                                             )
+                                        } else if (isSearchActive) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(34.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Morandi.panelHi.copy(alpha = 0.6f))
+                                                    .padding(horizontal = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_search),
+                                                    contentDescription = null,
+                                                    tint = Morandi.subText,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(Modifier.width(6.dp))
+                                                Box(
+                                                    modifier = Modifier.weight(1f),
+                                                    contentAlignment = Alignment.CenterStart
+                                                ) {
+                                                    if (searchQuery.isEmpty()) {
+                                                        Text(
+                                                            text = stringResource(R.string.brush_search_placeholder),
+                                                            color = Morandi.subText.copy(alpha = 0.6f),
+                                                            fontSize = 12.sp,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                    BasicTextField(
+                                                        value = searchQuery,
+                                                        onValueChange = { searchQuery = it },
+                                                        singleLine = true,
+                                                        textStyle = androidx.compose.ui.text.TextStyle(
+                                                            color = Morandi.text,
+                                                            fontSize = 12.sp
+                                                        ),
+                                                        cursorBrush = SolidColor(Morandi.accent),
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .focusRequester(searchFocusRequester)
+                                                    )
+                                                }
+                                                if (searchQuery.isNotEmpty()) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(20.dp)
+                                                            .clip(CircleShape)
+                                                            .clickable { searchQuery = "" },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.ic_x),
+                                                            contentDescription = stringResource(R.string.brush_search_clear),
+                                                            tint = Morandi.subText,
+                                                            modifier = Modifier.size(12.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(Modifier.width(6.dp))
+
+                                            Text(
+                                                text = stringResource(R.string.common_cancel),
+                                                color = Morandi.accent,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .clickable {
+                                                        isSearchActive = false
+                                                        searchQuery = ""
+                                                    }
+                                                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                                            )
                                         } else {
                                             Text(
                                                 brushCategoryDisplayName(selectedCategory),
@@ -485,18 +610,19 @@ fun BrushPanel(
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
                                             Spacer(Modifier.width(2.dp))
                                             IconButton(
                                                 onClick = { categoryMenuTarget = selectedCategory },
-                                                modifier = Modifier.size(28.dp)
+                                                modifier = Modifier.size(26.dp)
                                             ) {
                                                 Icon(
                                                     painter = painterResource(R.drawable.ic_dots_vertical),
                                                     contentDescription = stringResource(R.string.brush_group_more_options),
                                                     tint = Morandi.icon,
-                                                    modifier = Modifier.size(16.dp)
+                                                    modifier = Modifier.size(15.dp)
                                                 )
                                             }
                                             Spacer(Modifier.weight(1f))
@@ -505,7 +631,23 @@ fun BrushPanel(
                                                 color = Morandi.subText,
                                                 fontSize = 11.sp,
                                             )
-                                            Spacer(Modifier.width(8.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(28.dp)
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Morandi.panelHi.copy(alpha = 0.5f))
+                                                    .clickable { isSearchActive = true },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_search),
+                                                    contentDescription = stringResource(R.string.brush_search_hint),
+                                                    tint = Morandi.icon,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                            Spacer(Modifier.width(6.dp))
                                             Box(
                                                 modifier = Modifier
                                                     .size(28.dp)
@@ -548,6 +690,65 @@ fun BrushPanel(
                                                         color = Morandi.subText,
                                                         fontSize = 12.sp,
                                                     )
+                                                }
+                                            } else if (searchQuery.isNotBlank()) {
+                                                if (selectedCategory != "全部" && allCategoryMatches.isNotEmpty()) {
+                                                    Column(
+                                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                                        verticalArrangement = Arrangement.Center
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.ic_search),
+                                                            contentDescription = null,
+                                                            tint = Morandi.subText.copy(alpha = 0.35f),
+                                                            modifier = Modifier.size(36.dp)
+                                                        )
+                                                        Spacer(Modifier.height(8.dp))
+                                                        Text(
+                                                            stringResource(R.string.brush_search_empty_current_group),
+                                                            color = Morandi.subText,
+                                                            fontSize = 13.sp,
+                                                        )
+                                                        Spacer(Modifier.height(8.dp))
+                                                        Text(
+                                                            stringResource(R.string.brush_search_in_all_count, allCategoryMatches.size),
+                                                            color = Morandi.accent,
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            modifier = Modifier
+                                                                .clip(RoundedCornerShape(6.dp))
+                                                                .background(Morandi.accent.copy(alpha = 0.12f))
+                                                                .clickable {
+                                                                    selectedCategory = "全部"
+                                                                    vm.updateBrushPanelCategory("全部")
+                                                                }
+                                                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                                        )
+                                                    }
+                                                } else {
+                                                    Column(
+                                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                                        verticalArrangement = Arrangement.Center
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.ic_search),
+                                                            contentDescription = null,
+                                                            tint = Morandi.subText.copy(alpha = 0.35f),
+                                                            modifier = Modifier.size(36.dp)
+                                                        )
+                                                        Spacer(Modifier.height(8.dp))
+                                                        Text(
+                                                            stringResource(R.string.brush_search_empty_title),
+                                                            color = Morandi.subText,
+                                                            fontSize = 13.sp,
+                                                        )
+                                                        Spacer(Modifier.height(4.dp))
+                                                        Text(
+                                                            stringResource(R.string.brush_search_empty_desc),
+                                                            color = Morandi.subText.copy(alpha = 0.6f),
+                                                            fontSize = 11.sp,
+                                                        )
+                                                    }
                                                 }
                                             } else if (vm.brushPresets.isEmpty()) {
                                                 Column(
@@ -677,6 +878,9 @@ fun BrushPanel(
                                                     items(filtered, key = { it.name }, contentType = { "preset_list" }) { preset ->
                                                         val isSelected = preset.index == vm.brushPresetIndex
                                                         val isFav = vm.isFavoriteBrush(preset.name)
+                                                        val subtitleText = if (isSearchActive && searchQuery.isNotBlank() && selectedCategory == "全部") {
+                                                            brushCategoryDisplayName(context, preset.group)
+                                                        } else null
                                                         PresetListRow(
                                                             preset = preset,
                                                             isSelected = isSelected,
@@ -684,6 +888,7 @@ fun BrushPanel(
                                                             isModified = vm.isBrushModified(preset.name),
                                                             isBatchMode = isBatchMode,
                                                             isChecked = preset.name in selectedPresets,
+                                                            subtitleText = subtitleText,
                                                             onClick = {
                                                                 if (isBatchMode) {
                                                                     selectedPresets = if (preset.name in selectedPresets) {
@@ -1280,6 +1485,7 @@ private fun PresetListRow(
     isModified: Boolean = false,
     isBatchMode: Boolean = false,
     isChecked: Boolean = false,
+    subtitleText: String? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onToggleFav: () -> Unit,
@@ -1377,6 +1583,8 @@ private fun PresetListRow(
             )
             if (isSelected && !isBatchMode) {
                 Text(stringResource(R.string.brush_in_use_hint), color = Morandi.subText, fontSize = 10.sp)
+            } else if (subtitleText != null) {
+                Text(subtitleText, color = Morandi.subText.copy(alpha = 0.6f), fontSize = 10.sp, maxLines = 1)
             }
         }
         // Star button (hidden in batch mode)

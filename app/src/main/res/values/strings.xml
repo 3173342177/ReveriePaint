@@ -1214,6 +1214,13 @@
     <string name="brush_presets_reload">重新载入</string>
     <string name="brush_switch_to_list">切换为列表视图</string>
     <string name="brush_switch_to_grid">切换为网格视图</string>
+    <string name="brush_search_hint">搜索笔刷</string>
+    <string name="brush_search_placeholder">搜索笔刷名称或分组…</string>
+    <string name="brush_search_clear">清空搜索</string>
+    <string name="brush_search_empty_title">未找到相关笔刷</string>
+    <string name="brush_search_empty_desc">尝试使用其他关键词搜索</string>
+    <string name="brush_search_empty_current_group">当前分组未找到相关笔刷</string>
+    <string name="brush_search_in_all_count">在全部笔刷中搜索（共 %1$d 项）</string>
     <string name="brush_empty_fav_title">暂无常用笔刷</string>
     <string name="brush_empty_fav_desc">点击笔刷星标即可加入常用</string>
     <string name="brush_empty_recent_title">暂无最近使用记录</string>

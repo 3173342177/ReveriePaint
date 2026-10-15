@@ -1214,6 +1214,13 @@
     <string name="brush_presets_reload">Reload</string>
     <string name="brush_switch_to_list">Switch to List View</string>
     <string name="brush_switch_to_grid">Switch to Grid View</string>
+    <string name="brush_search_hint">Search brushes</string>
+    <string name="brush_search_placeholder">Search brushes or groups…</string>
+    <string name="brush_search_clear">Clear search</string>
+    <string name="brush_search_empty_title">No brushes found</string>
+    <string name="brush_search_empty_desc">Try searching with different keywords</string>
+    <string name="brush_search_empty_current_group">No matching brushes in this group</string>
+    <string name="brush_search_in_all_count">Search all brushes (%1$d found)</string>
     <string name="brush_empty_fav_title">No Favorite Brushes</string>
     <string name="brush_empty_fav_desc">Tap star on any brush to favorite it</string>
     <string name="brush_empty_recent_title">No Recent Brushes</string>
