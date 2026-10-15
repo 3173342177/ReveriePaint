@@ -902,6 +902,38 @@ class PaintViewModel : ViewModel() {
 
     fun persistReferenceState() = persistProjectReferenceState()
 
+    // Current orientation tracked for quick windows layout
+    var isLandscapeMode by mutableStateOf(true)
+        internal set
+
+    // Per-orientation persistent positions for Quick Windows
+    internal var quickActionWindowX_land: Float = -1f
+    internal var quickActionWindowY_land: Float = -1f
+    internal var quickActionWindowX_port: Float = -1f
+    internal var quickActionWindowY_port: Float = -1f
+
+    internal var quickBrushWindowX_land: Float = -1f
+    internal var quickBrushWindowY_land: Float = -1f
+    internal var quickBrushOrientation_land: String = "horizontal"
+    internal var quickBrushWindowX_port: Float = -1f
+    internal var quickBrushWindowY_port: Float = -1f
+    internal var quickBrushOrientation_port: String = "horizontal"
+
+    internal var quickColorWindowX_land: Float = -1f
+    internal var quickColorWindowY_land: Float = -1f
+    internal var quickColorWindowX_port: Float = -1f
+    internal var quickColorWindowY_port: Float = -1f
+
+    internal var quickLayerWindowX_land: Float = -1f
+    internal var quickLayerWindowY_land: Float = -1f
+    internal var quickLayerWindowX_port: Float = -1f
+    internal var quickLayerWindowY_port: Float = -1f
+
+    internal var referenceWindowX_land: Float = -1f
+    internal var referenceWindowY_land: Float = -1f
+    internal var referenceWindowX_port: Float = -1f
+    internal var referenceWindowY_port: Float = -1f
+
     // Quick Actions Tool Window State (快捷操作浮窗)
     var quickActionWindowOpen by mutableStateOf(false)
     var quickActionWindowWasOpen = false
@@ -915,8 +947,19 @@ class PaintViewModel : ViewModel() {
     fun persistQuickActionsState() {
         if (!::appContext.isInitialized) return
         try {
+            if (isLandscapeMode) {
+                quickActionWindowX_land = quickActionWindowX
+                quickActionWindowY_land = quickActionWindowY
+            } else {
+                quickActionWindowX_port = quickActionWindowX
+                quickActionWindowY_port = quickActionWindowY
+            }
             val p = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE).edit()
             p.putBoolean("quick_action_open", quickActionWindowOpen)
+            p.putFloat("quick_action_x_land", quickActionWindowX_land)
+            p.putFloat("quick_action_y_land", quickActionWindowY_land)
+            p.putFloat("quick_action_x_port", quickActionWindowX_port)
+            p.putFloat("quick_action_y_port", quickActionWindowY_port)
             p.putFloat("quick_action_x", quickActionWindowX)
             p.putFloat("quick_action_y", quickActionWindowY)
             p.putBoolean("quick_action_collapsed", quickActionCollapsed)
@@ -943,8 +986,23 @@ class PaintViewModel : ViewModel() {
     fun persistQuickBrushState() {
         if (!::appContext.isInitialized) return
         try {
+            if (isLandscapeMode) {
+                quickBrushWindowX_land = quickBrushWindowX
+                quickBrushWindowY_land = quickBrushWindowY
+                quickBrushOrientation_land = quickBrushOrientation
+            } else {
+                quickBrushWindowX_port = quickBrushWindowX
+                quickBrushWindowY_port = quickBrushWindowY
+                quickBrushOrientation_port = quickBrushOrientation
+            }
             val p = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE).edit()
             p.putBoolean("quick_brush_open", quickBrushWindowOpen)
+            p.putFloat("quick_brush_x_land", quickBrushWindowX_land)
+            p.putFloat("quick_brush_y_land", quickBrushWindowY_land)
+            p.putString("quick_brush_orientation_land", quickBrushOrientation_land)
+            p.putFloat("quick_brush_x_port", quickBrushWindowX_port)
+            p.putFloat("quick_brush_y_port", quickBrushWindowY_port)
+            p.putString("quick_brush_orientation_port", quickBrushOrientation_port)
             p.putFloat("quick_brush_x", quickBrushWindowX)
             p.putFloat("quick_brush_y", quickBrushWindowY)
             p.putBoolean("quick_brush_collapsed", quickBrushCollapsed)
@@ -971,8 +1029,19 @@ class PaintViewModel : ViewModel() {
     fun persistQuickColorState() {
         if (!::appContext.isInitialized) return
         try {
+            if (isLandscapeMode) {
+                quickColorWindowX_land = quickColorWindowX
+                quickColorWindowY_land = quickColorWindowY
+            } else {
+                quickColorWindowX_port = quickColorWindowX
+                quickColorWindowY_port = quickColorWindowY
+            }
             val p = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE).edit()
             p.putBoolean("quick_color_open", quickColorWindowOpen)
+            p.putFloat("quick_color_x_land", quickColorWindowX_land)
+            p.putFloat("quick_color_y_land", quickColorWindowY_land)
+            p.putFloat("quick_color_x_port", quickColorWindowX_port)
+            p.putFloat("quick_color_y_port", quickColorWindowY_port)
             p.putFloat("quick_color_x", quickColorWindowX)
             p.putFloat("quick_color_y", quickColorWindowY)
             p.putBoolean("quick_color_collapsed", quickColorCollapsed)
@@ -1016,8 +1085,19 @@ class PaintViewModel : ViewModel() {
     fun persistQuickLayerState() {
         if (!::appContext.isInitialized) return
         try {
+            if (isLandscapeMode) {
+                quickLayerWindowX_land = quickLayerWindowX
+                quickLayerWindowY_land = quickLayerWindowY
+            } else {
+                quickLayerWindowX_port = quickLayerWindowX
+                quickLayerWindowY_port = quickLayerWindowY
+            }
             val p = appContext.getSharedPreferences("paint_prefs", android.content.Context.MODE_PRIVATE).edit()
             p.putBoolean("quick_layer_open", quickLayerWindowOpen)
+            p.putFloat("quick_layer_x_land", quickLayerWindowX_land)
+            p.putFloat("quick_layer_y_land", quickLayerWindowY_land)
+            p.putFloat("quick_layer_x_port", quickLayerWindowX_port)
+            p.putFloat("quick_layer_y_port", quickLayerWindowY_port)
             p.putFloat("quick_layer_x", quickLayerWindowX)
             p.putFloat("quick_layer_y", quickLayerWindowY)
             p.putBoolean("quick_layer_collapsed", quickLayerCollapsed)
@@ -1028,6 +1108,113 @@ class PaintViewModel : ViewModel() {
 
     fun toggleQuickLayer() {
         quickLayerWindowOpen = !quickLayerWindowOpen
+        persistQuickLayerState()
+    }
+
+    /**
+     * 处理屏幕方向（横屏 / 竖屏）切换或屏幕尺寸变动。
+     * 为悬浮快捷小窗维护独立的横屏与竖屏排布记忆，杜绝旋转时将靠下/靠右的小窗单向挤压至正方形区域。
+     */
+    fun handleOrientationChange(
+        newIsLandscape: Boolean,
+        screenWidthPx: Float,
+        screenHeightPx: Float,
+        density: Float,
+    ) {
+        if (screenWidthPx <= 0f || screenHeightPx <= 0f) return
+
+        if (newIsLandscape == isLandscapeMode) {
+            clampQuickWindowsToSafeArea(screenWidthPx, screenHeightPx, density)
+            return
+        }
+
+        // 1. 保存当前活跃坐标到即将离去方向的独立槽位
+        if (isLandscapeMode) {
+            quickActionWindowX_land = quickActionWindowX
+            quickActionWindowY_land = quickActionWindowY
+            quickBrushWindowX_land = quickBrushWindowX
+            quickBrushWindowY_land = quickBrushWindowY
+            quickBrushOrientation_land = quickBrushOrientation
+            quickColorWindowX_land = quickColorWindowX
+            quickColorWindowY_land = quickColorWindowY
+            quickLayerWindowX_land = quickLayerWindowX
+            quickLayerWindowY_land = quickLayerWindowY
+            referenceWindowX_land = referenceWindowX
+            referenceWindowY_land = referenceWindowY
+        } else {
+            quickActionWindowX_port = quickActionWindowX
+            quickActionWindowY_port = quickActionWindowY
+            quickBrushWindowX_port = quickBrushWindowX
+            quickBrushWindowY_port = quickBrushWindowY
+            quickBrushOrientation_port = quickBrushOrientation
+            quickColorWindowX_port = quickColorWindowX
+            quickColorWindowY_port = quickColorWindowY
+            quickLayerWindowX_port = quickLayerWindowX
+            quickLayerWindowY_port = quickLayerWindowY
+            referenceWindowX_port = referenceWindowX
+            referenceWindowY_port = referenceWindowY
+        }
+
+        // 2. 切换方向标记
+        isLandscapeMode = newIsLandscape
+
+        // 3. 恢复进入新方向的独立记忆 (若新方向从未配置过，继承离去方向坐标作为初值)
+        if (newIsLandscape) {
+            quickActionWindowX = if (quickActionWindowX_land >= 0f) quickActionWindowX_land else quickActionWindowX
+            quickActionWindowY = if (quickActionWindowY_land >= 0f) quickActionWindowY_land else quickActionWindowY
+            quickBrushWindowX = if (quickBrushWindowX_land >= 0f) quickBrushWindowX_land else quickBrushWindowX
+            quickBrushWindowY = if (quickBrushWindowY_land >= 0f) quickBrushWindowY_land else quickBrushWindowY
+            quickBrushOrientation = quickBrushOrientation_land
+            quickColorWindowX = if (quickColorWindowX_land >= 0f) quickColorWindowX_land else quickColorWindowX
+            quickColorWindowY = if (quickColorWindowY_land >= 0f) quickColorWindowY_land else quickColorWindowY
+            quickLayerWindowX = if (quickLayerWindowX_land >= 0f) quickLayerWindowX_land else quickLayerWindowX
+            quickLayerWindowY = if (quickLayerWindowY_land >= 0f) quickLayerWindowY_land else quickLayerWindowY
+            if (referenceWindowX_land >= 0f) referenceWindowX = referenceWindowX_land
+            if (referenceWindowY_land >= 0f) referenceWindowY = referenceWindowY_land
+        } else {
+            quickActionWindowX = if (quickActionWindowX_port >= 0f) quickActionWindowX_port else quickActionWindowX
+            quickActionWindowY = if (quickActionWindowY_port >= 0f) quickActionWindowY_port else quickActionWindowY
+            quickBrushWindowX = if (quickBrushWindowX_port >= 0f) quickBrushWindowX_port else quickBrushWindowX
+            quickBrushWindowY = if (quickBrushWindowY_port >= 0f) quickBrushWindowY_port else quickBrushWindowY
+            quickBrushOrientation = quickBrushOrientation_port
+            quickColorWindowX = if (quickColorWindowX_port >= 0f) quickColorWindowX_port else quickColorWindowX
+            quickColorWindowY = if (quickColorWindowY_port >= 0f) quickColorWindowY_port else quickColorWindowY
+            quickLayerWindowX = if (quickLayerWindowX_port >= 0f) quickLayerWindowX_port else quickLayerWindowX
+            quickLayerWindowY = if (quickLayerWindowY_port >= 0f) quickLayerWindowY_port else quickLayerWindowY
+            if (referenceWindowX_port >= 0f) referenceWindowX = referenceWindowX_port
+            if (referenceWindowY_port >= 0f) referenceWindowY = referenceWindowY_port
+        }
+
+        // 4. 确保新视口中的各小窗处于当前屏幕安全区内
+        clampQuickWindowsToSafeArea(screenWidthPx, screenHeightPx, density)
+
+        // 5. 更新新方向槽位并持久化保存
+        if (newIsLandscape) {
+            quickActionWindowX_land = quickActionWindowX
+            quickActionWindowY_land = quickActionWindowY
+            quickBrushWindowX_land = quickBrushWindowX
+            quickBrushWindowY_land = quickBrushWindowY
+            quickColorWindowX_land = quickColorWindowX
+            quickColorWindowY_land = quickColorWindowY
+            quickLayerWindowX_land = quickLayerWindowX
+            quickLayerWindowY_land = quickLayerWindowY
+            referenceWindowX_land = referenceWindowX
+            referenceWindowY_land = referenceWindowY
+        } else {
+            quickActionWindowX_port = quickActionWindowX
+            quickActionWindowY_port = quickActionWindowY
+            quickBrushWindowX_port = quickBrushWindowX
+            quickBrushWindowY_port = quickBrushWindowY
+            quickColorWindowX_port = quickColorWindowX
+            quickColorWindowY_port = quickColorWindowY
+            quickLayerWindowX_port = quickLayerWindowX
+            quickLayerWindowY_port = quickLayerWindowY
+            referenceWindowX_port = referenceWindowX
+            referenceWindowY_port = referenceWindowY
+        }
+        persistQuickActionsState()
+        persistQuickBrushState()
+        persistQuickColorState()
         persistQuickLayerState()
     }
 
@@ -3659,14 +3846,36 @@ class PaintViewModel : ViewModel() {
             hasLegacyReferenceImages = prefs.getInt("ref_images_count", 0) > 0 &&
                 File(appContext.filesDir, "ref_images").isDirectory
 
+            val isLand = if (::appContext.isInitialized) {
+                val conf = appContext.resources.configuration
+                conf.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ||
+                        (conf.orientation != android.content.res.Configuration.ORIENTATION_PORTRAIT &&
+                                appContext.resources.displayMetrics.widthPixels >= appContext.resources.displayMetrics.heightPixels)
+            } else true
+            isLandscapeMode = isLand
+
             // 快捷操作浮窗持久化恢复
             quickActionWindowOpen = prefs.getBoolean("quick_action_open", false)
             quickActionWindowWasOpen = quickActionWindowOpen
-            quickActionWindowX = prefs.getFloat("quick_action_x", -1f)
-            quickActionWindowY = prefs.getFloat("quick_action_y", -1f)
-            if (quickActionWindowX == 60f && quickActionWindowY == 200f) {
-                quickActionWindowX = -1f
-                quickActionWindowY = -1f
+            var qaLegacyX = prefs.getFloat("quick_action_x", -1f)
+            var qaLegacyY = prefs.getFloat("quick_action_y", -1f)
+            if (qaLegacyX == 60f && qaLegacyY == 200f) {
+                qaLegacyX = -1f
+                qaLegacyY = -1f
+            }
+            quickActionWindowX_land = prefs.getFloat("quick_action_x_land", qaLegacyX)
+            quickActionWindowY_land = prefs.getFloat("quick_action_y_land", qaLegacyY)
+            quickActionWindowX_port = prefs.getFloat("quick_action_x_port", -1f)
+            quickActionWindowY_port = prefs.getFloat("quick_action_y_port", -1f)
+            quickActionWindowX = if (isLand) {
+                if (quickActionWindowX_land >= 0f) quickActionWindowX_land else qaLegacyX
+            } else {
+                if (quickActionWindowX_port >= 0f) quickActionWindowX_port else qaLegacyX
+            }
+            quickActionWindowY = if (isLand) {
+                if (quickActionWindowY_land >= 0f) quickActionWindowY_land else qaLegacyY
+            } else {
+                if (quickActionWindowY_port >= 0f) quickActionWindowY_port else qaLegacyY
             }
             quickActionCollapsed = prefs.getBoolean("quick_action_collapsed", false)
             val layoutMode = com.reverie.paint.model.QuickActionLayoutMode.fromId(prefs.getString("quick_action_layout", "column") ?: "column")
@@ -3686,14 +3895,31 @@ class PaintViewModel : ViewModel() {
             // 快捷笔刷浮窗持久化恢复
             quickBrushWindowOpen = prefs.getBoolean("quick_brush_open", false)
             quickBrushWindowWasOpen = quickBrushWindowOpen
-            quickBrushWindowX = prefs.getFloat("quick_brush_x", -1f)
-            quickBrushWindowY = prefs.getFloat("quick_brush_y", -1f)
-            if (quickBrushWindowX == 60f && quickBrushWindowY == 280f) {
-                quickBrushWindowX = -1f
-                quickBrushWindowY = -1f
+            var qbLegacyX = prefs.getFloat("quick_brush_x", -1f)
+            var qbLegacyY = prefs.getFloat("quick_brush_y", -1f)
+            if (qbLegacyX == 60f && qbLegacyY == 280f) {
+                qbLegacyX = -1f
+                qbLegacyY = -1f
             }
+            val qbLegacyOrient = prefs.getString("quick_brush_orientation", "horizontal") ?: "horizontal"
+            quickBrushWindowX_land = prefs.getFloat("quick_brush_x_land", qbLegacyX)
+            quickBrushWindowY_land = prefs.getFloat("quick_brush_y_land", qbLegacyY)
+            quickBrushOrientation_land = prefs.getString("quick_brush_orientation_land", qbLegacyOrient) ?: qbLegacyOrient
+            quickBrushWindowX_port = prefs.getFloat("quick_brush_x_port", -1f)
+            quickBrushWindowY_port = prefs.getFloat("quick_brush_y_port", -1f)
+            quickBrushOrientation_port = prefs.getString("quick_brush_orientation_port", qbLegacyOrient) ?: qbLegacyOrient
+            quickBrushWindowX = if (isLand) {
+                if (quickBrushWindowX_land >= 0f) quickBrushWindowX_land else qbLegacyX
+            } else {
+                if (quickBrushWindowX_port >= 0f) quickBrushWindowX_port else qbLegacyX
+            }
+            quickBrushWindowY = if (isLand) {
+                if (quickBrushWindowY_land >= 0f) quickBrushWindowY_land else qbLegacyY
+            } else {
+                if (quickBrushWindowY_port >= 0f) quickBrushWindowY_port else qbLegacyY
+            }
+            quickBrushOrientation = if (isLand) quickBrushOrientation_land else quickBrushOrientation_port
             quickBrushCollapsed = prefs.getBoolean("quick_brush_collapsed", false)
-            quickBrushOrientation = prefs.getString("quick_brush_orientation", "horizontal") ?: "horizontal"
             quickBrushMaxLength = prefs.getInt("quick_brush_max_length", 6)
             val brushOrderStr = prefs.getString("quick_brush_order", "") ?: ""
             if (brushOrderStr.isNotBlank()) {
@@ -3703,16 +3929,44 @@ class PaintViewModel : ViewModel() {
             // 快捷颜色浮窗持久化恢复
             quickColorWindowOpen = prefs.getBoolean("quick_color_open", false)
             quickColorWindowWasOpen = quickColorWindowOpen
-            quickColorWindowX = prefs.getFloat("quick_color_x", -1f)
-            quickColorWindowY = prefs.getFloat("quick_color_y", -1f)
+            val qcLegacyX = prefs.getFloat("quick_color_x", -1f)
+            val qcLegacyY = prefs.getFloat("quick_color_y", -1f)
+            quickColorWindowX_land = prefs.getFloat("quick_color_x_land", qcLegacyX)
+            quickColorWindowY_land = prefs.getFloat("quick_color_y_land", qcLegacyY)
+            quickColorWindowX_port = prefs.getFloat("quick_color_x_port", -1f)
+            quickColorWindowY_port = prefs.getFloat("quick_color_y_port", -1f)
+            quickColorWindowX = if (isLand) {
+                if (quickColorWindowX_land >= 0f) quickColorWindowX_land else qcLegacyX
+            } else {
+                if (quickColorWindowX_port >= 0f) quickColorWindowX_port else qcLegacyX
+            }
+            quickColorWindowY = if (isLand) {
+                if (quickColorWindowY_land >= 0f) quickColorWindowY_land else qcLegacyY
+            } else {
+                if (quickColorWindowY_port >= 0f) quickColorWindowY_port else qcLegacyY
+            }
             quickColorCollapsed = prefs.getBoolean("quick_color_collapsed", false)
             quickColorTab = prefs.getInt("quick_color_tab", 0)
 
             // 快捷图层浮窗持久化恢复
             quickLayerWindowOpen = prefs.getBoolean("quick_layer_open", false)
             quickLayerWindowWasOpen = quickLayerWindowOpen
-            quickLayerWindowX = prefs.getFloat("quick_layer_x", -1f)
-            quickLayerWindowY = prefs.getFloat("quick_layer_y", -1f)
+            val qlLegacyX = prefs.getFloat("quick_layer_x", -1f)
+            val qlLegacyY = prefs.getFloat("quick_layer_y", -1f)
+            quickLayerWindowX_land = prefs.getFloat("quick_layer_x_land", qlLegacyX)
+            quickLayerWindowY_land = prefs.getFloat("quick_layer_y_land", qlLegacyY)
+            quickLayerWindowX_port = prefs.getFloat("quick_layer_x_port", -1f)
+            quickLayerWindowY_port = prefs.getFloat("quick_layer_y_port", -1f)
+            quickLayerWindowX = if (isLand) {
+                if (quickLayerWindowX_land >= 0f) quickLayerWindowX_land else qlLegacyX
+            } else {
+                if (quickLayerWindowX_port >= 0f) quickLayerWindowX_port else qlLegacyX
+            }
+            quickLayerWindowY = if (isLand) {
+                if (quickLayerWindowY_land >= 0f) quickLayerWindowY_land else qlLegacyY
+            } else {
+                if (quickLayerWindowY_port >= 0f) quickLayerWindowY_port else qlLegacyY
+            }
             quickLayerCollapsed = prefs.getBoolean("quick_layer_collapsed", false)
             quickLayerPinned = prefs.getBoolean("quick_layer_pinned", true)
 

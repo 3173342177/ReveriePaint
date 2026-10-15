@@ -422,10 +422,13 @@ class MainActivity : ComponentActivity() {
             val density = dm.density
             val screenW = if (newConfig.screenWidthDp > 0) newConfig.screenWidthDp * density else dm.widthPixels.toFloat()
             val screenH = if (newConfig.screenHeightDp > 0) newConfig.screenHeightDp * density else dm.heightPixels.toFloat()
-            vm.clampQuickWindowsToSafeArea(
+            val isLand = newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ||
+                (newConfig.orientation == android.content.res.Configuration.ORIENTATION_UNDEFINED && screenW > screenH)
+            vm.handleOrientationChange(
+                newIsLandscape = isLand,
                 screenWidthPx = screenW,
                 screenHeightPx = screenH,
-                density = density
+                density = density,
             )
         }
     }

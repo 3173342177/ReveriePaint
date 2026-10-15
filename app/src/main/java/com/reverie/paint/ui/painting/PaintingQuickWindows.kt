@@ -36,32 +36,41 @@ internal fun BoxScope.PaintingQuickWindows(
     onOpenFullLayerPanel: () -> Unit,
     onOpenLayerDetails: (Long) -> Unit,
 ) {
-    // ---- Reference Window: 打开(false->true 边沿)时居中 ----
-    // 面板可自由拖动且无边界钳制, 若保留上次位置, 用户可能把它拖出屏幕后
-    // 再也拖不回来。仅"从关闭切换到打开"时回到视图中心; 面板已打开的状态下
-    // 进入工程/重组保持原位置不动 (位置不再持久化)。
+    // ---- Reference Window & Quick Windows 布局状态管理 ----
+    // 仅初次打开或未定位过时居中显示; 后续打开或旋转时保持用户拖拽位置 (横竖屏独立记忆各方向坐标)
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val screenW = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenH = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ||
+        (configuration.orientation == android.content.res.Configuration.ORIENTATION_UNDEFINED && screenW > screenH)
 
     var isInitialLaunch by remember { mutableStateOf(true) }
     var lastW by remember { mutableFloatStateOf(screenW) }
     var lastH by remember { mutableFloatStateOf(screenH) }
 
-    // 仅在横竖屏切换或屏幕尺寸变动的一瞬间，将超出新视口的小窗拉回安全区内
-    LaunchedEffect(screenW, screenH) {
+    // 仅在横竖屏切换或屏幕尺寸变动的一瞬间，处理横竖屏布局切换并将超出新视口的小窗拉回安全区内
+    LaunchedEffect(screenW, screenH, isLandscape) {
         if (screenW <= 0f || screenH <= 0f) return@LaunchedEffect
         if (isInitialLaunch) {
             isInitialLaunch = false
             lastW = screenW
             lastH = screenH
+            if (isLandscape != vm.isLandscapeMode) {
+                vm.handleOrientationChange(
+                    newIsLandscape = isLandscape,
+                    screenWidthPx = screenW,
+                    screenHeightPx = screenH,
+                    density = density.density,
+                )
+            }
             return@LaunchedEffect
         }
-        if (screenW != lastW || screenH != lastH) {
+        if (screenW != lastW || screenH != lastH || isLandscape != vm.isLandscapeMode) {
             lastW = screenW
             lastH = screenH
-            vm.clampQuickWindowsToSafeArea(
+            vm.handleOrientationChange(
+                newIsLandscape = isLandscape,
                 screenWidthPx = screenW,
                 screenHeightPx = screenH,
                 density = density.density,
@@ -71,54 +80,64 @@ internal fun BoxScope.PaintingQuickWindows(
 
     LaunchedEffect(vm.referenceWindowOpen) {
         if (vm.referenceWindowOpen && !vm.referenceWindowWasOpen) {
-            val panelW = with(density) { vm.referenceWindowWidth.dp.toPx() }
-            val panelH = with(density) { vm.referenceWindowHeight.dp.toPx() }
-            vm.referenceWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
-            vm.referenceWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+            if (vm.referenceWindowX < 0f || vm.referenceWindowY < 0f) {
+                val panelW = with(density) { vm.referenceWindowWidth.dp.toPx() }
+                val panelH = with(density) { vm.referenceWindowHeight.dp.toPx() }
+                vm.referenceWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+                vm.referenceWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+            }
         }
         vm.referenceWindowWasOpen = vm.referenceWindowOpen
     }
 
     LaunchedEffect(vm.quickActionWindowOpen) {
         if (vm.quickActionWindowOpen && !vm.quickActionWindowWasOpen) {
-            val panelW = if (vm.quickActionWindowWidth > 0f) vm.quickActionWindowWidth else with(density) { 200.dp.toPx() }
-            val panelH = if (vm.quickActionWindowHeight > 0f) vm.quickActionWindowHeight else with(density) { 160.dp.toPx() }
-            vm.quickActionWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
-            vm.quickActionWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
-            vm.persistQuickActionsState()
+            if (vm.quickActionWindowX < 0f || vm.quickActionWindowY < 0f) {
+                val panelW = if (vm.quickActionWindowWidth > 0f) vm.quickActionWindowWidth else with(density) { 200.dp.toPx() }
+                val panelH = if (vm.quickActionWindowHeight > 0f) vm.quickActionWindowHeight else with(density) { 160.dp.toPx() }
+                vm.quickActionWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+                vm.quickActionWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+                vm.persistQuickActionsState()
+            }
         }
         vm.quickActionWindowWasOpen = vm.quickActionWindowOpen
     }
 
     LaunchedEffect(vm.quickBrushWindowOpen) {
         if (vm.quickBrushWindowOpen && !vm.quickBrushWindowWasOpen) {
-            val panelW = if (vm.quickBrushWindowWidth > 0f) vm.quickBrushWindowWidth else with(density) { 240.dp.toPx() }
-            val panelH = if (vm.quickBrushWindowHeight > 0f) vm.quickBrushWindowHeight else with(density) { 54.dp.toPx() }
-            vm.quickBrushWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
-            vm.quickBrushWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
-            vm.persistQuickBrushState()
+            if (vm.quickBrushWindowX < 0f || vm.quickBrushWindowY < 0f) {
+                val panelW = if (vm.quickBrushWindowWidth > 0f) vm.quickBrushWindowWidth else with(density) { 240.dp.toPx() }
+                val panelH = if (vm.quickBrushWindowHeight > 0f) vm.quickBrushWindowHeight else with(density) { 54.dp.toPx() }
+                vm.quickBrushWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+                vm.quickBrushWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+                vm.persistQuickBrushState()
+            }
         }
         vm.quickBrushWindowWasOpen = vm.quickBrushWindowOpen
     }
 
     LaunchedEffect(vm.quickColorWindowOpen) {
         if (vm.quickColorWindowOpen && !vm.quickColorWindowWasOpen) {
-            val panelW = if (vm.quickColorWindowWidth > 0f) vm.quickColorWindowWidth else with(density) { 212.dp.toPx() }
-            val panelH = if (vm.quickColorWindowHeight > 0f) vm.quickColorWindowHeight else with(density) { 272.dp.toPx() }
-            vm.quickColorWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
-            vm.quickColorWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
-            vm.persistQuickColorState()
+            if (vm.quickColorWindowX < 0f || vm.quickColorWindowY < 0f) {
+                val panelW = if (vm.quickColorWindowWidth > 0f) vm.quickColorWindowWidth else with(density) { 212.dp.toPx() }
+                val panelH = if (vm.quickColorWindowHeight > 0f) vm.quickColorWindowHeight else with(density) { 272.dp.toPx() }
+                vm.quickColorWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+                vm.quickColorWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+                vm.persistQuickColorState()
+            }
         }
         vm.quickColorWindowWasOpen = vm.quickColorWindowOpen
     }
 
     LaunchedEffect(vm.quickLayerWindowOpen) {
         if (vm.quickLayerWindowOpen && !vm.quickLayerWindowWasOpen) {
-            val panelW = if (vm.quickLayerWindowWidth > 0f) vm.quickLayerWindowWidth else with(density) { 156.dp.toPx() }
-            val panelH = if (vm.quickLayerWindowHeight > 0f) vm.quickLayerWindowHeight else with(density) { 290.dp.toPx() }
-            vm.quickLayerWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
-            vm.quickLayerWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
-            vm.persistQuickLayerState()
+            if (vm.quickLayerWindowX < 0f || vm.quickLayerWindowY < 0f) {
+                val panelW = if (vm.quickLayerWindowWidth > 0f) vm.quickLayerWindowWidth else with(density) { 156.dp.toPx() }
+                val panelH = if (vm.quickLayerWindowHeight > 0f) vm.quickLayerWindowHeight else with(density) { 290.dp.toPx() }
+                vm.quickLayerWindowX = ((screenW - panelW) / 2f).coerceAtLeast(0f)
+                vm.quickLayerWindowY = ((screenH - panelH) / 2f).coerceAtLeast(0f)
+                vm.persistQuickLayerState()
+            }
         }
         vm.quickLayerWindowWasOpen = vm.quickLayerWindowOpen
     }
