@@ -88,4 +88,30 @@ class LargeBitmapTilingPolicyTest {
         // Viewport covering the whole canvas: [0, 0, 6000, 6000]
         assertTrue(LargeBitmapTilingPolicy.isTileVisible(tileSx, tileSy, tileW, tileH, 0, 0, 6000, 6000))
     }
+
+    @Test
+    fun `isLargeCanvas triggers warning on large dimensions and high memory`() {
+        // Standard presets shouldn't trigger
+        assertFalse(LargeBitmapTilingPolicy.isLargeCanvas(1920, 1080))
+        assertFalse(LargeBitmapTilingPolicy.isLargeCanvas(2048, 2048))
+        assertFalse(LargeBitmapTilingPolicy.isLargeCanvas(3840, 2160)) // 4K UHD: 33MB
+        assertFalse(LargeBitmapTilingPolicy.isLargeCanvas(2480, 3508)) // A4: 35MB
+        assertFalse(LargeBitmapTilingPolicy.isLargeCanvas(4096, 4096)) // 4K Square: 67MB
+
+        // Extra large canvases must trigger
+        assertTrue(LargeBitmapTilingPolicy.isLargeCanvas(5000, 5000)) // 100MB (>80MB)
+        assertTrue(LargeBitmapTilingPolicy.isLargeCanvas(6000, 6000)) // 144MB
+        assertTrue(LargeBitmapTilingPolicy.isLargeCanvas(8192, 8192)) // 268MB
+        assertTrue(LargeBitmapTilingPolicy.isLargeCanvas(5000, 4500)) // both > 4096
+        assertTrue(LargeBitmapTilingPolicy.isLargeCanvas(6000, 2000)) // max >= 6000
+    }
+
+    @Test
+    fun `singleLayerMegabytes calculates correct buffer size in MB`() {
+        assertEquals(0, LargeBitmapTilingPolicy.singleLayerMegabytes(0, 0))
+        assertEquals(16, LargeBitmapTilingPolicy.singleLayerMegabytes(2048, 2048))
+        assertEquals(64, LargeBitmapTilingPolicy.singleLayerMegabytes(4096, 4096))
+        assertEquals(138, LargeBitmapTilingPolicy.singleLayerMegabytes(6000, 6000))
+        assertEquals(256, LargeBitmapTilingPolicy.singleLayerMegabytes(8192, 8192))
+    }
 }

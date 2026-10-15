@@ -2347,6 +2347,14 @@
     <string name="create_print_size_format">Print size %s</string>
     <string name="create_pixel_size_format">Pixel size %1$d × %2$d px</string>
     <string name="create_layer_warning_low">(Low memory, layers limited)</string>
+    <string name="create_large_canvas_tag">Large Canvas</string>
+    <string name="create_large_canvas_warning_title">Large Canvas Warning</string>
+    <string name="create_large_canvas_warning_desc">Current canvas is large (~%1$d MB per layer). Deep zooming or multiple layers may consume substantial RAM and cause stutter. Please plan dimensions according to device performance</string>
+    <string name="create_large_canvas_dialog_title">Create Large Canvas</string>
+    <string name="create_large_canvas_dialog_desc">Canvas dimension is %1$d × %2$d (~%3$d MB per layer). Drawing and zooming at this size may consume heavy RAM and cause frame drops. Continue creating?</string>
+    <string name="create_large_canvas_dialog_continue">Continue</string>
+    <string name="create_large_canvas_dialog_adjust">Adjust</string>
+    <string name="create_large_canvas_dialog_dont_remind">Don\'t remind again</string>
 
     <!-- Brush UI Modernization & Fine Tuning -->
     <string name="brush_group_basic">Basic Properties</string>

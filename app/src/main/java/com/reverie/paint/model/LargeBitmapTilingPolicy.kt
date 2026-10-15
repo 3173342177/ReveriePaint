@@ -11,8 +11,31 @@ package com.reverie.paint.model
 object LargeBitmapTilingPolicy {
     const val TILE_DIM = 2048
     const val LARGE_BITMAP_THRESHOLD_BYTES = 100L * 1024L * 1024L // 100MB HWUI 绘制阈值
+    const val LARGE_CANVAS_WARNING_BYTES = 80L * 1024L * 1024L   // 80MB 单图层告警阈值
+    const val LARGE_CANVAS_WARNING_DIMENSION = 4096              // 4096 像素单边告警参考阈值
 
     fun isLargeBitmap(byteCount: Long): Boolean = byteCount > LARGE_BITMAP_THRESHOLD_BYTES
+
+    /**
+     * 判断画布尺寸是否属于超大画幅 (用于新建画布时的性能与显存预警)。
+     * 当单图层显存 >= 80MB，或双边均 > 4096，或任一边 >= 6000 时触发。
+     */
+    fun isLargeCanvas(width: Int, height: Int): Boolean {
+        if (width <= 0 || height <= 0) return false
+        val bytes = width.toLong() * height.toLong() * 4L
+        return bytes >= LARGE_CANVAS_WARNING_BYTES ||
+            (width > LARGE_CANVAS_WARNING_DIMENSION && height > LARGE_CANVAS_WARNING_DIMENSION) ||
+            maxOf(width, height) >= 6000
+    }
+
+    /**
+     * 计算单图层显存估算大小 (MB)。
+     */
+    fun singleLayerMegabytes(width: Int, height: Int): Int {
+        if (width <= 0 || height <= 0) return 0
+        val bytes = width.toLong() * height.toLong() * 4L
+        return ((bytes + 1024L * 1024L - 1L) / (1024L * 1024L)).toInt()
+    }
 
     fun tileCount(width: Int, height: Int, tileDim: Int = TILE_DIM): Pair<Int, Int> {
         if (width <= 0 || height <= 0) return 0 to 0

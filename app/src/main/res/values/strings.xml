@@ -2347,6 +2347,14 @@
     <string name="create_print_size_format">打印尺寸 %s</string>
     <string name="create_pixel_size_format">像素尺寸 %1$d × %2$d px</string>
     <string name="create_layer_warning_low">（内存偏低，图层受限）</string>
+    <string name="create_large_canvas_tag">超大画幅</string>
+    <string name="create_large_canvas_warning_title">超大画幅性能提示</string>
+    <string name="create_large_canvas_warning_desc">当前画布尺寸较大（单图层约 %1$d MB），大幅缩放或多图层绘制可能消耗较多运存并出现卡顿，建议根据绘制需求合理规划画幅</string>
+    <string name="create_large_canvas_dialog_title">超大画布创建提醒</string>
+    <string name="create_large_canvas_dialog_desc">当前画幅尺寸为 %1$d × %2$d（单图层约 %3$d MB），在此尺寸下进行高倍缩放或绘制可能占用较多系统运存并产生卡顿，是否确认继续创建？</string>
+    <string name="create_large_canvas_dialog_continue">继续创建</string>
+    <string name="create_large_canvas_dialog_adjust">返回调整</string>
+    <string name="create_large_canvas_dialog_dont_remind">不再提醒</string>
 
     <!-- Brush UI Modernization & Fine Tuning -->
     <string name="brush_group_basic">核心基础</string>

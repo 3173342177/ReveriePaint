@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reverie.paint.R
 import com.reverie.paint.core.*
+import com.reverie.paint.model.LargeBitmapTilingPolicy
 import com.reverie.paint.ui.components.ReTextButton
 import com.reverie.paint.ui.theme.Theme
 import kotlin.math.abs
@@ -170,6 +171,23 @@ fun CreatePage(vm: PaintViewModel) {
         calculateRealMaxLayers(context, widthVal, heightVal)
     }
 
+    // Large canvas performance warning calculation
+    val isLargeCanvas = remember(widthVal, heightVal) {
+        LargeBitmapTilingPolicy.isLargeCanvas(widthVal, heightVal)
+    }
+    val singleLayerMb = remember(widthVal, heightVal) {
+        LargeBitmapTilingPolicy.singleLayerMegabytes(widthVal, heightVal)
+    }
+
+    val createPrefs = remember {
+        context.getSharedPreferences("reverie_create_prefs", Context.MODE_PRIVATE)
+    }
+    var ignoreLargeCanvasWarning by remember {
+        mutableStateOf(createPrefs.getBoolean("ignore_large_canvas_warning", false))
+    }
+    var showLargeCanvasConfirmDialog by remember { mutableStateOf(false) }
+    var dontRemindAgainChecked by remember { mutableStateOf(false) }
+
     // Save Preset Dialog State
     var showSavePresetDialog by remember { mutableStateOf(false) }
     var newPresetName by remember { mutableStateOf("") }
@@ -265,6 +283,109 @@ fun CreatePage(vm: PaintViewModel) {
         )
     }
 
+    val executeStartPainting = {
+        val finalW = widthVal.coerceIn(64, 8192)
+        val finalH = heightVal.coerceIn(64, 8192)
+        vm.startPainting(
+            w = finalW,
+            h = finalH,
+            dpi = ppiVal,
+            animation = animationCanvas,
+            animationFps = DEFAULT_ANIMATION_FPS,
+        )
+    }
+
+    val onStartPainting = {
+        if (isLargeCanvas && !ignoreLargeCanvasWarning) {
+            dontRemindAgainChecked = false
+            showLargeCanvasConfirmDialog = true
+        } else {
+            executeStartPainting()
+        }
+    }
+
+    // Large Canvas Confirmation Dialog
+    if (showLargeCanvasConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showLargeCanvasConfirmDialog = false },
+            icon = {
+                Icon(
+                    painterResource(R.drawable.ic_alert_triangle),
+                    contentDescription = null,
+                    tint = Color(0xFFD97757),
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.create_large_canvas_dialog_title),
+                    color = colors.text,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = stringResource(R.string.create_large_canvas_dialog_desc, widthVal, heightVal, singleLayerMb),
+                        color = colors.subText,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { dontRemindAgainChecked = !dontRemindAgainChecked }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Checkbox(
+                            checked = dontRemindAgainChecked,
+                            onCheckedChange = { dontRemindAgainChecked = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = colors.accent,
+                                uncheckedColor = colors.subText,
+                                checkmarkColor = colors.onAccent
+                            ),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.create_large_canvas_dialog_dont_remind),
+                            color = colors.subText,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                ReTextButton(
+                    text = stringResource(R.string.create_large_canvas_dialog_continue),
+                    onClick = {
+                        if (dontRemindAgainChecked) {
+                            ignoreLargeCanvasWarning = true
+                            createPrefs.edit().putBoolean("ignore_large_canvas_warning", true).apply()
+                        }
+                        showLargeCanvasConfirmDialog = false
+                        executeStartPainting()
+                    },
+                    textColor = Color(0xFFD97757),
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            dismissButton = {
+                ReTextButton(
+                    text = stringResource(R.string.create_large_canvas_dialog_adjust),
+                    onClick = { showLargeCanvasConfirmDialog = false },
+                    textColor = colors.subText
+                )
+            },
+            containerColor = colors.panel
+        )
+    }
+
     val onSwapDimensions = {
         val tmp = customW
         customW = customH
@@ -276,18 +397,6 @@ fun CreatePage(vm: PaintViewModel) {
         if (toLandscape != curLandscape) {
             onSwapDimensions()
         }
-    }
-
-    val onStartPainting = {
-        val finalW = widthVal.coerceIn(64, 8192)
-        val finalH = heightVal.coerceIn(64, 8192)
-        vm.startPainting(
-            w = finalW,
-            h = finalH,
-            dpi = ppiVal,
-            animation = animationCanvas,
-            animationFps = DEFAULT_ANIMATION_FPS,
-        )
     }
 
     Column(
@@ -504,6 +613,17 @@ fun CreatePage(vm: PaintViewModel) {
                             }
                         }
 
+                        AnimatedVisibility(
+                            visible = isLargeCanvas,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            CanvasPerformanceWarningBanner(
+                                singleLayerMb = singleLayerMb,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+
                         Spacer(Modifier.height(8.dp))
                     }
 
@@ -612,6 +732,7 @@ fun CreatePage(vm: PaintViewModel) {
                             heightVal = heightVal,
                             ppiVal = ppiVal,
                             maxLayers = maxLayers,
+                            isLargeCanvas = isLargeCanvas,
                             onSwap = onSwapDimensions,
                             onCustomize = { portraitTab = 1 },
                             onCreate = onStartPainting,
@@ -681,6 +802,18 @@ fun CreatePage(vm: PaintViewModel) {
                                     }
                                 }
                             }
+
+                            AnimatedVisibility(
+                                visible = isLargeCanvas,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                CanvasPerformanceWarningBanner(
+                                    singleLayerMb = singleLayerMb,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
+
                             Spacer(Modifier.height(8.dp))
                         }
 
@@ -1104,6 +1237,7 @@ private fun PortraitPresetBottomBar(
     heightVal: Int,
     ppiVal: Int,
     maxLayers: Int,
+    isLargeCanvas: Boolean = false,
     onSwap: () -> Unit,
     onCustomize: () -> Unit,
     onCreate: () -> Unit,
@@ -1130,11 +1264,37 @@ private fun PortraitPresetBottomBar(
             )
             Spacer(Modifier.height(2.dp))
             val orientationText = if (widthVal >= heightVal) stringResource(R.string.create_orientation_landscape) else stringResource(R.string.create_orientation_portrait)
-            Text(
-                text = "$orientationText · " + stringResource(R.string.create_max_layers_desc, maxLayers),
-                color = colors.subText,
-                fontSize = 11.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "$orientationText · " + stringResource(R.string.create_max_layers_desc, maxLayers),
+                    color = colors.subText,
+                    fontSize = 11.sp
+                )
+                if (isLargeCanvas) {
+                    Spacer(Modifier.width(6.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFFD97757).copy(alpha = 0.15f))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.ic_alert_triangle),
+                            contentDescription = null,
+                            tint = Color(0xFFD97757),
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            text = stringResource(R.string.create_large_canvas_tag),
+                            color = Color(0xFFD97757),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
 
         Row(
@@ -1372,6 +1532,48 @@ private fun AnimationCanvasToggle(checked: Boolean) {
 }
 
 @Composable
+private fun CanvasPerformanceWarningBanner(
+    singleLayerMb: Int,
+    modifier: Modifier = Modifier
+) {
+    val warnColor = Color(0xFFD97757)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(warnColor.copy(alpha = 0.08f))
+            .border(1.dp, warnColor.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_alert_triangle),
+            contentDescription = null,
+            tint = warnColor,
+            modifier = Modifier
+                .padding(top = 1.dp)
+                .size(16.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.create_large_canvas_warning_title),
+                color = warnColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = stringResource(R.string.create_large_canvas_warning_desc, singleLayerMb),
+                color = Theme.current.subText,
+                fontSize = 11.sp,
+                lineHeight = 15.sp
+            )
+        }
+    }
+}
+
+@Composable
 private fun CanvasPresetCard(
     item: CanvasPresetItem,
     isSelected: Boolean,
@@ -1430,6 +1632,24 @@ private fun CanvasPresetCard(
                             .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(stringResource(R.string.create_custom_badge), color = colors.accent, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+                val isLargePreset = remember(item.width, item.height) {
+                    LargeBitmapTilingPolicy.isLargeCanvas(item.width, item.height)
+                }
+                if (isLargePreset) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFFD97757).copy(alpha = 0.15f))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.create_large_canvas_tag),
+                            color = Color(0xFFD97757),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }
