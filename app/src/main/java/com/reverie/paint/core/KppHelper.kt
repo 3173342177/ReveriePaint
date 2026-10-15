@@ -252,6 +252,25 @@ object KppHelper {
     }
 
     /**
+     * 仅更新 .kpp 文件内部的预设名称 (<Preset name="...">)，完整保留预设的所有原始数据
+     * (引擎类型、笔尖、纹理、双重画笔、动力学等)。用于复制未自定义过的笔刷等场景。
+     */
+    fun updatePresetName(kppFile: File, newName: String): Boolean {
+        return try {
+            if (!kppFile.exists()) return false
+            val bytes = kppFile.readBytes()
+            val xml = readPresetXml(bytes) ?: return false
+            val updatedXml = xml.replace(Regex("""<Preset\s+name="[^"]*""""), """<Preset name="$newName"""")
+            val updated = replacePresetXml(bytes, updatedXml)
+            kppFile.writeBytes(updated)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("KppHelper", "Failed to update preset name: ${kppFile.name}", e)
+            false
+        }
+    }
+
+    /**
      * Updates an existing .kpp file (or bytes) by modifying parameters in its preset XML.
      * Returns a new byte array with the updated zTXt chunk.
      *
@@ -350,7 +369,7 @@ object KppHelper {
      * ahead of the first IDAT, rather than replacing in place: the latter would perpetuate a
      * wrong position when the original chunk already sat after IDAT.
      */
-    private fun replacePresetXml(kppBytes: ByteArray, newXml: String): ByteArray {
+    internal fun replacePresetXml(kppBytes: ByteArray, newXml: String): ByteArray {
         val presetChunk = buildTextChunkData(
             keyword = "preset",
             payload = deflateXml(newXml),
@@ -1070,7 +1089,13 @@ object KppHelper {
         for ((key, sensorXml) in params.dynamicOptions) {
             if (key.isBlank() || sensorXml.isBlank()) continue
             xml = updateParam(xml, "${key}Sensor", sensorXml)
-            xml = updateParam(xml, "${key}UseCurve", "true")
+            val isEnabled = when (key.lowercase()) {
+                "size" -> params.pressureEnabled && params.pressureSize > 0.001
+                "opacity" -> params.pressureEnabled && params.pressureOpacity > 0.001
+                "flow" -> params.pressureEnabled && params.pressureFlow > 0.001
+                else -> true
+            }
+            xml = updateParam(xml, "${key}UseCurve", isEnabled.toString())
         }
 
         // 17. Masking Brush (双重画笔/蒙版画笔)

@@ -610,4 +610,44 @@ class KppHelperTest {
         val tip = KppHelper.extractTipAssetFilename(kppBytes)
         assertEquals("my_gih_brush.gih", tip)
     }
+
+    @Test
+    fun `updatePresetName 仅更新预设名称，不破坏引擎类型与原始配置`() {
+        val basePng = createMinimalPng()
+        val complexXml = """<Preset name="OriginalName" paintopid="colorsmudge">
+            <param name="Texture/Pattern/Enabled" type="string"><![CDATA[true]]></param>
+            <param name="MaskingBrush/Enabled" type="string"><![CDATA[true]]></param>
+            <param name="FlowValue" type="string"><![CDATA[0.85]]></param>
+        </Preset>"""
+        val kppBytes = KppHelper.replacePresetXml(basePng, complexXml)
+        val file = File.createTempFile("test_preset", ".kpp").also { it.deleteOnExit() }
+        file.writeBytes(kppBytes)
+
+        val ok = KppHelper.updatePresetName(file, "DuplicatedName")
+        assertTrue(ok)
+
+        val updatedXml = KppHelper.readPresetXml(file.readBytes())
+        assertNotNull(updatedXml)
+        assertTrue("预设名称应被更新", updatedXml!!.contains("""<Preset name="DuplicatedName""""))
+        assertTrue("colorsmudge 引擎类型应被保留", updatedXml.contains("""paintopid="colorsmudge""""))
+        assertTrue("纹理开关应被保留", updatedXml.contains("""name="Texture/Pattern/Enabled""""))
+        assertTrue("双重画笔开关应被保留", updatedXml.contains("""name="MaskingBrush/Enabled""""))
+        assertTrue("原流量参数应被保留", updatedXml.contains("""name="FlowValue" type="string"><![CDATA[0.85]]>"""))
+    }
+
+    @Test
+    fun `injectParamsIntoXml 写入动力学时当压感为0时不强行设置UseCurve为true`() {
+        val xml = """<Preset name="Test" paintopid="paintbrush"></Preset>"""
+        val curveXml = """<!DOCTYPE params><params id="pressure"><curve>0,0;1,1;</curve></params>"""
+        val params = BrushParams(
+            pressureEnabled = true,
+            pressureSize = 1.0,
+            pressureOpacity = 0.0,
+            pressureFlow = 0.0,
+            dynamicOptions = mapOf("Size" to curveXml, "Flow" to curveXml),
+        )
+        val updatedXml = KppHelper.injectParamsIntoXml(xml, "Test", params)
+        assertTrue("SizeUseCurve 应为 true", updatedXml.contains("""name="SizeUseCurve"><![CDATA[true]]></param>"""))
+        assertTrue("FlowUseCurve 应为 false (压感流量为0)", updatedXml.contains("""name="FlowUseCurve"><![CDATA[false]]></param>"""))
+    }
 }

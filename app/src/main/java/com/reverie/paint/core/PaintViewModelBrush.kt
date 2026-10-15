@@ -965,9 +965,15 @@ import kotlinx.coroutines.withContext
                                 "flow" -> saved.pressureFlow
                                 else -> 1.0
                             }
+                            val isEnabled = when (opt.lowercase()) {
+                                "size" -> saved.pressureEnabled && saved.pressureSize > 0.001
+                                "opacity" -> saved.pressureEnabled && saved.pressureOpacity > 0.001
+                                "flow" -> saved.pressureEnabled && saved.pressureFlow > 0.001
+                                else -> brushDynamicOptions[opt]?.enabled ?: true
+                            }
                             ReverieCoreBridge.setBrushOptionDynamics(
                                 opt,
-                                true,
+                                isEnabled,
                                 sensorId,
                                 curve,
                                 strength,
@@ -1197,35 +1203,21 @@ import kotlinx.coroutines.withContext
         if (srcFile.exists()) {
             srcFile.copyTo(dstFile, overwrite = true)
         }
-        val d = ReverieCoreBridge.brushPresetDefaults(src.index)
-        val srcTip = reverieReadTipAttrs(srcFile)
-        val srcParams = brushParams[src.name] ?: if (d.size >= 8) {
-            BrushParams(
-                size = d[0],
-                opacity = d[1].coerceIn(0.0, 1.0),
-                flow = d[2].coerceIn(0.0, 1.0),
-                spacing = d[3],
-                airbrush = d[4] > 0.5,
-                airbrushRate = if (d[5] >= 5.0) d[5] else 30.0,
-                smudgeRate = d[6],
-                smudgeLength = d[7],
-                fade = srcTip.fade ?: KppHelper.FADE_SOLID,
-                softness = srcTip.softness ?: KppHelper.SOFTNESS_NEUTRAL,
+        val srcCustomized = brushParams[src.name]
+        if (srcCustomized != null) {
+            val cleanParams = srcCustomized.copy(
+                author = if (src.isBuiltIn) "Krita (副本)" else srcCustomized.author,
+                isAuthorLocked = false,
             )
+            brushParams[cleanName] = cleanParams
+            if (dstFile.exists()) {
+                KppHelper.updateKppFile(dstFile, cleanName, cleanParams)
+            }
         } else {
-            BrushParams(
-                fade = srcTip.fade ?: KppHelper.FADE_SOLID,
-                softness = srcTip.softness ?: KppHelper.SOFTNESS_NEUTRAL,
-            )
-        }
-        // 复制出的笔刷作者可自由修改，且非内置
-        val cleanParams = srcParams.copy(
-            author = if (src.isBuiltIn) "Krita (副本)" else srcParams.author,
-            isAuthorLocked = false,
-        )
-        brushParams[cleanName] = cleanParams
-        if (dstFile.exists()) {
-            KppHelper.updateKppFile(dstFile, cleanName, cleanParams)
+            // 源笔刷未自定义: 仅更新 XML 内预设名称, 绝不拿空默认参数覆写破坏原预设内容 (引擎类型/笔尖/纹理/蒙版/动态等)
+            if (dstFile.exists()) {
+                KppHelper.updatePresetName(dstFile, cleanName)
+            }
         }
         persistBrushParams()
         if (userBrushGroups.containsKey(src.name)) {

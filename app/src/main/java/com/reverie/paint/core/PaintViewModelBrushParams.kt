@@ -455,11 +455,12 @@ import kotlinx.coroutines.launch
             val isLinear = points.size == 2 &&
                     points[0].x == 0f && points[0].y == 0f &&
                     points[1].x == 1f && points[1].y == 1f
-            // Opacity 在出厂预设中常带线性 curve 节点但压感实际未启用；若曲线为默认线性且非 Size，避免无脑设 enabled = true
-            val isEnabled = if (key.equals("Opacity", ignoreCase = true) && isLinear && (id == null || id == "pressure")) {
+            // 出厂预设中常包含所有通道的 Sensor/curve 节点，但实际压感并未启用。
+            // 只有 Size 默认开启压感；非 Size 通道若为默认线性曲线且无已有启用状态，则默认保持关闭，避免无脑设 enabled = true
+            val isEnabled = if (!key.equals("Size", ignoreCase = true) && isLinear && (id == null || id == "pressure")) {
                 existing?.enabled ?: false
             } else {
-                true
+                existing?.enabled ?: true
             }
             newMap[key] = (existing ?: com.reverie.paint.model.DynamicOptionConfig(optionKey = key)).copy(
                 enabled = isEnabled,
@@ -603,9 +604,15 @@ import kotlinx.coroutines.launch
                                             "flow" -> pSnapshot.pressureFlow
                                             else -> 1.0
                                         }
+                                        val isEnabled = when (opt.lowercase()) {
+                                            "size" -> pSnapshot.pressureEnabled && pSnapshot.pressureSize > 0.001
+                                            "opacity" -> pSnapshot.pressureEnabled && pSnapshot.pressureOpacity > 0.001
+                                            "flow" -> pSnapshot.pressureEnabled && pSnapshot.pressureFlow > 0.001
+                                            else -> brushDynamicOptions[opt]?.enabled ?: true
+                                        }
                                         ReverieCoreBridge.setBrushOptionDynamics(
                                             opt,
-                                            true,
+                                            isEnabled,
                                             sensorId,
                                             curve,
                                             strength,

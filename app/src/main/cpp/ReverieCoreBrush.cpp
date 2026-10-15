@@ -1567,7 +1567,12 @@ void ReverieCore::setBrushOptionDynamics(const QString &optionName, bool enabled
 
     s->setProperty(pressKey.toLatin1().constData(), true);
     s->setProperty(curveKey.toLatin1().constData(), true);
-    s->setProperty(valKey.toLatin1().constData(), strength);
+    const bool isMasterAttr = (opt.compare(QLatin1String("Opacity"), Qt::CaseInsensitive) == 0) ||
+                             (opt.compare(QLatin1String("Flow"), Qt::CaseInsensitive) == 0) ||
+                             (opt.compare(QLatin1String("Spacing"), Qt::CaseInsensitive) == 0);
+    if (!isMasterAttr) {
+        s->setProperty(valKey.toLatin1().constData(), strength);
+    }
 
     QString formattedCurve = curvePoints.trimmed();
     if (!formattedCurve.isEmpty() && !formattedCurve.endsWith(';')) {
