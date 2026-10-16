@@ -164,9 +164,20 @@ internal fun PaintViewModel.notifyLayerChanged(
      * false —— 见函数末尾的说明。
      */
     pixelChanged: Boolean = false,
+    /**
+     * 本次变更是否真的改动了文档内容/结构。
+     *
+     * 纯**选中/切换**类操作 (点图层、播放中切层) 传 false: 不标 isModified、
+     * 不置 hasPendingMajorOp。选中不改内容, 下一次真实变更会顺带把选中索引存档;
+     * 若不区分, 每次点图层都会在 1s 内拉响自动保存 —— 大工程全量保存耗时可达
+     * 十秒级并占住渲染线程, 是「点击图层卡顿」的直接来源。
+     */
+    contentChanged: Boolean = true,
 ) {
-    isModified = true
-    hasPendingMajorOp = true
+    if (contentChanged) {
+        isModified = true
+        hasPendingMajorOp = true
+    }
     onPaintingActivity()
     syncLayersFromNative()
     // Mirror the C++ solo raw-mode flag into Compose state so the solo
@@ -390,7 +401,8 @@ internal fun PaintViewModel.setCurrentLayer(i: Int) {
     if (recorder.recording) {
         recorder.layerOp(com.reverie.paint.model.RecordingEvents.L_SET_CURRENT, i)
     }
-    runCore(after = { notifyLayerChanged(forceThumbs = false) }) {
+    // 纯选中: 不改内容, 不标脏、不拉自动保存引信 (见 notifyLayerChanged 注释)
+    runCore(after = { notifyLayerChanged(forceThumbs = false, contentChanged = false) }) {
         ReverieCoreBridge.setCurrentLayer(i)
     }
 }
